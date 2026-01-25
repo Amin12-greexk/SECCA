@@ -1,0 +1,276 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum LotStatus {
+  AVAILABLE
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum WorkOrderStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum WorkOrderItemStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum RackType {
+  PRE_SALE
+  FINISHED
+  WORKER
+}
+
+enum MovementType {
+  IN
+  MOVE
+  OUT
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  name      String
+  code      String?  @unique
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rawBatches    RawBatch[]
+  moistureRules MoistureRule[]
+}
+
+model Grade {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tariffs       GradeTariff[]
+  moistureRules MoistureRule[]
+  gradeStocks   RawBatchGradeStock[]
+  lots          ProductionLot[]
+  payrolls      PayrollEntry[]
+}
+
+model GradeTariff {
+  id             String   @id @default(uuid())
+  gradeId        String
+  rateRpPerGram  Int
+  effectiveFrom  DateTime
+  effectiveTo    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  grade Grade @relation(fields: [gradeId], references: [id])
+
+  @@index([gradeId, effectiveFrom])
+}
+
+model MoistureRule {
+  id            String   @id @default(uuid())
+  gradeId       String?
+  supplierId    String?
+  moistureBps   Int
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  grade    Grade?    @relation(fields: [gradeId], references: [id])
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+
+  @@index([gradeId, supplierId, effectiveFrom])
+}
+
+model PecahBonPreset {
+  id        String   @id @default(uuid())
+  name      String
+  weightGram Int
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RackLocation {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  type      RackType
+  workerId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  worker         Worker?              @relation(fields: [workerId], references: [id])
+  lots           ProductionLot[]
+  movementsFrom  InventoryMovement[]  @relation("MovementFrom")
+  movementsTo    InventoryMovement[]  @relation("MovementTo")
+
+  @@unique([workerId])
+}
+
+model Worker {
+  id        String   @id @default(uuid())
+  name      String
+  code      String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rackLocation  RackLocation?
+  workOrders    WorkOrder[]
+  payrolls      PayrollEntry[]
+}
+
+model NumberSequence {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  current   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RawBatch {
+  id            String   @id @default(uuid())
+  cardNumber    String   @unique
+  supplierId    String
+  receivedAt    DateTime
+  wetWeightGram Int
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  supplier    Supplier             @relation(fields: [supplierId], references: [id])
+  gradeStocks RawBatchGradeStock[]
+
+  @@index([supplierId, receivedAt])
+}
+
+model RawBatchGradeStock {
+  id                     String   @id @default(uuid())
+  rawBatchId             String
+  gradeId                String
+  wetWeightGram          Int
+  remainingWetWeightGram Int
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  rawBatch   RawBatch    @relation(fields: [rawBatchId], references: [id])
+  grade      Grade       @relation(fields: [gradeId], references: [id])
+  lotSources LotSource[]
+
+  @@unique([rawBatchId, gradeId])
+}
+
+model ProductionLot {
+  id                 String    @id @default(uuid())
+  lotNumber          String    @unique
+  gradeId            String
+  wetWeightGram      Int
+  dryWeightGramLocked Int
+  moistureBps        Int
+  status             LotStatus
+  locationId         String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  grade      Grade        @relation(fields: [gradeId], references: [id])
+  location   RackLocation @relation(fields: [locationId], references: [id])
+  sources    LotSource[]
+  workItem   WorkOrderItem?
+  movements  InventoryMovement[]
+}
+
+model LotSource {
+  id            String   @id @default(uuid())
+  lotId         String
+  gradedStockId String
+  wetWeightGram Int
+  createdAt     DateTime @default(now())
+
+  lot         ProductionLot      @relation(fields: [lotId], references: [id])
+  gradedStock RawBatchGradeStock @relation(fields: [gradedStockId], references: [id])
+
+  @@index([gradedStockId])
+}
+
+model WorkOrder {
+  id          String          @id @default(uuid())
+  workerId    String
+  status      WorkOrderStatus @default(IN_PROGRESS)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  completedAt DateTime?
+
+  worker Worker          @relation(fields: [workerId], references: [id])
+  items  WorkOrderItem[]
+}
+
+model WorkOrderItem {
+  id          String               @id @default(uuid())
+  workOrderId String
+  lotId       String               @unique
+  status      WorkOrderItemStatus  @default(IN_PROGRESS)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  workOrder     WorkOrder     @relation(fields: [workOrderId], references: [id])
+  lot           ProductionLot @relation(fields: [lotId], references: [id])
+  finishReceipt FinishReceipt?
+  payrollEntry  PayrollEntry?
+}
+
+model FinishReceipt {
+  id                String   @id @default(uuid())
+  workOrderItemId   String   @unique
+  returnedAt        DateTime
+  mainOutWeightGram Int
+  byProductWeightGram Int
+  dryInGram         Int
+  susutProsesGram   Int
+  susutHilangGram   Int
+  susutProsesPctBps Int
+  susutHilangPctBps Int
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  workOrderItem WorkOrderItem @relation(fields: [workOrderItemId], references: [id])
+}
+
+model PayrollEntry {
+  id              String   @id @default(uuid())
+  workOrderItemId String   @unique
+  workerId        String
+  gradeId         String
+  rateRpPerGram   Int
+  amountRp        Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workOrderItem WorkOrderItem @relation(fields: [workOrderItemId], references: [id])
+  worker        Worker        @relation(fields: [workerId], references: [id])
+  grade         Grade         @relation(fields: [gradeId], references: [id])
+}
+
+model InventoryMovement {
+  id             String        @id @default(uuid())
+  lotId          String
+  fromLocationId String?
+  toLocationId   String
+  movementType   MovementType
+  note           String?
+  createdAt      DateTime      @default(now())
+
+  lot          ProductionLot @relation(fields: [lotId], references: [id])
+  fromLocation RackLocation? @relation("MovementFrom", fields: [fromLocationId], references: [id])
+  toLocation   RackLocation  @relation("MovementTo", fields: [toLocationId], references: [id])
+
+  @@index([lotId, createdAt])
+}

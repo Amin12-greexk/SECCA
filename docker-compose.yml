@@ -1,0 +1,26 @@
+services:
+  db:
+    image: postgres:16
+    container_name: secca-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: secca_local
+    ports:
+      - "5433:5432"
+    volumes:
+      - secca_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d secca_local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7
+    container_name: secca-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  secca_pg:
