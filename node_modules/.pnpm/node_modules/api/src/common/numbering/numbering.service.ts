@@ -35,17 +35,13 @@ export class NumberingService {
     tx: Prisma.TransactionClient,
     key: string,
   ): Promise<number> {
-    const rows = await tx.$queryRaw<{ current: number }[]>(
-      Prisma.sql`
-        INSERT INTO "NumberSequence" ("key", "current", "createdAt", "updatedAt")
-        VALUES (${key}, 1, NOW(), NOW())
-        ON CONFLICT ("key") DO UPDATE
-        SET "current" = "NumberSequence"."current" + 1,
-            "updatedAt" = NOW()
-        RETURNING "current";
-      `,
-    );
+    const sequence = await tx.numberSequence.upsert({
+      where: { key },
+      update: { current: { increment: 1 } },
+      create: { key, current: 1 },
+      select: { current: true },
+    });
 
-    return rows[0]?.current ?? 1;
+    return sequence.current;
   }
 }

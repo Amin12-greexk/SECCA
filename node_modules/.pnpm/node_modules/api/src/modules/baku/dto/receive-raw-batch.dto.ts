@@ -1,14 +1,22 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsDateString, IsInt, IsOptional, IsString, IsUUID, Min } from "class-validator";
+import {
+  IsDateString,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Min,
+} from "class-validator";
 
 export class ReceiveRawBatchDto {
   @ApiProperty()
   @IsUUID()
   supplierId: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsDateString()
-  receivedAt: string;
+  receivedAt?: string;
 
   @ApiProperty()
   @IsInt()
