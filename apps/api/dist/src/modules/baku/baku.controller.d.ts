@@ -7,5 +7,36 @@ export declare class BakuController {
         rawBatchId: string;
         cardNumber: string;
         qrPayload: string;
+        supplier: {
+            id: string;
+            name: string;
+            code: string | null;
+        };
+        wetWeightGram: number;
+        receivedAt: Date;
+    }>;
+    findAll(): Promise<{
+        rawBatchId: string;
+        cardNumber: string;
+        supplier: {
+            id: string;
+            name: string;
+            code: string | null;
+        };
+        wetWeightGram: number;
+        receivedAt: Date;
+        notes: string | null;
+    }[]>;
+    findByCardNumber(cardNumber: string): Promise<{
+        rawBatchId: string;
+        cardNumber: string;
+        supplier: {
+            id: string;
+            name: string;
+            code: string | null;
+        };
+        wetWeightGram: number;
+        receivedAt: Date;
+        notes: string | null;
     }>;
 }

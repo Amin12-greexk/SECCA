@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Post, Query } from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { Roles } from "../../auth/roles.decorator";
 import { CreateGradeTariffDto } from "./dto/create-grade-tariff.dto";
 import { CreateMoistureRuleDto } from "./dto/create-moisture-rule.dto";
 import { CreatePecahBonPresetDto } from "./dto/create-pecah-bon-preset.dto";
@@ -8,6 +9,8 @@ import { MoistureRuleQueryDto } from "./dto/moisture-rule-query.dto";
 import { RulesService } from "./rules.service";
 
 @ApiTags("rules")
+@ApiBearerAuth()
+@Roles("manager", "baku", "mitra", "koreksi")
 @Controller("rules")
 export class RulesController {
   constructor(private readonly rulesService: RulesService) {}

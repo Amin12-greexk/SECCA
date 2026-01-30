@@ -1,9 +1,12 @@
 import { Body, Controller, Get, Post } from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { Roles } from "../../auth/roles.decorator";
 import { CreateGradeDto } from "./dto/create-grade.dto";
 import { GradesService } from "./grades.service";
 
 @ApiTags("grades")
+@ApiBearerAuth()
+@Roles("manager", "baku", "mitra", "koreksi")
 @Controller("grades")
 export class GradesController {
   constructor(private readonly gradesService: GradesService) {}

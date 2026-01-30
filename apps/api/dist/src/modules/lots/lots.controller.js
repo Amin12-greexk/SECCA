@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.LotsController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
+const roles_decorator_1 = require("../../auth/roles.decorator");
 const auto_split_dto_1 = require("./dto/auto-split.dto");
 const create_lot_dto_1 = require("./dto/create-lot.dto");
 const lots_service_1 = require("./lots.service");
@@ -47,6 +48,8 @@ __decorate([
 ], LotsController.prototype, "autoSplit", null);
 exports.LotsController = LotsController = __decorate([
     (0, swagger_1.ApiTags)("lots"),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, roles_decorator_1.Roles)("manager", "baku", "mitra", "koreksi"),
     (0, common_1.Controller)("lots"),
     __metadata("design:paramtypes", [lots_service_1.LotsService])
 ], LotsController);

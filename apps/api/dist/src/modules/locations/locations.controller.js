@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.LocationsController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
+const roles_decorator_1 = require("../../auth/roles.decorator");
 const create_location_dto_1 = require("./dto/create-location.dto");
 const locations_service_1 = require("./locations.service");
 let LocationsController = class LocationsController {
@@ -55,6 +56,8 @@ __decorate([
 ], LocationsController.prototype, "findLots", null);
 exports.LocationsController = LocationsController = __decorate([
     (0, swagger_1.ApiTags)("locations"),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, roles_decorator_1.Roles)("manager", "baku", "mitra", "koreksi"),
     (0, common_1.Controller)("locations"),
     __metadata("design:paramtypes", [locations_service_1.LocationsService])
 ], LocationsController);

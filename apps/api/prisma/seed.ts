@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, UserRole } from "@prisma/client";
+import { createHash } from "crypto";
 import { Pool } from "pg";
 import { LOCATION_CODES } from "../src/common/constants";
 
@@ -13,6 +14,9 @@ const pool = new Pool({ connectionString });
 const prisma = new PrismaClient({
   adapter: new PrismaPg(pool),
 });
+
+const hashPassword = (password: string) =>
+  createHash("sha256").update(password).digest("hex");
 
 async function main() {
   await prisma.rackLocation.upsert({
@@ -92,6 +96,38 @@ async function main() {
         data: { ...preset, isActive: true },
       });
     }
+  }
+
+  const demoUsers = [
+    {
+      name: "Baku Demo",
+      email: "baku@secca.com",
+      role: UserRole.BAKU,
+    },
+    {
+      name: "Mitra Demo",
+      email: "mitra@secca.com",
+      role: UserRole.MITRA,
+    },
+    {
+      name: "Koreksi Demo",
+      email: "koreksi@secca.com",
+      role: UserRole.KOREKSI,
+    },
+    {
+      name: "Manager Demo",
+      email: "manager@secca.com",
+      role: UserRole.MANAGER,
+    },
+  ];
+
+  const passwordHash = hashPassword("password");
+  for (const user of demoUsers) {
+    await prisma.appUser.upsert({
+      where: { email: user.email },
+      update: { name: user.name, role: user.role, passwordHash },
+      create: { ...user, passwordHash },
+    });
   }
 }
 

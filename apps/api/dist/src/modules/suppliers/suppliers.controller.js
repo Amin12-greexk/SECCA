@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SuppliersController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
+const roles_decorator_1 = require("../../auth/roles.decorator");
 const create_supplier_dto_1 = require("./dto/create-supplier.dto");
 const suppliers_service_1 = require("./suppliers.service");
 let SuppliersController = class SuppliersController {
@@ -45,6 +46,8 @@ __decorate([
 ], SuppliersController.prototype, "findAll", null);
 exports.SuppliersController = SuppliersController = __decorate([
     (0, swagger_1.ApiTags)("suppliers"),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, roles_decorator_1.Roles)("manager", "baku", "mitra", "koreksi"),
     (0, common_1.Controller)("suppliers"),
     __metadata("design:paramtypes", [suppliers_service_1.SuppliersService])
 ], SuppliersController);

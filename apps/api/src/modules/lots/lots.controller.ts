@@ -1,10 +1,13 @@
 import { Body, Controller, Post } from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { Roles } from "../../auth/roles.decorator";
 import { AutoSplitDto } from "./dto/auto-split.dto";
 import { CreateLotDto } from "./dto/create-lot.dto";
 import { LotsService } from "./lots.service";
 
 @ApiTags("lots")
+@ApiBearerAuth()
+@Roles("manager", "baku", "mitra", "koreksi")
 @Controller("lots")
 export class LotsController {
   constructor(private readonly lotsService: LotsService) {}

@@ -1,9 +1,12 @@
 import { Body, Controller, Get, Param, Post } from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { Roles } from "../../auth/roles.decorator";
 import { CreateLocationDto } from "./dto/create-location.dto";
 import { LocationsService } from "./locations.service";
 
 @ApiTags("locations")
+@ApiBearerAuth()
+@Roles("manager", "baku", "mitra", "koreksi")
 @Controller("locations")
 export class LocationsController {
   constructor(private readonly locationsService: LocationsService) {}

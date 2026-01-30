@@ -1,9 +1,12 @@
 import { Body, Controller, Get, Param, Post } from "@nestjs/common";
-import { ApiParam, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiParam, ApiTags } from "@nestjs/swagger";
+import { Roles } from "../../auth/roles.decorator";
 import { ReceiveRawBatchDto } from "./dto/receive-raw-batch.dto";
 import { BakuService } from "./baku.service";
 
 @ApiTags("Baku")
+@ApiBearerAuth()
+@Roles("manager", "baku", "mitra", "koreksi")
 @Controller("baku")
 export class BakuController {
   constructor(private readonly bakuService: BakuService) {}

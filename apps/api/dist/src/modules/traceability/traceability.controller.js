@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TraceabilityController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
+const roles_decorator_1 = require("../../auth/roles.decorator");
 const traceability_service_1 = require("./traceability.service");
 let TraceabilityController = class TraceabilityController {
     traceabilityService;
@@ -35,6 +36,8 @@ __decorate([
 ], TraceabilityController.prototype, "trace", null);
 exports.TraceabilityController = TraceabilityController = __decorate([
     (0, swagger_1.ApiTags)("traceability"),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, roles_decorator_1.Roles)("manager", "baku", "mitra", "koreksi"),
     (0, common_1.Controller)("lots"),
     __metadata("design:paramtypes", [traceability_service_1.TraceabilityService])
 ], TraceabilityController);

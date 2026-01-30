@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PayrollController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
+const roles_decorator_1 = require("../../auth/roles.decorator");
 const payroll_service_1 = require("./payroll.service");
 let PayrollController = class PayrollController {
     payrollService;
@@ -31,6 +32,8 @@ __decorate([
 ], PayrollController.prototype, "findAll", null);
 exports.PayrollController = PayrollController = __decorate([
     (0, swagger_1.ApiTags)("payroll"),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, roles_decorator_1.Roles)("manager", "baku", "mitra", "koreksi"),
     (0, common_1.Controller)("payroll"),
     __metadata("design:paramtypes", [payroll_service_1.PayrollService])
 ], PayrollController);

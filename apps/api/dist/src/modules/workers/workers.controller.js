@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.WorkersController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
+const roles_decorator_1 = require("../../auth/roles.decorator");
 const create_worker_dto_1 = require("./dto/create-worker.dto");
 const workers_service_1 = require("./workers.service");
 let WorkersController = class WorkersController {
@@ -45,6 +46,8 @@ __decorate([
 ], WorkersController.prototype, "findAll", null);
 exports.WorkersController = WorkersController = __decorate([
     (0, swagger_1.ApiTags)("workers"),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, roles_decorator_1.Roles)("manager", "baku", "mitra", "koreksi"),
     (0, common_1.Controller)("workers"),
     __metadata("design:paramtypes", [workers_service_1.WorkersService])
 ], WorkersController);

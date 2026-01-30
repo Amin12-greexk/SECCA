@@ -1,6 +1,6 @@
 export declare class ReceiveRawBatchDto {
     supplierId: string;
-    receivedAt: string;
+    receivedAt?: string;
     wetWeightGram: number;
     notes?: string;
 }

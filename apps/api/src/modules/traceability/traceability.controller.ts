@@ -1,8 +1,11 @@
 import { Controller, Get, Param } from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { Roles } from "../../auth/roles.decorator";
 import { TraceabilityService } from "./traceability.service";
 
 @ApiTags("traceability")
+@ApiBearerAuth()
+@Roles("manager", "baku", "mitra", "koreksi")
 @Controller("lots")
 export class TraceabilityController {
   constructor(private readonly traceabilityService: TraceabilityService) {}

@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.BakuController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
+const roles_decorator_1 = require("../../auth/roles.decorator");
 const receive_raw_batch_dto_1 = require("./dto/receive-raw-batch.dto");
 const baku_service_1 = require("./baku.service");
 let BakuController = class BakuController {
@@ -25,6 +26,12 @@ let BakuController = class BakuController {
     receive(dto) {
         return this.bakuService.receive(dto);
     }
+    findAll() {
+        return this.bakuService.findAll();
+    }
+    findByCardNumber(cardNumber) {
+        return this.bakuService.findByCardNumber(cardNumber);
+    }
 };
 exports.BakuController = BakuController;
 __decorate([
@@ -34,8 +41,24 @@ __decorate([
     __metadata("design:paramtypes", [receive_raw_batch_dto_1.ReceiveRawBatchDto]),
     __metadata("design:returntype", void 0)
 ], BakuController.prototype, "receive", null);
+__decorate([
+    (0, common_1.Get)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], BakuController.prototype, "findAll", null);
+__decorate([
+    (0, common_1.Get)(":cardNumber"),
+    (0, swagger_1.ApiParam)({ name: "cardNumber" }),
+    __param(0, (0, common_1.Param)("cardNumber")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], BakuController.prototype, "findByCardNumber", null);
 exports.BakuController = BakuController = __decorate([
-    (0, swagger_1.ApiTags)("baku"),
+    (0, swagger_1.ApiTags)("Baku"),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, roles_decorator_1.Roles)("manager", "baku", "mitra", "koreksi"),
     (0, common_1.Controller)("baku"),
     __metadata("design:paramtypes", [baku_service_1.BakuService])
 ], BakuController);

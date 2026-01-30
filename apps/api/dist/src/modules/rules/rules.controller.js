@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RulesController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
+const roles_decorator_1 = require("../../auth/roles.decorator");
 const create_grade_tariff_dto_1 = require("./dto/create-grade-tariff.dto");
 const create_moisture_rule_dto_1 = require("./dto/create-moisture-rule.dto");
 const create_pecah_bon_preset_dto_1 = require("./dto/create-pecah-bon-preset.dto");
@@ -89,6 +90,8 @@ __decorate([
 ], RulesController.prototype, "findPresets", null);
 exports.RulesController = RulesController = __decorate([
     (0, swagger_1.ApiTags)("rules"),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, roles_decorator_1.Roles)("manager", "baku", "mitra", "koreksi"),
     (0, common_1.Controller)("rules"),
     __metadata("design:paramtypes", [rules_service_1.RulesService])
 ], RulesController);

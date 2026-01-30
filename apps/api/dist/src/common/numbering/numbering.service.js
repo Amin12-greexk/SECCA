@@ -11,7 +11,6 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.NumberingService = void 0;
 const common_1 = require("@nestjs/common");
-const client_1 = require("@prisma/client");
 const constants_1 = require("../constants");
 const prisma_service_1 = require("../../prisma/prisma.service");
 let NumberingService = class NumberingService {
@@ -34,15 +33,13 @@ let NumberingService = class NumberingService {
         return { lotNumber, sequence };
     }
     async nextSequence(tx, key) {
-        const rows = await tx.$queryRaw(client_1.Prisma.sql `
-        INSERT INTO "NumberSequence" ("key", "current", "createdAt", "updatedAt")
-        VALUES (${key}, 1, NOW(), NOW())
-        ON CONFLICT ("key") DO UPDATE
-        SET "current" = "NumberSequence"."current" + 1,
-            "updatedAt" = NOW()
-        RETURNING "current";
-      `);
-        return rows[0]?.current ?? 1;
+        const sequence = await tx.numberSequence.upsert({
+            where: { key },
+            update: { current: { increment: 1 } },
+            create: { key, current: 1 },
+            select: { current: true },
+        });
+        return sequence.current;
     }
 };
 exports.NumberingService = NumberingService;

@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+:root {
+  --primary: 22 163 74;
+  /* green-600 */
+  --primary-hover: 21 128 61;
+  /* green-700 */
+}
+
+body {
+  background-color: white;
+  color: rgb(17, 24, 39);
+  /* gray-900 */
+}
+
+@layer utilities {
+  .animate-spin-slow {
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.3s ease-out;
+}

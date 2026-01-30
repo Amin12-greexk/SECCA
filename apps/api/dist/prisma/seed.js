@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 require("dotenv/config");
 const adapter_pg_1 = require("@prisma/adapter-pg");
 const client_1 = require("@prisma/client");
+const crypto_1 = require("crypto");
 const pg_1 = require("pg");
 const constants_1 = require("../src/common/constants");
 const connectionString = process.env.DATABASE_URL;
@@ -13,6 +14,7 @@ const pool = new pg_1.Pool({ connectionString });
 const prisma = new client_1.PrismaClient({
     adapter: new adapter_pg_1.PrismaPg(pool),
 });
+const hashPassword = (password) => (0, crypto_1.createHash)("sha256").update(password).digest("hex");
 async function main() {
     await prisma.rackLocation.upsert({
         where: { code: constants_1.LOCATION_CODES.PRE_SALE },
@@ -80,6 +82,36 @@ async function main() {
                 data: { ...preset, isActive: true },
             });
         }
+    }
+    const demoUsers = [
+        {
+            name: "Baku Demo",
+            email: "baku@secca.com",
+            role: client_1.UserRole.BAKU,
+        },
+        {
+            name: "Mitra Demo",
+            email: "mitra@secca.com",
+            role: client_1.UserRole.MITRA,
+        },
+        {
+            name: "Koreksi Demo",
+            email: "koreksi@secca.com",
+            role: client_1.UserRole.KOREKSI,
+        },
+        {
+            name: "Manager Demo",
+            email: "manager@secca.com",
+            role: client_1.UserRole.MANAGER,
+        },
+    ];
+    const passwordHash = hashPassword("password");
+    for (const user of demoUsers) {
+        await prisma.appUser.upsert({
+            where: { email: user.email },
+            update: { name: user.name, role: user.role, passwordHash },
+            create: { ...user, passwordHash },
+        });
     }
 }
 main()

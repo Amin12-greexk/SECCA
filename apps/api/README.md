@@ -25,6 +25,12 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Secca API notes
+
+- Flow examples: `docs/api-flow.md`
+- Auth: `POST /api/auth/login` returns Bearer token; most endpoints require it.
+- Demo users: `baku@secca.com`, `mitra@secca.com`, `koreksi@secca.com`, `manager@secca.com` (password: `password`).
+
 ## Project setup
 
 ```bash
