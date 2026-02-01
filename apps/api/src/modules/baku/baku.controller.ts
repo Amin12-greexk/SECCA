@@ -21,9 +21,9 @@ export class BakuController {
     return this.bakuService.findAll();
   }
 
-  @Get(":cardNumber")
-  @ApiParam({ name: "cardNumber" })
-  findByCardNumber(@Param("cardNumber") cardNumber: string) {
-    return this.bakuService.findByCardNumber(cardNumber);
+  @Get(":cardId")
+  @ApiParam({ name: "cardId" })
+  findByCardId(@Param("cardId") cardId: string) {
+    return this.bakuService.findByCardId(cardId);
   }
 }

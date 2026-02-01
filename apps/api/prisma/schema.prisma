@@ -156,19 +156,22 @@ model NumberSequence {
 }
 
 model RawBatch {
-  id            String   @id @default(uuid())
-  cardNumber    String   @unique
-  supplierId    String
-  receivedAt    DateTime
-  wetWeightGram Int
-  notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id               String   @id @default(uuid())
+  batchNumber      String   @unique
+  cardId           String   @unique
+  supplierId       String
+  origin           String
+  featherCondition String
+  wetWeightGram    Float
+  pieceCount       Int
+  moisturePercent  Float
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   supplier    Supplier             @relation(fields: [supplierId], references: [id])
   gradeStocks RawBatchGradeStock[]
 
-  @@index([supplierId, receivedAt])
+  @@index([supplierId, createdAt])
 }
 
 model RawBatchGradeStock {

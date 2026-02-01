@@ -39,24 +39,34 @@ describe("BakuService", () => {
   });
 
   it("creates raw batch successfully", async () => {
+    const now = new Date();
+    const yearShort = String(now.getUTCFullYear()).slice(-2);
+    const monthCode = String(now.getUTCMonth() + 1).padStart(2, "0");
+
     const result = await bakuService.receive({
       supplierId,
-      receivedAt: "2026-01-25T10:00:00.000Z",
+      origin: "KAL",
+      featherCondition: "Light",
       wetWeightGram: 12000,
-      notes: "Kiriman pagi",
+      moisturePercent: 17.5,
+      pieceCount: 120,
     });
 
-    expect(result.cardNumber).toBe("K0001/SECCA/26");
-    expect(result.qrPayload).toBe("SECCA:RAW:K0001/SECCA/26");
+    expect(result.batchNumber).toBe(`K0001-TEI-${yearShort}`);
+    expect(result.cardId).toBe(`R-${yearShort}${monthCode}-001`);
     expect(result.supplier.id).toBe(supplierId);
     expect(result.wetWeightGram).toBe(12000);
+    expect(result.moisturePercent).toBe(17.5);
   });
 
-  it("generates unique card numbers for parallel requests", async () => {
+  it("generates unique batch and card IDs for parallel requests", async () => {
     const payload = {
       supplierId,
-      receivedAt: "2026-01-25T10:00:00.000Z",
+      origin: "KAL",
+      featherCondition: "Light",
       wetWeightGram: 1000,
+      moisturePercent: 12.5,
+      pieceCount: 10,
     };
 
     const results = await Promise.all([
@@ -64,13 +74,18 @@ describe("BakuService", () => {
       bakuService.receive(payload),
     ]);
 
-    const cardNumbers = results.map((item) => item.cardNumber);
-    const unique = new Set(cardNumbers);
+    const batchNumbers = results.map((item) => item.batchNumber);
+    const unique = new Set(batchNumbers);
     expect(unique.size).toBe(2);
 
-    const sequences = cardNumbers
-      .map((card) => Number(card.slice(1, 5)))
+    const sequences = batchNumbers
+      .map((batch) => Number(batch.slice(1, 5)))
       .sort((a, b) => a - b);
     expect(sequences).toEqual([1, 2]);
+
+    const cardSequences = results
+      .map((item) => Number(item.cardId.split("-").pop()))
+      .sort((a, b) => a - b);
+    expect(cardSequences).toEqual([1, 2]);
   });
 });

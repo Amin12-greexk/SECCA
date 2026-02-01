@@ -1,18 +1,17 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
-import { NumberingService } from "../../common/numbering/numbering.service";
 import { conflict, notFound } from "../../common/errors";
-import { ReceiveRawBatchDto } from "./dto/receive-raw-batch.dto";
+import {
+  FeatherConditionInput,
+  ReceiveRawBatchDto,
+} from "./dto/receive-raw-batch.dto";
 
 @Injectable()
 export class BakuService {
   private readonly logger = new Logger(BakuService.name);
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly numberingService: NumberingService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async receive(dto: ReceiveRawBatchDto) {
     const supplier = await this.prisma.supplier.findUnique({
@@ -23,98 +22,148 @@ export class BakuService {
       return notFound("Supplier not found", { supplierId: dto.supplierId });
     }
 
-    const receivedAt = dto.receivedAt ? new Date(dto.receivedAt) : new Date();
+    const createdAt = new Date();
 
-    return this.prisma.$transaction(async (tx) => {
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        const { cardNumber } = await this.numberingService.nextRawBatchNumber(
-          tx,
-          receivedAt,
-        );
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const rawBatch = await this.prisma.$transaction(async (tx) => {
+          const { batchNumber, cardId } = await this.generateIdentifiers(
+            tx,
+            createdAt,
+          );
 
-        try {
-          const rawBatch = await tx.rawBatch.create({
+          return tx.rawBatch.create({
             data: {
-              cardNumber,
+              batchNumber,
+              cardId,
               supplierId: dto.supplierId,
-              receivedAt,
-              wetWeightGram: dto.wetWeightGram,
-              notes: dto.notes,
+              origin: dto.origin,
+              featherCondition: this.mapFeatherCondition(dto.featherCondition),
+              wetWeightGram: this.roundToTwoDecimals(dto.wetWeightGram),
+              pieceCount: dto.pieceCount,
+              moisturePercent: this.roundToTwoDecimals(dto.moisturePercent),
+              createdAt,
             },
+            include: { supplier: true },
           });
+        });
 
-          this.logger.log(`Raw batch created: ${rawBatch.cardNumber}`);
+        this.logger.log(`Raw batch created: ${rawBatch.batchNumber}`);
 
-          return {
-            rawBatchId: rawBatch.id,
-            cardNumber: rawBatch.cardNumber,
-            qrPayload: `SECCA:RAW:${rawBatch.cardNumber}`,
-            supplier: {
-              id: supplier.id,
-              name: supplier.name,
-              code: supplier.code,
-            },
-            wetWeightGram: rawBatch.wetWeightGram,
-            receivedAt: rawBatch.receivedAt,
-          };
-        } catch (error) {
-          if (error instanceof Prisma.PrismaClientKnownRequestError) {
-            if (error.code === "P2002") {
-              if (attempt === 0) {
-                continue;
-              }
-              return conflict("Card number already exists", { cardNumber });
+        return rawBatch;
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+          if (error.code === "P2002") {
+            if (attempt < 2) {
+              continue;
             }
+            return conflict("Batch identifier already exists");
           }
-          throw error;
         }
+        throw error;
       }
+    }
 
-      return conflict("Failed to generate unique card number");
-    });
+    return conflict("Failed to generate unique batch identifiers");
   }
 
   async findAll() {
     const items = await this.prisma.rawBatch.findMany({
       include: { supplier: true },
-      orderBy: { receivedAt: "desc" },
+      orderBy: { createdAt: "desc" },
     });
 
     return items.map((rawBatch) => ({
       rawBatchId: rawBatch.id,
-      cardNumber: rawBatch.cardNumber,
+      batchNumber: rawBatch.batchNumber,
+      cardId: rawBatch.cardId,
       supplier: {
         id: rawBatch.supplier.id,
         name: rawBatch.supplier.name,
         code: rawBatch.supplier.code,
       },
+      origin: rawBatch.origin,
+      featherCondition: rawBatch.featherCondition,
       wetWeightGram: rawBatch.wetWeightGram,
-      receivedAt: rawBatch.receivedAt,
-      notes: rawBatch.notes,
+      moisturePercent: rawBatch.moisturePercent,
+      pieceCount: rawBatch.pieceCount,
+      createdAt: rawBatch.createdAt,
+      updatedAt: rawBatch.updatedAt,
     }));
   }
 
-  async findByCardNumber(cardNumber: string) {
+  async findByCardId(cardId: string) {
     const rawBatch = await this.prisma.rawBatch.findUnique({
-      where: { cardNumber },
+      where: { cardId },
       include: { supplier: true },
     });
 
     if (!rawBatch) {
-      return notFound("Raw batch not found", { cardNumber });
+      return notFound("Raw batch not found", { cardId });
     }
 
     return {
       rawBatchId: rawBatch.id,
-      cardNumber: rawBatch.cardNumber,
+      batchNumber: rawBatch.batchNumber,
+      cardId: rawBatch.cardId,
       supplier: {
         id: rawBatch.supplier.id,
         name: rawBatch.supplier.name,
         code: rawBatch.supplier.code,
       },
+      origin: rawBatch.origin,
+      featherCondition: rawBatch.featherCondition,
       wetWeightGram: rawBatch.wetWeightGram,
-      receivedAt: rawBatch.receivedAt,
-      notes: rawBatch.notes,
+      moisturePercent: rawBatch.moisturePercent,
+      pieceCount: rawBatch.pieceCount,
+      createdAt: rawBatch.createdAt,
+      updatedAt: rawBatch.updatedAt,
     };
+  }
+
+  private async generateIdentifiers(
+    tx: Prisma.TransactionClient,
+    at: Date,
+  ): Promise<{ batchNumber: string; cardId: string }> {
+    const year = at.getUTCFullYear();
+    const month = at.getUTCMonth();
+
+    const yearStart = new Date(Date.UTC(year, 0, 1));
+    const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
+    const monthStart = new Date(Date.UTC(year, month, 1));
+    const monthEnd = new Date(Date.UTC(year, month + 1, 1));
+
+    const [yearCount, monthCount] = await Promise.all([
+      tx.rawBatch.count({
+        where: { createdAt: { gte: yearStart, lt: yearEnd } },
+      }),
+      tx.rawBatch.count({
+        where: { createdAt: { gte: monthStart, lt: monthEnd } },
+      }),
+    ]);
+
+    const yearShort = String(year).slice(-2);
+    const monthCode = String(month + 1).padStart(2, "0");
+    const batchSequence = String(yearCount + 1).padStart(4, "0");
+    const cardSequence = String(monthCount + 1).padStart(3, "0");
+
+    const batchNumber = `K${batchSequence}-TEI-${yearShort}`;
+    const cardId = `R-${yearShort}${monthCode}-${cardSequence}`;
+
+    return { batchNumber, cardId };
+  }
+
+  private mapFeatherCondition(value: FeatherConditionInput): string {
+    const mapping: Record<FeatherConditionInput, string> = {
+      [FeatherConditionInput.Light]: "Ringan",
+      [FeatherConditionInput.Medium]: "Sedang",
+      [FeatherConditionInput.Heavy]: "Berat",
+    };
+
+    return mapping[value];
+  }
+
+  private roundToTwoDecimals(value: number) {
+    return Math.round(value * 100) / 100;
   }
 }

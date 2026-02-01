@@ -5,18 +5,34 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3
 export interface Supplier {
     id: string;
     name: string;
+    code?: string | null;
 }
 
 export interface BakuReceiveRequest {
     supplierId: string;
+    origin: string;
+    featherCondition: string;
     wetWeightGram: number;
-    notes?: string;
+    moisturePercent: number;
+    pieceCount: number;
 }
 
-export interface BakuReceiveResponse {
-    cardNumber: string;
-    qrPayload: string;
+export interface RawBatch {
+    id: string;
+    batchNumber: string;
+    cardId: string;
+    supplierId: string;
+    supplier?: Supplier;
+    origin: string;
+    featherCondition: string;
+    wetWeightGram: number;
+    moisturePercent: number;
+    pieceCount: number;
+    createdAt: string;
+    updatedAt: string;
 }
+
+export type BakuReceiveResponse = RawBatch;
 
 export interface LoginRequest {
     email: string;
