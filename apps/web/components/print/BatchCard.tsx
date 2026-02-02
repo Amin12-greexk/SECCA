@@ -5,18 +5,21 @@ import QRCode from "react-qr-code";
 
 export type BatchCardData = {
   batchNumber: string;
-  cardId: string;
+  cardId?: string;
   supplier?: {
     id: string;
     name: string;
     code?: string | null;
+    origin?: string | null;
   };
   origin: string;
   featherCondition: string;
   wetWeightGram: number;
+  originalWetWeightGram?: number;
   moisturePercent: number;
-  pieceCount: number;
+  notes?: string | null;
   createdAt: string | Date;
+  updatedAt?: string | Date;
 };
 
 type BatchCardProps = {
@@ -37,16 +40,50 @@ const formatNumber = (value: number, fractionDigits = 2) =>
     maximumFractionDigits: fractionDigits,
   }).format(value);
 
+const toIsoString = (value?: string | Date) => {
+  if (!value) return null;
+  return typeof value === "string" ? value : value.toISOString();
+};
+
 const BatchCard = React.forwardRef<HTMLDivElement, BatchCardProps>(({ batch }, ref) => {
+  const displayWeightGram = batch.originalWetWeightGram ?? batch.wetWeightGram;
+  const qrPayload = JSON.stringify({
+    type: "RAW_BATCH",
+    batchNumber: batch.batchNumber,
+    cardId: batch.cardId ?? null,
+    supplier: batch.supplier ?? null,
+    origin: batch.origin,
+    featherCondition: batch.featherCondition,
+    wetWeightGram: displayWeightGram,
+    remainingWetWeightGram: batch.wetWeightGram,
+    moisturePercent: batch.moisturePercent,
+    notes: batch.notes ?? null,
+    createdAt: toIsoString(batch.createdAt),
+    updatedAt: toIsoString(batch.updatedAt),
+  });
+
   return (
-    <>
-      <style>{`
+      <>
+        <style>{`
 @page {
   size: 72mm auto;
   margin: 0;
 }
+html, body {
+  margin: 0;
+  padding: 0;
+}
 @media print {
-  body { visibility: hidden; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 72mm;
+  }
+  body {
+    visibility: hidden;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   #printable-content {
     visibility: visible;
     position: absolute;
@@ -69,9 +106,8 @@ const BatchCard = React.forwardRef<HTMLDivElement, BatchCardProps>(({ batch }, r
       >
         <div className="text-center text-[16px] font-bold">KARTU BAKU - TEI</div>
         <div className="mt-2 flex justify-center">
-          <QRCode value={batch.cardId} size={128} />
+          <QRCode value={qrPayload} size={128} />
         </div>
-        <div className="mt-2 text-center text-[11px] font-semibold">{batch.cardId}</div>
 
         <div className="mt-2 border border-black/70 p-2 text-[12px]">
           <div className="grid grid-cols-2 gap-y-1">
@@ -84,22 +120,18 @@ const BatchCard = React.forwardRef<HTMLDivElement, BatchCardProps>(({ batch }, r
             <div className="font-semibold">Asal</div>
             <div className="text-right">{batch.origin}</div>
 
-            <div className="font-semibold">Kondisi</div>
+            <div className="font-semibold">Grading</div>
             <div className="text-right">{batch.featherCondition}</div>
           </div>
         </div>
 
         <div className="mt-2 border-2 border-black p-2 text-center">
           <div className="text-[18px] font-bold">
-            WEIGHT: {formatNumber(batch.wetWeightGram, 2)} Gr
+            BERAT: {formatNumber(displayWeightGram, 2)} Gr
           </div>
           <div className="text-[18px] font-bold">
-            MOIST: {formatNumber(batch.moisturePercent, 1)}%
+            KADAR AIR: {formatNumber(batch.moisturePercent, 1)}%
           </div>
-        </div>
-
-        <div className="mt-2 text-center text-[11px]">
-          Pieces: {batch.pieceCount}
         </div>
 
         <div className="mt-3 border-t border-dashed border-black" />

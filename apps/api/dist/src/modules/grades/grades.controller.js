@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const roles_decorator_1 = require("../../auth/roles.decorator");
 const create_grade_dto_1 = require("./dto/create-grade.dto");
+const update_grade_dto_1 = require("./dto/update-grade.dto");
 const grades_service_1 = require("./grades.service");
 let GradesController = class GradesController {
     gradesService;
@@ -28,6 +29,12 @@ let GradesController = class GradesController {
     }
     findAll() {
         return this.gradesService.findAll();
+    }
+    update(gradeId, dto) {
+        return this.gradesService.update(gradeId, dto);
+    }
+    remove(gradeId) {
+        return this.gradesService.remove(gradeId);
     }
 };
 exports.GradesController = GradesController;
@@ -44,6 +51,21 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], GradesController.prototype, "findAll", null);
+__decorate([
+    (0, common_1.Patch)(":gradeId"),
+    __param(0, (0, common_1.Param)("gradeId")),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, update_grade_dto_1.UpdateGradeDto]),
+    __metadata("design:returntype", void 0)
+], GradesController.prototype, "update", null);
+__decorate([
+    (0, common_1.Delete)(":gradeId"),
+    __param(0, (0, common_1.Param)("gradeId")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], GradesController.prototype, "remove", null);
 exports.GradesController = GradesController = __decorate([
     (0, swagger_1.ApiTags)("grades"),
     (0, swagger_1.ApiBearerAuth)(),

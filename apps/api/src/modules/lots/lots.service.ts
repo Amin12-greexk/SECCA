@@ -8,6 +8,7 @@ import { DEFAULT_MOISTURE_BPS, LOCATION_CODES } from "../../common/constants";
 import { roundDryWeight } from "../../common/utils/weight";
 import { AutoSplitDto } from "./dto/auto-split.dto";
 import { CreateLotDto } from "./dto/create-lot.dto";
+import { MoveLotDto } from "./dto/move-lot.dto";
 
 @Injectable()
 export class LotsService {
@@ -235,16 +236,103 @@ export class LotsService {
     });
   }
 
-  private async getPreSaleLocation(tx: Prisma.TransactionClient) {
-    return tx.rackLocation.upsert({
-      where: { code: LOCATION_CODES.PRE_SALE },
-      update: { name: "Rak Sementara", type: RackType.PRE_SALE },
-      create: {
-        code: LOCATION_CODES.PRE_SALE,
-        name: "Rak Sementara",
-        type: RackType.PRE_SALE,
-      },
+  async moveLot(lotId: string, dto: MoveLotDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const lot = await tx.productionLot.findUnique({
+        where: { id: lotId },
+        include: { location: true, grade: true },
+      });
+
+      if (!lot) {
+        return notFound("Lot not found", { lotId });
+      }
+
+      if (lot.status === LotStatus.COMPLETED) {
+        return conflict("Lot already completed", { lotNumber: lot.lotNumber });
+      }
+
+      const toLocation = await this.getRackLocation(tx, dto.toLocationCode);
+
+      if (lot.locationId === toLocation.id) {
+        return conflict("Lot already in target location", {
+          lotNumber: lot.lotNumber,
+          location: toLocation.code,
+        });
+      }
+
+      const nextStatus =
+        toLocation.code === LOCATION_CODES.PRE_SALE
+          ? LotStatus.AVAILABLE
+          : toLocation.code === LOCATION_CODES.MITRA_ORDER
+            ? LotStatus.IN_PROGRESS
+            : lot.status;
+
+      const updated = await tx.productionLot.update({
+        where: { id: lot.id },
+        data: {
+          locationId: toLocation.id,
+          status: nextStatus,
+        },
+        include: { grade: true, location: true },
+      });
+
+      await this.movementService.record(tx, {
+        lotId: lot.id,
+        fromLocationId: lot.locationId,
+        toLocationId: toLocation.id,
+        movementType: MovementType.MOVE,
+        note: "Manual rack move",
+      });
+
+      return updated;
     });
+  }
+
+  private async getPreSaleLocation(tx: Prisma.TransactionClient) {
+    return this.getRackLocation(tx, LOCATION_CODES.PRE_SALE);
+  }
+
+  private async getRackLocation(
+    tx: Prisma.TransactionClient,
+    code: string,
+  ) {
+    if (code === LOCATION_CODES.PRE_SALE) {
+      return tx.rackLocation.upsert({
+        where: { code: LOCATION_CODES.PRE_SALE },
+        update: { name: "Rak Sementara", type: RackType.PRE_SALE },
+        create: {
+          code: LOCATION_CODES.PRE_SALE,
+          name: "Rak Sementara",
+          type: RackType.PRE_SALE,
+        },
+      });
+    }
+
+    if (code === LOCATION_CODES.MITRA_ORDER) {
+      return tx.rackLocation.upsert({
+        where: { code: LOCATION_CODES.MITRA_ORDER },
+        update: { name: "Rak Mitra Order", type: RackType.MITRA_ORDER },
+        create: {
+          code: LOCATION_CODES.MITRA_ORDER,
+          name: "Rak Mitra Order",
+          type: RackType.MITRA_ORDER,
+        },
+      });
+    }
+
+    if (code === LOCATION_CODES.FINISHED) {
+      return tx.rackLocation.upsert({
+        where: { code: LOCATION_CODES.FINISHED },
+        update: { name: "Rak Finished", type: RackType.FINISHED },
+        create: {
+          code: LOCATION_CODES.FINISHED,
+          name: "Rak Finished",
+          type: RackType.FINISHED,
+        },
+      });
+    }
+
+    return badRequest("Unknown location code", { code });
   }
 
   private async resolveMoistureBps(

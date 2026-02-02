@@ -61,4 +61,31 @@ export declare class RulesService {
         weightGram: number;
         isActive: boolean;
     }[]>;
+    deleteGradeTariff(id: string): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        gradeId: string;
+        rateRpPerGram: number;
+        effectiveFrom: Date;
+        effectiveTo: Date | null;
+    }>;
+    deleteMoistureRule(id: string): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        gradeId: string | null;
+        effectiveFrom: Date;
+        effectiveTo: Date | null;
+        supplierId: string | null;
+        moistureBps: number;
+    }>;
+    deletePecahBonPreset(id: string): Promise<{
+        id: string;
+        name: string;
+        createdAt: Date;
+        updatedAt: Date;
+        weightGram: number;
+        isActive: boolean;
+    }>;
 }

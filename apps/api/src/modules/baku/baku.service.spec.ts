@@ -2,6 +2,7 @@ import "dotenv/config";
 import { Test } from "@nestjs/testing";
 import { BakuService } from "./baku.service";
 import { NumberingService } from "../../common/numbering/numbering.service";
+import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
 import { PrismaService } from "../../prisma/prisma.service";
 
 jest.setTimeout(30000);
@@ -13,7 +14,12 @@ describe("BakuService", () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      providers: [PrismaService, NumberingService, BakuService],
+      providers: [
+        PrismaService,
+        NumberingService,
+        InventoryMovementService,
+        BakuService,
+      ],
     }).compile();
 
     bakuService = moduleRef.get(BakuService);
@@ -33,7 +39,7 @@ describe("BakuService", () => {
     await prisma.supplier.deleteMany();
 
     const supplier = await prisma.supplier.create({
-      data: { name: "Supplier Test", code: "SUP-TEST" },
+      data: { name: "Supplier Test", code: "SUP-TEST", origin: "KAL" },
     });
     supplierId = supplier.id;
   });
@@ -45,11 +51,9 @@ describe("BakuService", () => {
 
     const result = await bakuService.receive({
       supplierId,
-      origin: "KAL",
-      featherCondition: "Light",
+      featherCondition: "A",
       wetWeightGram: 12000,
       moisturePercent: 17.5,
-      pieceCount: 120,
     });
 
     expect(result.batchNumber).toBe(`K0001-TEI-${yearShort}`);
@@ -62,11 +66,9 @@ describe("BakuService", () => {
   it("generates unique batch and card IDs for parallel requests", async () => {
     const payload = {
       supplierId,
-      origin: "KAL",
-      featherCondition: "Light",
+      featherCondition: "A",
       wetWeightGram: 1000,
       moisturePercent: 12.5,
-      pieceCount: 10,
     };
 
     const results = await Promise.all([

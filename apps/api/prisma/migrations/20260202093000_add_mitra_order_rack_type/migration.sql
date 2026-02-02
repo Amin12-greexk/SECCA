@@ -1,0 +1,2 @@
+-- Add MITRA_ORDER to RackType enum
+ALTER TYPE "RackType" ADD VALUE 'MITRA_ORDER';

@@ -54,7 +54,7 @@ const menuItems: MenuItem[] = [
                         <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                     </svg>
                 ),
-                roles: ['baku', 'manager'],
+                roles: ['manager'],
             },
             {
                 name: 'Tambah Supplier',
@@ -64,7 +64,7 @@ const menuItems: MenuItem[] = [
                         <path d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                     </svg>
                 ),
-                roles: ['baku', 'manager'],
+                roles: ['manager'],
             },
         ],
     },
@@ -79,18 +79,28 @@ const menuItems: MenuItem[] = [
         roles: ['baku', 'manager'],
         children: [
             {
-                name: 'Rak Mitra Order',
-                href: '/stock/mitra-order',
+                name: 'Stock Asal',
+                href: '/stock/asal',
                 icon: (
                     <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                        <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                     </svg>
                 ),
                 roles: ['baku', 'manager'],
             },
             {
-                name: 'Rak Penempatan Sementara',
-                href: '/stock/temporary',
+                name: 'Pecah Bon',
+                href: '/stock/pecah-bon',
+                icon: (
+                    <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                        <path d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
+                    </svg>
+                ),
+                roles: ['baku', 'manager'],
+            },
+            {
+                name: 'Rak',
+                href: '/stock/rak',
                 icon: (
                     <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                         <path d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
@@ -164,6 +174,28 @@ const menuItems: MenuItem[] = [
         ),
         roles: ['manager'],
     },
+    // Admin menu
+    {
+        name: 'Admin',
+        icon: (
+            <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                <path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+        ),
+        roles: ['manager'],
+        children: [
+            {
+                name: 'Manajemen Data',
+                href: '/admin/rules',
+                icon: (
+                    <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                        <path d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                    </svg>
+                ),
+                roles: ['manager'],
+            },
+        ],
+    },
 ];
 
 export default function Sidebar() {
@@ -198,8 +230,8 @@ export default function Sidebar() {
                     <button
                         onClick={() => toggleMenu(item.name)}
                         className={`flex items-center justify-between w-full px-4 py-3 rounded-lg transition-colors ${isActive
-                                ? 'bg-green-50 text-green-700 font-medium'
-                                : 'text-gray-700 hover:bg-gray-50'
+                            ? 'bg-green-50 text-green-700 font-medium'
+                            : 'text-gray-700 hover:bg-gray-50'
                             }`}
                     >
                         <div className="flex items-center gap-3">
@@ -224,7 +256,7 @@ export default function Sidebar() {
                     {/* Dropdown children */}
                     {isOpen && (
                         <div className="ml-4 mt-1 space-y-1">
-                            {item.children
+                            {(item.children ?? [])
                                 .filter((child) => child.roles.includes(user.role as UserRole))
                                 .map((child) => renderMenuItem(child, true))}
                         </div>

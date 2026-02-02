@@ -1,4 +1,5 @@
 import { CreateSupplierDto } from "./dto/create-supplier.dto";
+import { UpdateSupplierDto } from "./dto/update-supplier.dto";
 import { SuppliersService } from "./suppliers.service";
 export declare class SuppliersController {
     private readonly suppliersService;
@@ -10,6 +11,7 @@ export declare class SuppliersController {
         createdAt: Date;
         updatedAt: Date;
         phone: string | null;
+        origin: string | null;
     }, never, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
     findAll(): import("@prisma/client").Prisma.PrismaPromise<{
         id: string;
@@ -18,5 +20,24 @@ export declare class SuppliersController {
         createdAt: Date;
         updatedAt: Date;
         phone: string | null;
+        origin: string | null;
     }[]>;
+    update(supplierId: string, dto: UpdateSupplierDto): Promise<{
+        id: string;
+        code: string | null;
+        name: string;
+        createdAt: Date;
+        updatedAt: Date;
+        phone: string | null;
+        origin: string | null;
+    }>;
+    remove(supplierId: string): Promise<{
+        id: string;
+        code: string | null;
+        name: string;
+        createdAt: Date;
+        updatedAt: Date;
+        phone: string | null;
+        origin: string | null;
+    }>;
 }

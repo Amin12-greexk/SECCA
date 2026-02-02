@@ -79,9 +79,43 @@ export declare class LocationsService {
             moistureBps: number;
             lotNumber: string;
             wetWeightGram: number;
-            status: import("@prisma/client").$Enums.LotStatus;
+            externalId: string | null;
             dryWeightGramLocked: number;
+            status: import("@prisma/client").$Enums.LotStatus;
             locationId: string;
         })[];
     }>;
+    findLotsByCode(code: string): Promise<{
+        location: {
+            id: string;
+            code: string;
+            workerId: string | null;
+            name: string;
+            type: import("@prisma/client").$Enums.RackType;
+            createdAt: Date;
+            updatedAt: Date;
+        };
+        lots: ({
+            grade: {
+                id: string;
+                code: string;
+                name: string;
+                createdAt: Date;
+                updatedAt: Date;
+            };
+        } & {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            gradeId: string;
+            moistureBps: number;
+            lotNumber: string;
+            wetWeightGram: number;
+            externalId: string | null;
+            dryWeightGramLocked: number;
+            status: import("@prisma/client").$Enums.LotStatus;
+            locationId: string;
+        })[];
+    }>;
+    private ensureLocationByCode;
 }

@@ -21,6 +21,11 @@ export class LocationsController {
     return this.locationsService.findAll();
   }
 
+  @Get("code/:code/lots")
+  findLotsByCode(@Param("code") code: string) {
+    return this.locationsService.findLotsByCode(code);
+  }
+
   @Get(":id/lots")
   findLots(@Param("id") id: string) {
     return this.locationsService.findLots(id);

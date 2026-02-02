@@ -22,8 +22,8 @@ export declare class PayrollController {
             createdAt: Date;
             updatedAt: Date;
             lotId: string;
-            workOrderId: string;
             status: import("@prisma/client").$Enums.WorkOrderItemStatus;
+            workOrderId: string;
         };
     } & {
         id: string;

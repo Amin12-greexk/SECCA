@@ -116,6 +116,39 @@ let RulesService = class RulesService {
             orderBy: { createdAt: "asc" },
         });
     }
+    async deleteGradeTariff(id) {
+        const existing = await this.prisma.gradeTariff.findUnique({
+            where: { id },
+        });
+        if (!existing) {
+            return (0, errors_1.notFound)("Grade tariff not found", { id });
+        }
+        return this.prisma.gradeTariff.delete({
+            where: { id },
+        });
+    }
+    async deleteMoistureRule(id) {
+        const existing = await this.prisma.moistureRule.findUnique({
+            where: { id },
+        });
+        if (!existing) {
+            return (0, errors_1.notFound)("Moisture rule not found", { id });
+        }
+        return this.prisma.moistureRule.delete({
+            where: { id },
+        });
+    }
+    async deletePecahBonPreset(id) {
+        const existing = await this.prisma.pecahBonPreset.findUnique({
+            where: { id },
+        });
+        if (!existing) {
+            return (0, errors_1.notFound)("Pecah bon preset not found", { id });
+        }
+        return this.prisma.pecahBonPreset.delete({
+            where: { id },
+        });
+    }
 };
 exports.RulesService = RulesService;
 exports.RulesService = RulesService = __decorate([

@@ -1,16 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useReactToPrint } from 'react-to-print';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { Check, ChevronsUpDown, Loader2, PackageCheck, Printer } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, PackageCheck } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Alert from '@/components/Alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
     Select,
     SelectContent,
@@ -18,15 +19,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
     Command,
@@ -40,65 +32,48 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/lib/toast';
 import {
     getSuppliers,
+    getGrades,
     submitBakuReceive,
-    type BakuReceiveResponse,
+    type Grade,
     type Supplier,
 } from '@/lib/api';
-import BatchCard from '@/components/print/BatchCard';
 
 const formSchema = z.object({
     supplierId: z.string().min(1, 'Supplier wajib dipilih'),
-    origin: z.enum(['KAL', 'SBY', 'RBI', 'LPG', 'OTHER']),
-    featherCondition: z.enum(['Light', 'Medium', 'Heavy']),
-    wetWeightGram: z.coerce.number().min(0.1, 'Minimal 0.1 gram'),
-    moisturePercent: z.coerce.number().min(0, 'Minimal 0%').max(100, 'Maksimal 100%'),
-    pieceCount: z.coerce.number().int().min(1, 'Minimal 1'),
+    featherCondition: z.string().min(1, 'Grading wajib dipilih'),
+    wetWeightGram: z.number().min(0.1, 'Minimal 0.1 gram'),
+    moisturePercent: z.number().min(0, 'Minimal 0%').max(100, 'Maksimal 100%'),
+    notes: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
-const originOptions = [
-    { value: 'KAL', label: 'Kalimantan (KAL)' },
-    { value: 'SBY', label: 'Surabaya (SBY)' },
-    { value: 'RBI', label: 'Riau (RBI)' },
-    { value: 'LPG', label: 'Lampung (LPG)' },
-    { value: 'OTHER', label: 'Lainnya (OTHER)' },
-];
-
-const featherOptions = [
-    { value: 'Light', label: 'Ringan' },
-    { value: 'Medium', label: 'Sedang' },
-    { value: 'Heavy', label: 'Berat' },
-];
-
 function TerimaBakuContent() {
     const toast = useToast();
+    const router = useRouter();
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+    const [grades, setGrades] = useState<Grade[]>([]);
     const [supplierLoadError, setSupplierLoadError] = useState<string | null>(null);
+    const [gradeLoadError, setGradeLoadError] = useState<string | null>(null);
     const [loadingSuppliers, setLoadingSuppliers] = useState(true);
+    const [loadingGrades, setLoadingGrades] = useState(true);
     const [submitError, setSubmitError] = useState<string | null>(null);
-    const [printBatch, setPrintBatch] = useState<BakuReceiveResponse | null>(null);
-    const [printOpen, setPrintOpen] = useState(false);
     const [supplierOpen, setSupplierOpen] = useState(false);
-
-    const printRef = useRef<HTMLDivElement>(null);
 
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
         mode: 'onSubmit',
         defaultValues: {
             supplierId: '',
-            origin: 'KAL',
-            featherCondition: 'Light',
+            featherCondition: '',
             wetWeightGram: 0,
             moisturePercent: 0,
-            pieceCount: 1,
+            notes: '',
         },
     });
 
     const supplierId = form.watch('supplierId');
-    const originValue = form.watch('origin');
-    const featherValue = form.watch('featherCondition');
+    const gradingValue = form.watch('featherCondition');
 
     const selectedSupplier = useMemo(
         () => suppliers.find((supplier) => supplier.id === supplierId),
@@ -106,42 +81,46 @@ function TerimaBakuContent() {
     );
 
     useEffect(() => {
-        async function loadSuppliers() {
-            try {
-                const data = await getSuppliers();
-                setSuppliers(data);
-            } catch (err) {
-                console.error('Failed to load suppliers:', err);
+        async function loadData() {
+            const results = await Promise.allSettled([getSuppliers(), getGrades()]);
+            const [supplierResult, gradeResult] = results;
+
+            if (supplierResult.status === 'fulfilled') {
+                setSuppliers(supplierResult.value);
+            } else {
+                console.error('Failed to load suppliers:', supplierResult.reason);
                 setSupplierLoadError('Gagal memuat supplier. Masukkan ID supplier secara manual.');
-            } finally {
-                setLoadingSuppliers(false);
             }
+
+            if (gradeResult.status === 'fulfilled') {
+                setGrades(gradeResult.value);
+            } else {
+                console.error('Failed to load grades:', gradeResult.reason);
+                setGradeLoadError('Gagal memuat grading. Masukkan grading secara manual.');
+            }
+
+            setLoadingSuppliers(false);
+            setLoadingGrades(false);
         }
 
-        loadSuppliers();
+        loadData();
     }, []);
-
-    const handlePrint = useReactToPrint({
-        content: () => printRef.current,
-        documentTitle: printBatch?.batchNumber ?? 'batch-card',
-    });
 
     const onSubmit = async (values: FormValues) => {
         setSubmitError(null);
 
         try {
-            const response = await submitBakuReceive(values);
-            setPrintBatch(response);
-            setPrintOpen(true);
-            toast.success('Penerimaan baku berhasil dicatat.');
+            await submitBakuReceive(values);
+            toast.success('Penerimaan baku berhasil dicatat. Data tersimpan di Stock Asal.');
             form.reset({
                 supplierId: '',
-                origin: values.origin,
                 featherCondition: values.featherCondition,
                 wetWeightGram: 0,
                 moisturePercent: 0,
-                pieceCount: 1,
+                notes: '',
             });
+            // Navigate to Stock Asal page
+            router.push('/stock/asal');
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Terjadi kesalahan saat menyimpan data.';
             setSubmitError(message);
@@ -149,12 +128,12 @@ function TerimaBakuContent() {
         }
     };
 
-    if (loadingSuppliers) {
+    if (loadingSuppliers || loadingGrades) {
         return (
             <div className="min-h-[calc(100vh-72px)] flex items-center justify-center">
                 <div className="flex items-center gap-3 text-gray-600">
                     <Loader2 className="h-5 w-5 animate-spin" />
-                    <span>Memuat data supplier...</span>
+                    <span>Memuat data...</span>
                 </div>
             </div>
         );
@@ -171,7 +150,7 @@ function TerimaBakuContent() {
                         <div>
                             <h1 className="text-3xl font-semibold text-gray-900">Penerimaan Bahan Baku</h1>
                             <p className="text-sm text-gray-600">
-                                Catat penerimaan bahan baku dan siapkan kartu cetak untuk proses berikutnya.
+                                Catat penerimaan bahan baku. Data akan tersimpan di Stock Asal untuk cetak kartu.
                             </p>
                         </div>
                     </div>
@@ -251,54 +230,41 @@ function TerimaBakuContent() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label>Asal</Label>
-                                    <Select
-                                        value={originValue}
-                                        onValueChange={(value) =>
-                                            form.setValue('origin', value as FormValues['origin'], {
-                                                shouldValidate: true,
-                                            })
-                                        }
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Pilih asal" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {originOptions.map((option) => (
-                                                <SelectItem key={option.value} value={option.value}>
-                                                    {option.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label>Kondisi Bulu</Label>
-                                    <RadioGroup
-                                        value={featherValue}
-                                        onValueChange={(value) =>
-                                            form.setValue('featherCondition', value as FormValues['featherCondition'], {
-                                                shouldValidate: true,
-                                            })
-                                        }
-                                        className="grid grid-cols-3 gap-3"
-                                    >
-                                        {featherOptions.map((option) => (
-                                            <Label
-                                                key={option.value}
-                                                className={cn(
-                                                    'flex cursor-pointer items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700',
-                                                    featherValue === option.value
-                                                        ? 'border-green-600 bg-green-50 text-green-700'
-                                                        : 'bg-white',
-                                                )}
-                                            >
-                                                <span>{option.label}</span>
-                                                <RadioGroupItem value={option.value} />
-                                            </Label>
-                                        ))}
-                                    </RadioGroup>
+                                    <Label>Grading</Label>
+                                    {gradeLoadError ? (
+                                        <Input
+                                            placeholder="Masukkan grading"
+                                            {...form.register('featherCondition')}
+                                        />
+                                    ) : (
+                                        <Select
+                                            value={gradingValue}
+                                            onValueChange={(value) =>
+                                                form.setValue('featherCondition', value, {
+                                                    shouldValidate: true,
+                                                })
+                                            }
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Pilih grading" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {grades.map((grade) => (
+                                                    <SelectItem key={grade.id} value={grade.code}>
+                                                        {grade.code} - {grade.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                    {form.formState.errors.featherCondition && (
+                                        <p className="text-xs text-red-600">
+                                            {form.formState.errors.featherCondition.message}
+                                        </p>
+                                    )}
+                                    {gradeLoadError && (
+                                        <p className="text-xs text-amber-600">{gradeLoadError}</p>
+                                    )}
                                 </div>
                             </div>
 
@@ -310,7 +276,7 @@ function TerimaBakuContent() {
                                         min={0.1}
                                         step="0.01"
                                         placeholder="Contoh: 1050.5"
-                                        {...form.register('wetWeightGram')}
+                                        {...form.register('wetWeightGram', { valueAsNumber: true })}
                                     />
                                     {form.formState.errors.wetWeightGram && (
                                         <p className="text-xs text-red-600">
@@ -327,7 +293,7 @@ function TerimaBakuContent() {
                                         max={100}
                                         step="0.1"
                                         placeholder="Contoh: 17.5"
-                                        {...form.register('moisturePercent')}
+                                        {...form.register('moisturePercent', { valueAsNumber: true })}
                                     />
                                     {form.formState.errors.moisturePercent && (
                                         <p className="text-xs text-red-600">
@@ -335,23 +301,17 @@ function TerimaBakuContent() {
                                         </p>
                                     )}
                                 </div>
-
-                                <div className="space-y-2">
-                                    <Label>Jumlah Potong</Label>
-                                    <Input
-                                        type="number"
-                                        min={1}
-                                        step="1"
-                                        placeholder="Contoh: 120"
-                                        {...form.register('pieceCount')}
-                                    />
-                                    {form.formState.errors.pieceCount && (
-                                        <p className="text-xs text-red-600">
-                                            {form.formState.errors.pieceCount.message}
-                                        </p>
-                                    )}
-                                </div>
                             </div>
+                        </div>
+
+                        {/* Notes field - full width */}
+                        <div className="space-y-2">
+                            <Label>Catatan (Opsional)</Label>
+                            <Textarea
+                                placeholder="Tambahkan catatan untuk penerimaan ini..."
+                                rows={3}
+                                {...form.register('notes')}
+                            />
                         </div>
 
                         {submitError && (
@@ -362,81 +322,22 @@ function TerimaBakuContent() {
 
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <p className="text-xs text-gray-500">
-                                Pastikan data sudah benar sebelum mencetak kartu penerimaan.
+                                Data akan tersimpan di Stock Asal. Anda dapat mencetak kartu dari halaman Stock Asal.
                             </p>
                             <Button type="submit" disabled={form.formState.isSubmitting}>
                                 {form.formState.isSubmitting ? (
                                     <>
                                         <Loader2 className="h-4 w-4 animate-spin" />
-                                        Loading...
+                                        Menyimpan...
                                     </>
                                 ) : (
-                                    'Simpan & Cetak'
+                                    'Simpan'
                                 )}
                             </Button>
                         </div>
                     </form>
                 </div>
             </div>
-
-            <Dialog open={printOpen} onOpenChange={setPrintOpen}>
-                <DialogContent className="max-w-5xl">
-                    <DialogHeader>
-                        <DialogTitle>Print Preview</DialogTitle>
-                        <DialogDescription>
-                            Kartu siap dicetak ke printer Blueprint Lite 80D1 (lebar 72mm).
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    {printBatch && (
-                        <div className="grid gap-6 md:grid-cols-[1fr_280px]">
-                            <div className="flex items-start justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4">
-                                <BatchCard ref={printRef} batch={printBatch} />
-                            </div>
-                            <div className="space-y-4">
-                                <div className="rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-gray-500">Batch</span>
-                                        <span className="font-semibold">{printBatch.batchNumber}</span>
-                                    </div>
-                                    <div className="mt-2 flex items-center justify-between">
-                                        <span className="text-gray-500">Card ID</span>
-                                        <span className="font-semibold">{printBatch.cardId}</span>
-                                    </div>
-                                    <div className="mt-2 flex items-center justify-between">
-                                        <span className="text-gray-500">Supplier</span>
-                                        <span className="font-semibold">
-                                            {printBatch.supplier?.name ?? printBatch.supplierId}
-                                        </span>
-                                    </div>
-                                    <div className="mt-2 flex items-center justify-between">
-                                        <span className="text-gray-500">Berat</span>
-                                        <span className="font-semibold">
-                                            {printBatch.wetWeightGram.toFixed(2)} gr
-                                        </span>
-                                    </div>
-                                    <div className="mt-2 flex items-center justify-between">
-                                        <span className="text-gray-500">Kadar Air</span>
-                                        <span className="font-semibold">
-                                            {printBatch.moisturePercent.toFixed(1)}%
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <DialogFooter>
-                                    <Button variant="outline" onClick={() => setPrintOpen(false)}>
-                                        Tutup
-                                    </Button>
-                                    <Button onClick={handlePrint}>
-                                        <Printer className="h-4 w-4" />
-                                        Cetak Kartu
-                                    </Button>
-                                </DialogFooter>
-                            </div>
-                        </div>
-                    )}
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

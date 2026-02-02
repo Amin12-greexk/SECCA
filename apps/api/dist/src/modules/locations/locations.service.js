@@ -71,6 +71,15 @@ let LocationsService = class LocationsService {
                 type: client_1.RackType.PRE_SALE,
             },
         });
+        const mitraOrder = await this.prisma.rackLocation.upsert({
+            where: { code: constants_1.LOCATION_CODES.MITRA_ORDER },
+            update: { name: "Rak Mitra Order", type: client_1.RackType.MITRA_ORDER },
+            create: {
+                code: constants_1.LOCATION_CODES.MITRA_ORDER,
+                name: "Rak Mitra Order",
+                type: client_1.RackType.MITRA_ORDER,
+            },
+        });
         const finished = await this.prisma.rackLocation.upsert({
             where: { code: constants_1.LOCATION_CODES.FINISHED },
             update: { name: "Rak Finished", type: client_1.RackType.FINISHED },
@@ -102,7 +111,7 @@ let LocationsService = class LocationsService {
             workerLocations.push(location);
         }
         return {
-            defaults: [preSale, finished],
+            defaults: [preSale, mitraOrder, finished],
             workerLocations,
         };
     }
@@ -128,6 +137,54 @@ let LocationsService = class LocationsService {
             location,
             lots,
         };
+    }
+    async findLotsByCode(code) {
+        const location = await this.ensureLocationByCode(code);
+        const lots = await this.prisma.productionLot.findMany({
+            where: { locationId: location.id },
+            include: { grade: true },
+            orderBy: { createdAt: "asc" },
+        });
+        return {
+            location,
+            lots,
+        };
+    }
+    async ensureLocationByCode(code) {
+        if (code === constants_1.LOCATION_CODES.PRE_SALE) {
+            return this.prisma.rackLocation.upsert({
+                where: { code: constants_1.LOCATION_CODES.PRE_SALE },
+                update: { name: "Rak Sementara", type: client_1.RackType.PRE_SALE },
+                create: {
+                    code: constants_1.LOCATION_CODES.PRE_SALE,
+                    name: "Rak Sementara",
+                    type: client_1.RackType.PRE_SALE,
+                },
+            });
+        }
+        if (code === constants_1.LOCATION_CODES.MITRA_ORDER) {
+            return this.prisma.rackLocation.upsert({
+                where: { code: constants_1.LOCATION_CODES.MITRA_ORDER },
+                update: { name: "Rak Mitra Order", type: client_1.RackType.MITRA_ORDER },
+                create: {
+                    code: constants_1.LOCATION_CODES.MITRA_ORDER,
+                    name: "Rak Mitra Order",
+                    type: client_1.RackType.MITRA_ORDER,
+                },
+            });
+        }
+        if (code === constants_1.LOCATION_CODES.FINISHED) {
+            return this.prisma.rackLocation.upsert({
+                where: { code: constants_1.LOCATION_CODES.FINISHED },
+                update: { name: "Rak Finished", type: client_1.RackType.FINISHED },
+                create: {
+                    code: constants_1.LOCATION_CODES.FINISHED,
+                    name: "Rak Finished",
+                    type: client_1.RackType.FINISHED,
+                },
+            });
+        }
+        return (0, errors_1.badRequest)("Unknown location code", { code });
     }
 };
 exports.LocationsService = LocationsService;

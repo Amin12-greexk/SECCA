@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../auth/roles.decorator";
 import { CreateSupplierDto } from "./dto/create-supplier.dto";
+import { UpdateSupplierDto } from "./dto/update-supplier.dto";
 import { SuppliersService } from "./suppliers.service";
 
 @ApiTags("suppliers")
@@ -19,5 +20,18 @@ export class SuppliersController {
   @Get()
   findAll() {
     return this.suppliersService.findAll();
+  }
+
+  @Patch(":supplierId")
+  update(
+    @Param("supplierId") supplierId: string,
+    @Body() dto: UpdateSupplierDto,
+  ) {
+    return this.suppliersService.update(supplierId, dto);
+  }
+
+  @Delete(":supplierId")
+  remove(@Param("supplierId") supplierId: string) {
+    return this.suppliersService.remove(supplierId);
   }
 }

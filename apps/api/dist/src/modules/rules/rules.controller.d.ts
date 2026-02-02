@@ -25,6 +25,15 @@ export declare class RulesController {
         effectiveFrom: Date;
         effectiveTo: Date | null;
     }[]>;
+    deleteGradeTariff(id: string): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        gradeId: string;
+        rateRpPerGram: number;
+        effectiveFrom: Date;
+        effectiveTo: Date | null;
+    }>;
     createMoistureRule(dto: CreateMoistureRuleDto): Promise<{
         id: string;
         createdAt: Date;
@@ -45,6 +54,16 @@ export declare class RulesController {
         supplierId: string | null;
         moistureBps: number;
     }[]>;
+    deleteMoistureRule(id: string): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        gradeId: string | null;
+        effectiveFrom: Date;
+        effectiveTo: Date | null;
+        supplierId: string | null;
+        moistureBps: number;
+    }>;
     createPreset(dto: CreatePecahBonPresetDto): import("@prisma/client").Prisma.Prisma__PecahBonPresetClient<{
         id: string;
         name: string;
@@ -61,4 +80,12 @@ export declare class RulesController {
         weightGram: number;
         isActive: boolean;
     }[]>;
+    deletePreset(id: string): Promise<{
+        id: string;
+        name: string;
+        createdAt: Date;
+        updatedAt: Date;
+        weightGram: number;
+        isActive: boolean;
+    }>;
 }

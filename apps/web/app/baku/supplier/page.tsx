@@ -1,11 +1,76 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { Loader2, Pencil, Trash2 } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import Alert from '@/components/Alert';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { useToast } from '@/lib/toast';
+import {
+    createSupplier,
+    deleteSupplier,
+    getSuppliers,
+    updateSupplier,
+    type Supplier,
+} from '@/lib/api';
+
+const originOptions = [
+    { value: 'KAL', label: 'Kalimantan (KAL)' },
+    { value: 'SBY', label: 'Surabaya (SBY)' },
+    { value: 'RBI', label: 'Riau (RBI)' },
+    { value: 'LPG', label: 'Lampung (LPG)' },
+    { value: 'OTHER', label: 'Lainnya (OTHER)' },
+];
+
+const formSchema = z.object({
+    name: z.string().min(1, 'Nama supplier wajib diisi'),
+    origin: z.string().min(1, 'Asal wajib dipilih'),
+    code: z.string().optional(),
+    phone: z.string().optional(),
+});
+
+type FormValues = z.infer<typeof formSchema>;
+
+const defaultValues: FormValues = {
+    name: '',
+    origin: '',
+    code: '',
+    phone: '',
+};
+
+const normalizeOptional = (value?: string) => {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : null;
+};
 
 function SupplierContent() {
+    const toast = useToast();
     const containerRef = useRef<HTMLDivElement>(null);
+    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [listError, setListError] = useState<string | null>(null);
+    const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+
+    const form = useForm<FormValues>({
+        resolver: zodResolver(formSchema),
+        mode: 'onSubmit',
+        defaultValues,
+    });
+
+    const originValue = form.watch('origin');
 
     useEffect(() => {
         if (containerRef.current) {
@@ -17,29 +82,236 @@ function SupplierContent() {
         }
     }, []);
 
-    return (
-        <div ref={containerRef} className="p-8">
-            <div className="max-w-4xl mx-auto">
-                <h1 className="text-3xl font-bold text-gray-900 mb-4">Tambah Supplier</h1>
-                <p className="text-gray-600 mb-8">
-                    Halaman untuk menambahkan supplier bahan baku
-                </p>
+    const loadSuppliers = async () => {
+        setLoading(true);
+        setListError(null);
 
-                <div className="bg-white rounded-xl shadow-lg p-8">
-                    <div className="text-center py-12">
-                        <svg
-                            className="mx-auto w-16 h-16 text-gray-400 mb-4"
-                            fill="none"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                        >
-                            <path d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                        </svg>
-                        <p className="text-gray-500">Halaman ini akan segera tersedia</p>
+        try {
+            const data = await getSuppliers();
+            setSuppliers(data);
+        } catch (err) {
+            console.error('Failed to load suppliers:', err);
+            setListError('Gagal memuat supplier. Coba lagi.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadSuppliers();
+    }, []);
+
+    const handleSubmit = async (values: FormValues) => {
+        try {
+            const payload = {
+                name: values.name.trim(),
+                origin: values.origin,
+                code: normalizeOptional(values.code),
+                phone: normalizeOptional(values.phone),
+            };
+
+            if (editingSupplier) {
+                await updateSupplier(editingSupplier.id, payload);
+                toast.success('Supplier berhasil diperbarui.');
+            } else {
+                await createSupplier(payload);
+                toast.success('Supplier berhasil ditambahkan.');
+            }
+
+            setEditingSupplier(null);
+            form.reset(defaultValues);
+            await loadSuppliers();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Gagal menyimpan supplier.';
+            toast.error(message);
+        }
+    };
+
+    const startEdit = (supplier: Supplier) => {
+        setEditingSupplier(supplier);
+        form.reset({
+            name: supplier.name,
+            origin: supplier.origin ?? '',
+            code: supplier.code ?? '',
+            phone: supplier.phone ?? '',
+        });
+    };
+
+    const cancelEdit = () => {
+        setEditingSupplier(null);
+        form.reset(defaultValues);
+    };
+
+    const handleDelete = async (supplier: Supplier) => {
+        const confirmed = window.confirm(`Hapus supplier "${supplier.name}"?`);
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            await deleteSupplier(supplier.id);
+            toast.success('Supplier berhasil dihapus.');
+            await loadSuppliers();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Gagal menghapus supplier.';
+            toast.error(message);
+        }
+    };
+
+    return (
+        <div ref={containerRef} className="min-h-[calc(100vh-72px)] bg-gradient-to-br from-amber-50 via-white to-green-50 py-10 px-4">
+            <div className="mx-auto max-w-5xl space-y-8">
+                <div className="flex flex-col gap-3">
+                    <h1 className="text-3xl font-semibold text-gray-900">
+                        {editingSupplier ? 'Edit Supplier' : 'Tambah Supplier'}
+                    </h1>
+                    <p className="text-sm text-gray-600">
+                        Kelola data supplier, termasuk asal pemasok untuk pencatatan bahan baku.
+                    </p>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+                        <div className="grid gap-6 md:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label>Nama Supplier</Label>
+                                <Input placeholder="Contoh: Supplier Utama" {...form.register('name')} />
+                                {form.formState.errors.name && (
+                                    <p className="text-xs text-red-600">{form.formState.errors.name.message}</p>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Asal</Label>
+                                <Select
+                                    value={originValue}
+                                    onValueChange={(value) =>
+                                        form.setValue('origin', value, { shouldValidate: true })
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Pilih asal supplier" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {originOptions.map((option) => (
+                                            <SelectItem key={option.value} value={option.value}>
+                                                {option.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {form.formState.errors.origin && (
+                                    <p className="text-xs text-red-600">{form.formState.errors.origin.message}</p>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Kode (opsional)</Label>
+                                <Input placeholder="Contoh: SUP-01" {...form.register('code')} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Telepon (opsional)</Label>
+                                <Input placeholder="Contoh: 08123456789" {...form.register('phone')} />
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3">
+                            <Button type="submit" disabled={form.formState.isSubmitting}>
+                                {form.formState.isSubmitting ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Menyimpan...
+                                    </>
+                                ) : editingSupplier ? (
+                                    'Simpan Perubahan'
+                                ) : (
+                                    'Tambah Supplier'
+                                )}
+                            </Button>
+                            {editingSupplier && (
+                                <Button type="button" variant="outline" onClick={cancelEdit}>
+                                    Batal
+                                </Button>
+                            )}
+                        </div>
+                    </form>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-lg font-semibold text-gray-900">Daftar Supplier</h2>
+                        <Button type="button" variant="outline" size="sm" onClick={loadSuppliers}>
+                            Refresh
+                        </Button>
                     </div>
+
+                    {listError && (
+                        <div className="mt-4">
+                            <Alert variant="error">{listError}</Alert>
+                        </div>
+                    )}
+
+                    {loading ? (
+                        <div className="flex items-center gap-2 py-6 text-sm text-gray-600">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Memuat supplier...
+                        </div>
+                    ) : suppliers.length === 0 ? (
+                        <p className="py-6 text-sm text-gray-500">Belum ada data supplier.</p>
+                    ) : (
+                        <div className="mt-4 overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-gray-200 text-left text-gray-500">
+                                        <th className="py-3 pr-4 font-medium">Nama</th>
+                                        <th className="py-3 pr-4 font-medium">Asal</th>
+                                        <th className="py-3 pr-4 font-medium">Kode</th>
+                                        <th className="py-3 pr-4 font-medium">Telepon</th>
+                                        <th className="py-3 text-right font-medium">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {suppliers.map((supplier) => {
+                                        const originLabel =
+                                            originOptions.find((option) => option.value === supplier.origin)?.label ??
+                                            supplier.origin ??
+                                            '-';
+
+                                        return (
+                                            <tr key={supplier.id} className="border-b border-gray-100">
+                                                <td className="py-3 pr-4 font-medium text-gray-900">
+                                                    {supplier.name}
+                                                </td>
+                                                <td className="py-3 pr-4 text-gray-700">{originLabel}</td>
+                                                <td className="py-3 pr-4 text-gray-700">{supplier.code ?? '-'}</td>
+                                                <td className="py-3 pr-4 text-gray-700">{supplier.phone ?? '-'}</td>
+                                                <td className="py-3 text-right">
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => startEdit(supplier)}
+                                                        >
+                                                            <Pencil className="h-4 w-4" />
+                                                            Edit
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            onClick={() => handleDelete(supplier)}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                            Hapus
+                                                        </Button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -14,6 +14,7 @@ const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class CreateSupplierDto {
     name;
+    origin;
     code;
     phone;
 }
@@ -24,6 +25,12 @@ __decorate([
     (0, class_validator_1.MinLength)(1),
     __metadata("design:type", String)
 ], CreateSupplierDto.prototype, "name", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MinLength)(1),
+    __metadata("design:type", String)
+], CreateSupplierDto.prototype, "origin", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)(),
     (0, class_validator_1.IsOptional)(),

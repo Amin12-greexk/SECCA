@@ -44,7 +44,7 @@ let TraceabilityService = class TraceabilityService {
                     id: source.gradedStock.rawBatch.supplier.id,
                     name: source.gradedStock.rawBatch.supplier.name,
                 },
-                rawBatchCardNumber: source.gradedStock.rawBatch.cardNumber,
+                rawBatchNumber: source.gradedStock.rawBatch.batchNumber,
                 grade: source.gradedStock.grade.code,
                 wetAllocatedGram: source.wetWeightGram,
             })),

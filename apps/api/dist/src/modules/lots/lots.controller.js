@@ -18,6 +18,7 @@ const swagger_1 = require("@nestjs/swagger");
 const roles_decorator_1 = require("../../auth/roles.decorator");
 const auto_split_dto_1 = require("./dto/auto-split.dto");
 const create_lot_dto_1 = require("./dto/create-lot.dto");
+const move_lot_dto_1 = require("./dto/move-lot.dto");
 const lots_service_1 = require("./lots.service");
 let LotsController = class LotsController {
     lotsService;
@@ -29,6 +30,9 @@ let LotsController = class LotsController {
     }
     autoSplit(dto) {
         return this.lotsService.autoSplit(dto);
+    }
+    moveLot(id, dto) {
+        return this.lotsService.moveLot(id, dto);
     }
 };
 exports.LotsController = LotsController;
@@ -46,6 +50,14 @@ __decorate([
     __metadata("design:paramtypes", [auto_split_dto_1.AutoSplitDto]),
     __metadata("design:returntype", void 0)
 ], LotsController.prototype, "autoSplit", null);
+__decorate([
+    (0, common_1.Post)(":id/move"),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, move_lot_dto_1.MoveLotDto]),
+    __metadata("design:returntype", void 0)
+], LotsController.prototype, "moveLot", null);
 exports.LotsController = LotsController = __decorate([
     (0, swagger_1.ApiTags)("lots"),
     (0, swagger_1.ApiBearerAuth)(),

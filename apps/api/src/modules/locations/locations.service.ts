@@ -67,6 +67,16 @@ export class LocationsService {
       },
     });
 
+    const mitraOrder = await this.prisma.rackLocation.upsert({
+      where: { code: LOCATION_CODES.MITRA_ORDER },
+      update: { name: "Rak Mitra Order", type: RackType.MITRA_ORDER },
+      create: {
+        code: LOCATION_CODES.MITRA_ORDER,
+        name: "Rak Mitra Order",
+        type: RackType.MITRA_ORDER,
+      },
+    });
+
     const finished = await this.prisma.rackLocation.upsert({
       where: { code: LOCATION_CODES.FINISHED },
       update: { name: "Rak Finished", type: RackType.FINISHED },
@@ -101,7 +111,7 @@ export class LocationsService {
     }
 
     return {
-      defaults: [preSale, finished],
+      defaults: [preSale, mitraOrder, finished],
       workerLocations,
     };
   }
@@ -132,5 +142,60 @@ export class LocationsService {
       location,
       lots,
     };
+  }
+
+  async findLotsByCode(code: string) {
+    const location = await this.ensureLocationByCode(code);
+
+    const lots = await this.prisma.productionLot.findMany({
+      where: { locationId: location.id },
+      include: { grade: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return {
+      location,
+      lots,
+    };
+  }
+
+  private async ensureLocationByCode(code: string) {
+    if (code === LOCATION_CODES.PRE_SALE) {
+      return this.prisma.rackLocation.upsert({
+        where: { code: LOCATION_CODES.PRE_SALE },
+        update: { name: "Rak Sementara", type: RackType.PRE_SALE },
+        create: {
+          code: LOCATION_CODES.PRE_SALE,
+          name: "Rak Sementara",
+          type: RackType.PRE_SALE,
+        },
+      });
+    }
+
+    if (code === LOCATION_CODES.MITRA_ORDER) {
+      return this.prisma.rackLocation.upsert({
+        where: { code: LOCATION_CODES.MITRA_ORDER },
+        update: { name: "Rak Mitra Order", type: RackType.MITRA_ORDER },
+        create: {
+          code: LOCATION_CODES.MITRA_ORDER,
+          name: "Rak Mitra Order",
+          type: RackType.MITRA_ORDER,
+        },
+      });
+    }
+
+    if (code === LOCATION_CODES.FINISHED) {
+      return this.prisma.rackLocation.upsert({
+        where: { code: LOCATION_CODES.FINISHED },
+        update: { name: "Rak Finished", type: RackType.FINISHED },
+        create: {
+          code: LOCATION_CODES.FINISHED,
+          name: "Rak Finished",
+          type: RackType.FINISHED,
+        },
+      });
+    }
+
+    return badRequest("Unknown location code", { code });
   }
 }

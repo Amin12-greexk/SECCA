@@ -4,6 +4,7 @@ export const DEFAULT_MOISTURE_BPS = 1200;
 
 export const LOCATION_CODES = {
   PRE_SALE: "RAK_SEMENTARA",
+  MITRA_ORDER: "RAK_MITRA_ORDER",
   FINISHED: "RAK_FINISHED",
 } as const;
 

@@ -197,16 +197,86 @@ let LotsService = class LotsService {
             };
         });
     }
-    async getPreSaleLocation(tx) {
-        return tx.rackLocation.upsert({
-            where: { code: constants_1.LOCATION_CODES.PRE_SALE },
-            update: { name: "Rak Sementara", type: client_1.RackType.PRE_SALE },
-            create: {
-                code: constants_1.LOCATION_CODES.PRE_SALE,
-                name: "Rak Sementara",
-                type: client_1.RackType.PRE_SALE,
-            },
+    async moveLot(lotId, dto) {
+        return this.prisma.$transaction(async (tx) => {
+            const lot = await tx.productionLot.findUnique({
+                where: { id: lotId },
+                include: { location: true, grade: true },
+            });
+            if (!lot) {
+                return (0, errors_1.notFound)("Lot not found", { lotId });
+            }
+            if (lot.status === client_1.LotStatus.COMPLETED) {
+                return (0, errors_1.conflict)("Lot already completed", { lotNumber: lot.lotNumber });
+            }
+            const toLocation = await this.getRackLocation(tx, dto.toLocationCode);
+            if (lot.locationId === toLocation.id) {
+                return (0, errors_1.conflict)("Lot already in target location", {
+                    lotNumber: lot.lotNumber,
+                    location: toLocation.code,
+                });
+            }
+            const nextStatus = toLocation.code === constants_1.LOCATION_CODES.PRE_SALE
+                ? client_1.LotStatus.AVAILABLE
+                : toLocation.code === constants_1.LOCATION_CODES.MITRA_ORDER
+                    ? client_1.LotStatus.IN_PROGRESS
+                    : lot.status;
+            const updated = await tx.productionLot.update({
+                where: { id: lot.id },
+                data: {
+                    locationId: toLocation.id,
+                    status: nextStatus,
+                },
+                include: { grade: true, location: true },
+            });
+            await this.movementService.record(tx, {
+                lotId: lot.id,
+                fromLocationId: lot.locationId,
+                toLocationId: toLocation.id,
+                movementType: client_1.MovementType.MOVE,
+                note: "Manual rack move",
+            });
+            return updated;
         });
+    }
+    async getPreSaleLocation(tx) {
+        return this.getRackLocation(tx, constants_1.LOCATION_CODES.PRE_SALE);
+    }
+    async getRackLocation(tx, code) {
+        if (code === constants_1.LOCATION_CODES.PRE_SALE) {
+            return tx.rackLocation.upsert({
+                where: { code: constants_1.LOCATION_CODES.PRE_SALE },
+                update: { name: "Rak Sementara", type: client_1.RackType.PRE_SALE },
+                create: {
+                    code: constants_1.LOCATION_CODES.PRE_SALE,
+                    name: "Rak Sementara",
+                    type: client_1.RackType.PRE_SALE,
+                },
+            });
+        }
+        if (code === constants_1.LOCATION_CODES.MITRA_ORDER) {
+            return tx.rackLocation.upsert({
+                where: { code: constants_1.LOCATION_CODES.MITRA_ORDER },
+                update: { name: "Rak Mitra Order", type: client_1.RackType.MITRA_ORDER },
+                create: {
+                    code: constants_1.LOCATION_CODES.MITRA_ORDER,
+                    name: "Rak Mitra Order",
+                    type: client_1.RackType.MITRA_ORDER,
+                },
+            });
+        }
+        if (code === constants_1.LOCATION_CODES.FINISHED) {
+            return tx.rackLocation.upsert({
+                where: { code: constants_1.LOCATION_CODES.FINISHED },
+                update: { name: "Rak Finished", type: client_1.RackType.FINISHED },
+                create: {
+                    code: constants_1.LOCATION_CODES.FINISHED,
+                    name: "Rak Finished",
+                    type: client_1.RackType.FINISHED,
+                },
+            });
+        }
+        return (0, errors_1.badRequest)("Unknown location code", { code });
     }
     async resolveMoistureBps(tx, input) {
         const { gradeId, supplierIds, at } = input;

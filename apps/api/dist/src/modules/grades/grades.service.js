@@ -12,6 +12,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.GradesService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../prisma/prisma.service");
+const client_1 = require("@prisma/client");
+const errors_1 = require("../../common/errors");
 let GradesService = class GradesService {
     prisma;
     constructor(prisma) {
@@ -29,6 +31,42 @@ let GradesService = class GradesService {
         return this.prisma.grade.findMany({
             orderBy: { createdAt: "asc" },
         });
+    }
+    async update(id, dto) {
+        const existing = await this.prisma.grade.findUnique({
+            where: { id },
+        });
+        if (!existing) {
+            return (0, errors_1.notFound)("Grade not found", { gradeId: id });
+        }
+        return this.prisma.grade.update({
+            where: { id },
+            data: {
+                name: dto.name,
+                code: dto.code,
+            },
+        });
+    }
+    async remove(id) {
+        const existing = await this.prisma.grade.findUnique({
+            where: { id },
+        });
+        if (!existing) {
+            return (0, errors_1.notFound)("Grade not found", { gradeId: id });
+        }
+        try {
+            return await this.prisma.grade.delete({
+                where: { id },
+            });
+        }
+        catch (error) {
+            if (error instanceof client_1.Prisma.PrismaClientKnownRequestError) {
+                if (error.code === "P2003") {
+                    return (0, errors_1.conflict)("Grade is in use and cannot be deleted", { gradeId: id });
+                }
+            }
+            throw error;
+        }
     }
 };
 exports.GradesService = GradesService;

@@ -1,28 +1,15 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import {
-  IsEnum,
-  IsInt,
   IsNotEmpty,
   IsNumber,
+  IsOptional,
+  IsString,
   IsUUID,
   Max,
   Min,
+  MinLength,
 } from "class-validator";
-
-export enum RawBatchOrigin {
-  KAL = "KAL",
-  SBY = "SBY",
-  RBI = "RBI",
-  LPG = "LPG",
-  OTHER = "OTHER",
-}
-
-export enum FeatherConditionInput {
-  Light = "Light",
-  Medium = "Medium",
-  Heavy = "Heavy",
-}
 
 export class ReceiveRawBatchDto {
   @ApiProperty()
@@ -30,15 +17,10 @@ export class ReceiveRawBatchDto {
   @IsNotEmpty()
   supplierId: string;
 
-  @ApiProperty({ enum: RawBatchOrigin })
-  @IsEnum(RawBatchOrigin)
-  @IsNotEmpty()
-  origin: RawBatchOrigin;
-
-  @ApiProperty({ enum: FeatherConditionInput })
-  @IsEnum(FeatherConditionInput)
-  @IsNotEmpty()
-  featherCondition: FeatherConditionInput;
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  featherCondition: string;
 
   @ApiProperty()
   @Type(() => Number)
@@ -53,9 +35,8 @@ export class ReceiveRawBatchDto {
   @Max(100)
   moisturePercent: number;
 
-  @ApiProperty()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  pieceCount: number;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }

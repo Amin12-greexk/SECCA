@@ -9,7 +9,7 @@ import { MoistureRuleQueryDto } from "./dto/moisture-rule-query.dto";
 
 @Injectable()
 export class RulesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async createGradeTariff(dto: CreateGradeTariffDto) {
     const grade = await this.prisma.grade.findUnique({
@@ -44,9 +44,9 @@ export class RulesService {
         gradeId: query.gradeId,
         ...(at
           ? {
-              effectiveFrom: { lte: at },
-              OR: [{ effectiveTo: null }, { effectiveTo: { gt: at } }],
-            }
+            effectiveFrom: { lte: at },
+            OR: [{ effectiveTo: null }, { effectiveTo: { gt: at } }],
+          }
           : undefined),
       },
       orderBy: { effectiveFrom: "desc" },
@@ -98,9 +98,9 @@ export class RulesService {
         supplierId: query.supplierId,
         ...(at
           ? {
-              effectiveFrom: { lte: at },
-              OR: [{ effectiveTo: null }, { effectiveTo: { gt: at } }],
-            }
+            effectiveFrom: { lte: at },
+            OR: [{ effectiveTo: null }, { effectiveTo: { gt: at } }],
+          }
           : undefined),
       },
       orderBy: { effectiveFrom: "desc" },
@@ -120,6 +120,48 @@ export class RulesService {
   findPecahBonPresets() {
     return this.prisma.pecahBonPreset.findMany({
       orderBy: { createdAt: "asc" },
+    });
+  }
+
+  async deleteGradeTariff(id: string) {
+    const existing = await this.prisma.gradeTariff.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      return notFound("Grade tariff not found", { id });
+    }
+
+    return this.prisma.gradeTariff.delete({
+      where: { id },
+    });
+  }
+
+  async deleteMoistureRule(id: string) {
+    const existing = await this.prisma.moistureRule.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      return notFound("Moisture rule not found", { id });
+    }
+
+    return this.prisma.moistureRule.delete({
+      where: { id },
+    });
+  }
+
+  async deletePecahBonPreset(id: string) {
+    const existing = await this.prisma.pecahBonPreset.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      return notFound("Pecah bon preset not found", { id });
+    }
+
+    return this.prisma.pecahBonPreset.delete({
+      where: { id },
     });
   }
 }

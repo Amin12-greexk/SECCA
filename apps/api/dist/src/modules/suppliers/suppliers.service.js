@@ -12,6 +12,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SuppliersService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../prisma/prisma.service");
+const client_1 = require("@prisma/client");
+const errors_1 = require("../../common/errors");
 let SuppliersService = class SuppliersService {
     prisma;
     constructor(prisma) {
@@ -21,6 +23,7 @@ let SuppliersService = class SuppliersService {
         return this.prisma.supplier.create({
             data: {
                 name: dto.name,
+                origin: dto.origin,
                 code: dto.code,
                 phone: dto.phone,
             },
@@ -30,6 +33,44 @@ let SuppliersService = class SuppliersService {
         return this.prisma.supplier.findMany({
             orderBy: { createdAt: "asc" },
         });
+    }
+    async update(id, dto) {
+        const existing = await this.prisma.supplier.findUnique({
+            where: { id },
+        });
+        if (!existing) {
+            return (0, errors_1.notFound)("Supplier not found", { supplierId: id });
+        }
+        return this.prisma.supplier.update({
+            where: { id },
+            data: {
+                name: dto.name,
+                origin: dto.origin,
+                code: dto.code,
+                phone: dto.phone,
+            },
+        });
+    }
+    async remove(id) {
+        const existing = await this.prisma.supplier.findUnique({
+            where: { id },
+        });
+        if (!existing) {
+            return (0, errors_1.notFound)("Supplier not found", { supplierId: id });
+        }
+        try {
+            return await this.prisma.supplier.delete({
+                where: { id },
+            });
+        }
+        catch (error) {
+            if (error instanceof client_1.Prisma.PrismaClientKnownRequestError) {
+                if (error.code === "P2003") {
+                    return (0, errors_1.conflict)("Supplier is in use and cannot be deleted", { supplierId: id });
+                }
+            }
+            throw error;
+        }
     }
 };
 exports.SuppliersService = SuppliersService;

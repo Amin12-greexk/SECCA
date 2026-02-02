@@ -1,6 +1,12 @@
 import React from 'react';
 
-export default function LogoPlaceholder() {
+type LogoPlaceholderProps = {
+  textClassName?: string;
+};
+
+export default function LogoPlaceholder({
+  textClassName = "text-green-600",
+}: LogoPlaceholderProps) {
   return (
     <div className="flex items-center gap-2">
       {/* Leaf/Circle Icon */}
@@ -31,7 +37,7 @@ export default function LogoPlaceholder() {
       </div>
       
       {/* Text Logo */}
-      <span className="text-xl font-bold text-green-600">SECCA</span>
+      <span className={`text-xl font-bold ${textClassName}`}>SECCA</span>
     </div>
   );
 }

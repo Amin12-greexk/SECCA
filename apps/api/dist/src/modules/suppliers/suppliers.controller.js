@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const roles_decorator_1 = require("../../auth/roles.decorator");
 const create_supplier_dto_1 = require("./dto/create-supplier.dto");
+const update_supplier_dto_1 = require("./dto/update-supplier.dto");
 const suppliers_service_1 = require("./suppliers.service");
 let SuppliersController = class SuppliersController {
     suppliersService;
@@ -28,6 +29,12 @@ let SuppliersController = class SuppliersController {
     }
     findAll() {
         return this.suppliersService.findAll();
+    }
+    update(supplierId, dto) {
+        return this.suppliersService.update(supplierId, dto);
+    }
+    remove(supplierId) {
+        return this.suppliersService.remove(supplierId);
     }
 };
 exports.SuppliersController = SuppliersController;
@@ -44,6 +51,21 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], SuppliersController.prototype, "findAll", null);
+__decorate([
+    (0, common_1.Patch)(":supplierId"),
+    __param(0, (0, common_1.Param)("supplierId")),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, update_supplier_dto_1.UpdateSupplierDto]),
+    __metadata("design:returntype", void 0)
+], SuppliersController.prototype, "update", null);
+__decorate([
+    (0, common_1.Delete)(":supplierId"),
+    __param(0, (0, common_1.Param)("supplierId")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], SuppliersController.prototype, "remove", null);
 exports.SuppliersController = SuppliersController = __decorate([
     (0, swagger_1.ApiTags)("suppliers"),
     (0, swagger_1.ApiBearerAuth)(),

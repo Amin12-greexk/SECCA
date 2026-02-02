@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Post, Query } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../auth/roles.decorator";
 import { CreateGradeTariffDto } from "./dto/create-grade-tariff.dto";
@@ -13,7 +13,7 @@ import { RulesService } from "./rules.service";
 @Roles("manager", "baku", "mitra", "koreksi")
 @Controller("rules")
 export class RulesController {
-  constructor(private readonly rulesService: RulesService) {}
+  constructor(private readonly rulesService: RulesService) { }
 
   @Post("grade-tariffs")
   createGradeTariff(@Body() dto: CreateGradeTariffDto) {
@@ -23,6 +23,11 @@ export class RulesController {
   @Get("grade-tariffs")
   findGradeTariffs(@Query() query: GradeTariffQueryDto) {
     return this.rulesService.findGradeTariffs(query);
+  }
+
+  @Delete("grade-tariffs/:id")
+  deleteGradeTariff(@Param("id") id: string) {
+    return this.rulesService.deleteGradeTariff(id);
   }
 
   @Post("moisture")
@@ -35,6 +40,11 @@ export class RulesController {
     return this.rulesService.findMoistureRules(query);
   }
 
+  @Delete("moisture/:id")
+  deleteMoistureRule(@Param("id") id: string) {
+    return this.rulesService.deleteMoistureRule(id);
+  }
+
   @Post("pecah-bon-presets")
   createPreset(@Body() dto: CreatePecahBonPresetDto) {
     return this.rulesService.createPecahBonPreset(dto);
@@ -44,4 +54,10 @@ export class RulesController {
   findPresets() {
     return this.rulesService.findPecahBonPresets();
   }
+
+  @Delete("pecah-bon-presets/:id")
+  deletePreset(@Param("id") id: string) {
+    return this.rulesService.deletePecahBonPreset(id);
+  }
 }
+

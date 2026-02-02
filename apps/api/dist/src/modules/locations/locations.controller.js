@@ -29,6 +29,9 @@ let LocationsController = class LocationsController {
     findAll() {
         return this.locationsService.findAll();
     }
+    findLotsByCode(code) {
+        return this.locationsService.findLotsByCode(code);
+    }
     findLots(id) {
         return this.locationsService.findLots(id);
     }
@@ -47,6 +50,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], LocationsController.prototype, "findAll", null);
+__decorate([
+    (0, common_1.Get)("code/:code/lots"),
+    __param(0, (0, common_1.Param)("code")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], LocationsController.prototype, "findLotsByCode", null);
 __decorate([
     (0, common_1.Get)(":id/lots"),
     __param(0, (0, common_1.Param)("id")),

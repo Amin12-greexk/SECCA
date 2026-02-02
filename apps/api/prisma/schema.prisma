@@ -24,6 +24,7 @@ enum WorkOrderItemStatus {
 
 enum RackType {
   PRE_SALE
+  MITRA_ORDER
   FINISHED
   WORKER
 }
@@ -58,6 +59,7 @@ model Supplier {
   name      String
   code      String?  @unique
   phone     String?
+  origin    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -72,11 +74,12 @@ model Grade {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tariffs       GradeTariff[]
-  moistureRules MoistureRule[]
-  gradeStocks   RawBatchGradeStock[]
-  lots          ProductionLot[]
-  payrolls      PayrollEntry[]
+  tariffs         GradeTariff[]
+  moistureRules   MoistureRule[]
+  gradeStocks     RawBatchGradeStock[]
+  lots            ProductionLot[]
+  payrolls        PayrollEntry[]
+  pecahBonEntries PecahBonEntry[]
 }
 
 model GradeTariff {
@@ -163,15 +166,36 @@ model RawBatch {
   origin           String
   featherCondition String
   wetWeightGram    Float
-  pieceCount       Int
   moisturePercent  Float
+  notes            String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  supplier    Supplier             @relation(fields: [supplierId], references: [id])
-  gradeStocks RawBatchGradeStock[]
+  supplier       Supplier             @relation(fields: [supplierId], references: [id])
+  gradeStocks    RawBatchGradeStock[]
+  pecahBonEntries PecahBonEntry[]
 
   @@index([supplierId, createdAt])
+}
+
+model PecahBonEntry {
+  id                String   @id @default(uuid())
+  pecahBonId        String?  @unique
+  rawBatchId        String
+  gradeId           String
+  pecahBonDate      DateTime
+  featherCondition  String
+  pieceCount        Int
+  initialWeightGram Float
+  moisturePercent   Float
+  dryWeightGram     Float
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  rawBatch RawBatch @relation(fields: [rawBatchId], references: [id])
+  grade    Grade    @relation(fields: [gradeId], references: [id])
+
+  @@index([rawBatchId, createdAt])
 }
 
 model RawBatchGradeStock {
@@ -193,6 +217,7 @@ model RawBatchGradeStock {
 model ProductionLot {
   id                 String    @id @default(uuid())
   lotNumber          String    @unique
+  externalId         String?
   gradeId            String
   wetWeightGram      Int
   dryWeightGramLocked Int

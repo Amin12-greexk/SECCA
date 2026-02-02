@@ -11,31 +11,43 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ReceiveRawBatchDto = void 0;
 const swagger_1 = require("@nestjs/swagger");
+const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
 class ReceiveRawBatchDto {
     supplierId;
-    receivedAt;
+    featherCondition;
     wetWeightGram;
+    moisturePercent;
     notes;
 }
 exports.ReceiveRawBatchDto = ReceiveRawBatchDto;
 __decorate([
     (0, swagger_1.ApiProperty)(),
     (0, class_validator_1.IsUUID)(),
+    (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
 ], ReceiveRawBatchDto.prototype, "supplierId", void 0);
 __decorate([
-    (0, swagger_1.ApiPropertyOptional)(),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsDateString)(),
+    (0, swagger_1.ApiProperty)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MinLength)(1),
     __metadata("design:type", String)
-], ReceiveRawBatchDto.prototype, "receivedAt", void 0);
+], ReceiveRawBatchDto.prototype, "featherCondition", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)(),
-    (0, class_validator_1.IsInt)(),
-    (0, class_validator_1.Min)(1),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)({ maxDecimalPlaces: 2 }),
+    (0, class_validator_1.Min)(0.1),
     __metadata("design:type", Number)
 ], ReceiveRawBatchDto.prototype, "wetWeightGram", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)({ maxDecimalPlaces: 2 }),
+    (0, class_validator_1.Min)(0),
+    (0, class_validator_1.Max)(100),
+    __metadata("design:type", Number)
+], ReceiveRawBatchDto.prototype, "moisturePercent", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)(),
     (0, class_validator_1.IsOptional)(),

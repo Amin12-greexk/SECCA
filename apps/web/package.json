@@ -9,7 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@hookform/resolvers": "^4.2.0",
+    "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-dialog": "^1.1.6",
     "@radix-ui/react-popover": "^1.1.6",
     "@radix-ui/react-radio-group": "^1.2.3",
@@ -23,6 +23,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-hook-form": "^7.55.0",
+    "jsqr": "^1.4.0",
     "react-qr-code": "^2.0.15",
     "react-to-print": "^2.15.1",
     "tailwind-merge": "^2.6.0",

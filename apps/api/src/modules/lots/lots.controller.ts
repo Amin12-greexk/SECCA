@@ -1,8 +1,9 @@
-import { Body, Controller, Post } from "@nestjs/common";
+import { Body, Controller, Param, Post } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../auth/roles.decorator";
 import { AutoSplitDto } from "./dto/auto-split.dto";
 import { CreateLotDto } from "./dto/create-lot.dto";
+import { MoveLotDto } from "./dto/move-lot.dto";
 import { LotsService } from "./lots.service";
 
 @ApiTags("lots")
@@ -20,5 +21,10 @@ export class LotsController {
   @Post("auto-split")
   autoSplit(@Body() dto: AutoSplitDto) {
     return this.lotsService.autoSplit(dto);
+  }
+
+  @Post(":id/move")
+  moveLot(@Param("id") id: string, @Body() dto: MoveLotDto) {
+    return this.lotsService.moveLot(id, dto);
   }
 }

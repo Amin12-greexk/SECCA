@@ -9,7 +9,7 @@ export declare class TraceabilityService {
                 id: string;
                 name: string;
             };
-            rawBatchCardNumber: string;
+            rawBatchNumber: string;
             grade: string;
             wetAllocatedGram: number;
         }[];

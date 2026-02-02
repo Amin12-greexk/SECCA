@@ -33,17 +33,26 @@ let RulesController = class RulesController {
     findGradeTariffs(query) {
         return this.rulesService.findGradeTariffs(query);
     }
+    deleteGradeTariff(id) {
+        return this.rulesService.deleteGradeTariff(id);
+    }
     createMoistureRule(dto) {
         return this.rulesService.createMoistureRule(dto);
     }
     findMoistureRules(query) {
         return this.rulesService.findMoistureRules(query);
     }
+    deleteMoistureRule(id) {
+        return this.rulesService.deleteMoistureRule(id);
+    }
     createPreset(dto) {
         return this.rulesService.createPecahBonPreset(dto);
     }
     findPresets() {
         return this.rulesService.findPecahBonPresets();
+    }
+    deletePreset(id) {
+        return this.rulesService.deletePecahBonPreset(id);
     }
 };
 exports.RulesController = RulesController;
@@ -62,6 +71,13 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], RulesController.prototype, "findGradeTariffs", null);
 __decorate([
+    (0, common_1.Delete)("grade-tariffs/:id"),
+    __param(0, (0, common_1.Param)("id")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], RulesController.prototype, "deleteGradeTariff", null);
+__decorate([
     (0, common_1.Post)("moisture"),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -76,6 +92,13 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], RulesController.prototype, "findMoistureRules", null);
 __decorate([
+    (0, common_1.Delete)("moisture/:id"),
+    __param(0, (0, common_1.Param)("id")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], RulesController.prototype, "deleteMoistureRule", null);
+__decorate([
     (0, common_1.Post)("pecah-bon-presets"),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -88,6 +111,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], RulesController.prototype, "findPresets", null);
+__decorate([
+    (0, common_1.Delete)("pecah-bon-presets/:id"),
+    __param(0, (0, common_1.Param)("id")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], RulesController.prototype, "deletePreset", null);
 exports.RulesController = RulesController = __decorate([
     (0, swagger_1.ApiTags)("rules"),
     (0, swagger_1.ApiBearerAuth)(),

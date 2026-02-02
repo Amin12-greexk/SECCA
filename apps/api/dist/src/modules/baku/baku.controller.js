@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const roles_decorator_1 = require("../../auth/roles.decorator");
 const receive_raw_batch_dto_1 = require("./dto/receive-raw-batch.dto");
+const create_pecah_bon_dto_1 = require("./dto/create-pecah-bon.dto");
 const baku_service_1 = require("./baku.service");
 let BakuController = class BakuController {
     bakuService;
@@ -29,8 +30,14 @@ let BakuController = class BakuController {
     findAll() {
         return this.bakuService.findAll();
     }
-    findByCardNumber(cardNumber) {
-        return this.bakuService.findByCardNumber(cardNumber);
+    findByCardId(cardId) {
+        return this.bakuService.findByCardId(cardId);
+    }
+    createPecahBon(id, dto) {
+        return this.bakuService.createPecahBon(id, dto);
+    }
+    getPecahBonEntries(id) {
+        return this.bakuService.getPecahBonEntries(id);
     }
 };
 exports.BakuController = BakuController;
@@ -48,13 +55,30 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], BakuController.prototype, "findAll", null);
 __decorate([
-    (0, common_1.Get)(":cardNumber"),
-    (0, swagger_1.ApiParam)({ name: "cardNumber" }),
-    __param(0, (0, common_1.Param)("cardNumber")),
+    (0, common_1.Get)(":cardId"),
+    (0, swagger_1.ApiParam)({ name: "cardId" }),
+    __param(0, (0, common_1.Param)("cardId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
-], BakuController.prototype, "findByCardNumber", null);
+], BakuController.prototype, "findByCardId", null);
+__decorate([
+    (0, common_1.Post)(":id/pecah-bon"),
+    (0, swagger_1.ApiParam)({ name: "id" }),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, create_pecah_bon_dto_1.CreatePecahBonDto]),
+    __metadata("design:returntype", void 0)
+], BakuController.prototype, "createPecahBon", null);
+__decorate([
+    (0, common_1.Get)(":id/pecah-bon"),
+    (0, swagger_1.ApiParam)({ name: "id" }),
+    __param(0, (0, common_1.Param)("id")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], BakuController.prototype, "getPecahBonEntries", null);
 exports.BakuController = BakuController = __decorate([
     (0, swagger_1.ApiTags)("Baku"),
     (0, swagger_1.ApiBearerAuth)(),
