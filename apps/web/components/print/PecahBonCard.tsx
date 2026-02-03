@@ -39,7 +39,7 @@ const PecahBonCard = React.forwardRef<HTMLDivElement, PecahBonCardProps>(
       <>
         <style>{`
 @page {
-  size: 72mm auto;
+  size: 72mm 200mm;
   margin: 0;
 }
 html, body {
@@ -60,10 +60,11 @@ html, body {
   #printable-content {
     visibility: visible;
     position: absolute;
-    left: 0;
+    left: 0mm;
     top: 0;
     width: 72mm;
     padding: 2mm;
+    box-sizing: border-box;
   }
 }
       `}</style>

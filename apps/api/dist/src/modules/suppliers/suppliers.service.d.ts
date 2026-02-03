@@ -12,7 +12,6 @@ export declare class SuppliersService {
         createdAt: Date;
         updatedAt: Date;
         phone: string | null;
-        origin: string | null;
     }, never, import("@prisma/client/runtime/client").DefaultArgs, Prisma.PrismaClientOptions>;
     findAll(): Prisma.PrismaPromise<{
         id: string;
@@ -21,7 +20,6 @@ export declare class SuppliersService {
         createdAt: Date;
         updatedAt: Date;
         phone: string | null;
-        origin: string | null;
     }[]>;
     update(id: string, dto: UpdateSupplierDto): Promise<{
         id: string;
@@ -30,7 +28,6 @@ export declare class SuppliersService {
         createdAt: Date;
         updatedAt: Date;
         phone: string | null;
-        origin: string | null;
     }>;
     remove(id: string): Promise<{
         id: string;
@@ -39,6 +36,5 @@ export declare class SuppliersService {
         createdAt: Date;
         updatedAt: Date;
         phone: string | null;
-        origin: string | null;
     }>;
 }

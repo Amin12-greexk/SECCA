@@ -39,7 +39,7 @@ describe("BakuService", () => {
     await prisma.supplier.deleteMany();
 
     const supplier = await prisma.supplier.create({
-      data: { name: "Supplier Test", code: "SUP-TEST", origin: "KAL" },
+      data: { name: "Supplier Test", code: "SUP-TEST" },
     });
     supplierId = supplier.id;
   });

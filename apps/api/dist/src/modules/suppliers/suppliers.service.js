@@ -23,7 +23,6 @@ let SuppliersService = class SuppliersService {
         return this.prisma.supplier.create({
             data: {
                 name: dto.name,
-                origin: dto.origin,
                 code: dto.code,
                 phone: dto.phone,
             },
@@ -45,7 +44,6 @@ let SuppliersService = class SuppliersService {
             where: { id },
             data: {
                 name: dto.name,
-                origin: dto.origin,
                 code: dto.code,
                 phone: dto.phone,
             },

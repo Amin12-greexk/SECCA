@@ -17,7 +17,6 @@ export declare class BakuService {
             createdAt: Date;
             updatedAt: Date;
             phone: string | null;
-            origin: string | null;
         };
     } & {
         id: string;
@@ -28,7 +27,6 @@ export declare class BakuService {
         wetWeightGram: number;
         moisturePercent: number;
         notes: string | null;
-        origin: string;
         batchNumber: string;
         cardId: string;
     }>;
@@ -41,9 +39,7 @@ export declare class BakuService {
             id: string;
             name: string;
             code: string | null;
-            origin: string | null;
         };
-        origin: string;
         featherCondition: string;
         wetWeightGram: number;
         moisturePercent: number;
@@ -60,9 +56,7 @@ export declare class BakuService {
             id: string;
             name: string;
             code: string | null;
-            origin: string | null;
         };
-        origin: string;
         featherCondition: string;
         wetWeightGram: number;
         moisturePercent: number;
@@ -87,7 +81,6 @@ export declare class BakuService {
             wetWeightGram: number;
             moisturePercent: number;
             notes: string | null;
-            origin: string;
             batchNumber: string;
             cardId: string;
         };

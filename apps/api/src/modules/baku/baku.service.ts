@@ -27,12 +27,6 @@ export class BakuService {
     if (!supplier) {
       return notFound("Supplier not found", { supplierId: dto.supplierId });
     }
-    const supplierOrigin = supplier.origin;
-    if (!supplierOrigin) {
-      return badRequest("Supplier origin is not set", {
-        supplierId: dto.supplierId,
-      });
-    }
 
     const createdAt = new Date();
 
@@ -49,7 +43,6 @@ export class BakuService {
               batchNumber,
               cardId,
               supplierId: dto.supplierId,
-              origin: supplierOrigin,
               featherCondition: dto.featherCondition,
               wetWeightGram: this.roundToTwoDecimals(dto.wetWeightGram),
               moisturePercent: this.roundToTwoDecimals(dto.moisturePercent),
@@ -104,9 +97,7 @@ export class BakuService {
         id: rawBatch.supplier.id,
         name: rawBatch.supplier.name,
         code: rawBatch.supplier.code,
-        origin: rawBatch.supplier.origin,
       },
-      origin: rawBatch.origin,
       featherCondition: rawBatch.featherCondition,
       wetWeightGram: rawBatch.wetWeightGram,
       moisturePercent: rawBatch.moisturePercent,
@@ -143,9 +134,7 @@ export class BakuService {
         id: rawBatch.supplier.id,
         name: rawBatch.supplier.name,
         code: rawBatch.supplier.code,
-        origin: rawBatch.supplier.origin,
       },
-      origin: rawBatch.origin,
       featherCondition: rawBatch.featherCondition,
       wetWeightGram: rawBatch.wetWeightGram,
       moisturePercent: rawBatch.moisturePercent,

@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { ChevronDown, ChevronUp, Loader2, Printer, RefreshCw, Scissors } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Loader2, Printer, RefreshCw, Scissors } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,10 +46,14 @@ const pecahBonSchema = z.object({
 
 type PecahBonFormValues = z.infer<typeof pecahBonSchema>;
 
+// Pagination constant for entries display
+const ENTRIES_PER_PAGE = 20;
+
 interface BatchWithEntries extends RawBatch {
     pecahBonEntries?: PecahBonEntry[];
     entriesLoading?: boolean;
     expanded?: boolean;
+    entriesPage?: number;
 }
 
 function PecahBonContent() {
@@ -65,7 +69,181 @@ function PecahBonContent() {
     } | null>(null);
     const [printOpen, setPrintOpen] = useState(false);
 
-    const handlePrint = () => window.print();
+    const buildPrintOptions = () => {
+        // Options for electron-secure-pos-printer library
+        // BP Lite 80D1: 80mm paper, ~72mm printable area
+        return {
+            silent: true,
+            preview: false, // Direct print
+            margin: '0',
+            pageSize: { width: 80000, height: 297000 },
+            addFinalMargin: true,
+            bodyAttributes: {
+                style: 'width: 80mm !important; max-width: 80mm !important; margin: 0 !important; padding: 0 !important;',
+            },
+            containerAttributes: {
+                style: 'width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important; padding: 2mm !important;',
+            },
+            styleSheet: `
+                @page {
+                    size: 80mm auto;
+                    margin: 0 !important;
+                }
+                * {
+                    box-sizing: border-box !important;
+                }
+                html, body {
+                    width: 80mm !important;
+                    max-width: 80mm !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    font-family: Arial, Helvetica, sans-serif;
+                    font-size: 10pt;
+                }
+                #container {
+                    width: 76mm !important;
+                    max-width: 76mm !important;
+                    margin: 0 auto !important;
+                    padding: 2mm !important;
+                    text-align: center !important;
+                }
+                #container .section {
+                    width: 100% !important;
+                    max-width: 72mm !important;
+                    margin: 0 auto !important;
+                    padding: 1mm 0 !important;
+                    text-align: center !important;
+                }
+                img {
+                    max-width: 100% !important;
+                    display: block !important;
+                    margin: 0 auto !important;
+                }
+            `,
+        };
+    };
+
+    const buildPecahBonPrintData = (batch: BatchWithEntries, entry: PecahBonEntry) => {
+        const dateStr = formatDate(entry.pecahBonDate);
+        return [
+            {
+                type: 'text',
+                raw: true,
+                value: `<div style="text-align:center;font-size:11pt;font-weight:bold;padding:1mm 0;">KARTU PECAH BON - TEI</div>`,
+            },
+            {
+                type: 'qrCode',
+                value: entry.pecahBonId || batch.batchNumber,
+                width: 80,
+                height: 80,
+                sectionStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1mm 0' },
+            },
+            {
+                type: 'text',
+                raw: true,
+                value: `
+                    <div style="border:1px solid #333;padding:1.5mm;font-size:8pt;width:100%;box-sizing:border-box;">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
+                            <span style="font-weight:bold;">ID Pecah</span><span>${entry.pecahBonId ?? '-'}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
+                            <span style="font-weight:bold;">Batch No</span><span>${batch.batchNumber}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
+                            <span style="font-weight:bold;">Tgl Pecah</span><span>${dateStr}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
+                            <span style="font-weight:bold;">Grade</span><span>${entry.grade?.code ?? '-'}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
+                            <span style="font-weight:bold;">Kondisi</span><span>${entry.featherCondition}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="font-weight:bold;">Keping</span><span>${entry.pieceCount}</span>
+                        </div>
+                    </div>
+                `,
+            },
+            {
+                type: 'text',
+                raw: true,
+                value: `
+                    <div style="border:1.5px solid #000;padding:1.5mm;margin-top:1mm;text-align:center;width:100%;box-sizing:border-box;">
+                        <div style="font-size:9pt;font-weight:bold;">BERAT AWAL: ${formatNumber(entry.initialWeightGram, 2)} Gr</div>
+                        <div style="font-size:9pt;font-weight:bold;">KADAR AIR: ${formatNumber(entry.moisturePercent, 1)}%</div>
+                        <div style="font-size:9pt;font-weight:bold;">BERAT KERING: ${formatNumber(entry.dryWeightGram, 2)} Gr</div>
+                    </div>
+                `,
+            },
+            {
+                type: 'text',
+                raw: true,
+                value: `<div style="margin-top:2mm;border-top:1px dashed #000;width:100%;"></div>`,
+            },
+        ];
+    };
+
+    const handlePrint = async () => {
+        if (!printContext) return;
+
+        // Log available print methods
+        console.log('[SECCA Print Debug]', {
+            securePOSPrinter: !!window.securePOSPrinter,
+            seccaPrint: !!window.seccaPrint,
+            seccaDesktop: !!window.seccaDesktop,
+        });
+
+        // Try electron-secure-pos-printer first (preferred for thermal printers)
+        if (typeof window !== 'undefined' && window.securePOSPrinter?.print) {
+            console.log('[SECCA] Using securePOSPrinter...');
+            try {
+                const options = buildPrintOptions();
+                const data = buildPecahBonPrintData(printContext.batch, printContext.entry);
+                console.log('[SECCA] Print options:', options);
+                console.log('[SECCA] Print data:', data);
+                await window.securePOSPrinter.print(data, options);
+                toast.success('Berhasil mencetak kartu!');
+                return;
+            } catch (error) {
+                console.error('[SECCA] securePOSPrinter.print failed:', error);
+                await window.seccaDesktop?.log?.({
+                    scope: 'pecah-bon',
+                    message: 'securePOSPrinter.print failed',
+                    error: error instanceof Error ? error.message : String(error),
+                });
+                toast.error('securePOSPrinter gagal: ' + (error instanceof Error ? error.message : String(error)));
+                // Don't fallback, show error
+                return;
+            }
+        } else {
+            console.warn('[SECCA] securePOSPrinter not available, using fallback...');
+        }
+
+        // Fallback to seccaPrint (Electron webContents.print)
+        if (typeof window !== 'undefined' && window.seccaPrint?.print) {
+            console.log('[SECCA] Using seccaPrint fallback...');
+            try {
+                await window.seccaPrint.print({
+                    silent: true,
+                    printBackground: true,
+                    margins: { marginType: 'none' },
+                    preferCSSPageSize: true,
+                });
+                toast.success('Berhasil mencetak kartu!');
+                return;
+            } catch (error) {
+                console.error('[SECCA] seccaPrint.print failed:', error);
+                await window.seccaDesktop?.log?.({
+                    scope: 'pecah-bon',
+                    message: 'seccaPrint.print failed',
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        }
+
+        // If we reach here, no print method worked
+        toast.error('Gagal cetak. Pastikan aplikasi desktop terpasang dan printer terhubung.');
+    };
 
     const form = useForm<PecahBonFormValues>({
         resolver: zodResolver(pecahBonSchema),
@@ -104,6 +282,7 @@ function PecahBonContent() {
                 expanded: false,
                 pecahBonEntries: undefined,
                 entriesLoading: false,
+                entriesPage: 0,
             }));
             mapped.sort((left, right) =>
                 left.batchNumber.localeCompare(right.batchNumber),
@@ -145,26 +324,26 @@ function PecahBonContent() {
 
                 try {
                     const entries = await getPecahBonEntries(batchId);
-                setRawBatches((prev) =>
-                    prev.map((b) =>
-                        b.id === batchId
-                            ? {
-                                ...b,
-                                pecahBonEntries: [...entries].sort((left, right) => {
-                                    const leftId = left.pecahBonId ?? '';
-                                    const rightId = right.pecahBonId ?? '';
-                                    if (leftId && rightId) {
-                                        return leftId.localeCompare(rightId);
-                                    }
-                                    if (leftId) return -1;
-                                    if (rightId) return 1;
-                                    return new Date(left.pecahBonDate).getTime() - new Date(right.pecahBonDate).getTime();
-                                }),
-                                entriesLoading: false,
-                            }
-                            : b
-                    )
-                );
+                    setRawBatches((prev) =>
+                        prev.map((b) =>
+                            b.id === batchId
+                                ? {
+                                    ...b,
+                                    pecahBonEntries: [...entries].sort((left, right) => {
+                                        const leftId = left.pecahBonId ?? '';
+                                        const rightId = right.pecahBonId ?? '';
+                                        if (leftId && rightId) {
+                                            return leftId.localeCompare(rightId);
+                                        }
+                                        if (leftId) return -1;
+                                        if (rightId) return 1;
+                                        return new Date(left.pecahBonDate).getTime() - new Date(right.pecahBonDate).getTime();
+                                    }),
+                                    entriesLoading: false,
+                                }
+                                : b
+                        )
+                    );
                 } catch (err) {
                     console.error('Error loading pecah bon entries:', err);
                     toast.error('Gagal memuat pecah bon entries.');
@@ -188,7 +367,7 @@ function PecahBonContent() {
             gradeId: '',
             featherCondition: batch.featherCondition,
             pieceCount: 1,
-            initialWeightGram: batch.wetWeightGram,
+            initialWeightGram: 0,
             moisturePercent: batch.moisturePercent,
         });
         setDialogOpen(true);
@@ -294,7 +473,7 @@ function PecahBonContent() {
                                             Supplier
                                         </th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Grading
+                                            Kondisi Baku
                                         </th>
                                         <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                                             Sisa Berat (gr)
@@ -366,84 +545,172 @@ function PecahBonContent() {
                                                                 <Loader2 className="h-4 w-4 animate-spin" />
                                                                 <span>Memuat pecahan...</span>
                                                             </div>
-                                                        ) : batch.pecahBonEntries && batch.pecahBonEntries.length > 0 ? (
-                                                            <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-                                                                <table className="w-full text-sm">
-                                                                    <thead>
-                                                                        <tr className="bg-green-50 border-b border-gray-200">
-                                                                            <th className="px-3 py-2 text-left text-xs font-medium text-green-700">
-                                                                                ID Pecah Bon
-                                                                            </th>
-                                                                            <th className="px-3 py-2 text-left text-xs font-medium text-green-700">
-                                                                                Tanggal Pecah
-                                                                            </th>
-                                                                            <th className="px-3 py-2 text-left text-xs font-medium text-green-700">
-                                                                                Grade
-                                                                            </th>
-                                                                            <th className="px-3 py-2 text-left text-xs font-medium text-green-700">
-                                                                                Kondisi
-                                                                            </th>
-                                                                            <th className="px-3 py-2 text-center text-xs font-medium text-green-700">
-                                                                                Keping
-                                                                            </th>
-                                                                            <th className="px-3 py-2 text-right text-xs font-medium text-green-700">
-                                                                                Berat Awal
-                                                                            </th>
-                                                                            <th className="px-3 py-2 text-right text-xs font-medium text-green-700">
-                                                                                Kadar Air
-                                                                            </th>
-                                                                            <th className="px-3 py-2 text-right text-xs font-medium text-green-700">
-                                                                                Berat Kering
-                                                                            </th>
-                                                                            <th className="px-3 py-2 text-center text-xs font-medium text-green-700">
-                                                                                Aksi
-                                                                            </th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody className="divide-y divide-gray-100">
-                                                                        {batch.pecahBonEntries.map((entry) => (
-                                                                            <tr key={entry.id} className="hover:bg-gray-50">
-                                                                                <td className="px-3 py-2 font-mono text-gray-700">
-                                                                                    {entry.pecahBonId ?? '-'}
-                                                                                </td>
-                                                                                <td className="px-3 py-2 text-gray-600">
-                                                                                    {formatDate(entry.pecahBonDate)}
-                                                                                </td>
-                                                                                <td className="px-3 py-2 font-medium text-gray-900">
-                                                                                    {entry.grade?.code ?? '-'}
-                                                                                </td>
-                                                                                <td className="px-3 py-2 text-gray-700">
-                                                                                    {entry.featherCondition}
-                                                                                </td>
-                                                                                <td className="px-3 py-2 text-center font-mono">
-                                                                                    {entry.pieceCount}
-                                                                                </td>
-                                                                                <td className="px-3 py-2 text-right font-mono text-gray-900">
-                                                                                    {formatNumber(entry.initialWeightGram)}
-                                                                                </td>
-                                                                                <td className="px-3 py-2 text-right font-mono text-gray-900">
-                                                                                    {formatNumber(entry.moisturePercent, 1)}%
-                                                                                </td>
-                                                                                <td className="px-3 py-2 text-right font-mono font-semibold text-green-700">
-                                                                                    {formatNumber(entry.dryWeightGram)}
-                                                                                </td>
-                                                                                <td className="px-3 py-2 text-center">
-                                                                                    <Button
-                                                                                        size="sm"
-                                                                                        variant="outline"
-                                                                                        onClick={() => openPrintDialog(batch, entry)}
-                                                                                        disabled={!entry.pecahBonId}
-                                                                                    >
-                                                                                        <Printer className="h-4 w-4" />
-                                                                                        Cetak
-                                                                                    </Button>
-                                                                                </td>
+                                                        ) : batch.pecahBonEntries && batch.pecahBonEntries.length > 0 ? (() => {
+                                                            const totalEntries = batch.pecahBonEntries.length;
+                                                            const currentPage = batch.entriesPage ?? 0;
+                                                            const totalPages = Math.ceil(totalEntries / ENTRIES_PER_PAGE);
+                                                            const startIdx = currentPage * ENTRIES_PER_PAGE;
+                                                            const endIdx = Math.min(startIdx + ENTRIES_PER_PAGE, totalEntries);
+                                                            const paginatedEntries = batch.pecahBonEntries.slice(startIdx, endIdx);
+
+                                                            const goToPage = (page: number) => {
+                                                                setRawBatches((prev) =>
+                                                                    prev.map((b) =>
+                                                                        b.id === batch.id ? { ...b, entriesPage: page } : b
+                                                                    )
+                                                                );
+                                                            };
+
+                                                            return (
+                                                                <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+                                                                    {/* Pagination Header */}
+                                                                    <div className="flex items-center justify-between bg-green-50 border-b border-gray-200 px-3 py-2">
+                                                                        <span className="text-sm text-green-800">
+                                                                            Menampilkan <strong>{startIdx + 1}</strong> - <strong>{endIdx}</strong> dari <strong>{totalEntries}</strong> entries
+                                                                        </span>
+                                                                        {totalPages > 1 && (
+                                                                            <div className="flex items-center gap-2">
+                                                                                <Button
+                                                                                    size="sm"
+                                                                                    variant="ghost"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        goToPage(currentPage - 1);
+                                                                                    }}
+                                                                                    disabled={currentPage === 0}
+                                                                                    className="h-7 px-2"
+                                                                                >
+                                                                                    <ChevronLeft className="h-4 w-4" />
+                                                                                    Sebelumnya
+                                                                                </Button>
+                                                                                <span className="text-sm text-green-700 tabular-nums">
+                                                                                    {currentPage + 1} / {totalPages}
+                                                                                </span>
+                                                                                <Button
+                                                                                    size="sm"
+                                                                                    variant="ghost"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        goToPage(currentPage + 1);
+                                                                                    }}
+                                                                                    disabled={currentPage >= totalPages - 1}
+                                                                                    className="h-7 px-2"
+                                                                                >
+                                                                                    Selanjutnya
+                                                                                    <ChevronRight className="h-4 w-4" />
+                                                                                </Button>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    <table className="w-full text-sm">
+                                                                        <thead>
+                                                                            <tr className="bg-gray-50 border-b border-gray-200">
+                                                                                <th className="px-3 py-2 text-left text-xs font-medium text-green-700">
+                                                                                    ID Pecah Bon
+                                                                                </th>
+                                                                                <th className="px-3 py-2 text-left text-xs font-medium text-green-700">
+                                                                                    Tanggal Pecah
+                                                                                </th>
+                                                                                <th className="px-3 py-2 text-left text-xs font-medium text-green-700">
+                                                                                    Grade
+                                                                                </th>
+                                                                                <th className="px-3 py-2 text-left text-xs font-medium text-green-700">
+                                                                                    Kondisi
+                                                                                </th>
+                                                                                <th className="px-3 py-2 text-center text-xs font-medium text-green-700">
+                                                                                    Keping
+                                                                                </th>
+                                                                                <th className="px-3 py-2 text-right text-xs font-medium text-green-700">
+                                                                                    Berat Awal
+                                                                                </th>
+                                                                                <th className="px-3 py-2 text-right text-xs font-medium text-green-700">
+                                                                                    Kadar Air
+                                                                                </th>
+                                                                                <th className="px-3 py-2 text-right text-xs font-medium text-green-700">
+                                                                                    Berat Kering
+                                                                                </th>
+                                                                                <th className="px-3 py-2 text-center text-xs font-medium text-green-700">
+                                                                                    Aksi
+                                                                                </th>
                                                                             </tr>
-                                                                        ))}
-                                                                    </tbody>
-                                                                </table>
-                                                            </div>
-                                                        ) : (
+                                                                        </thead>
+                                                                        <tbody className="divide-y divide-gray-100">
+                                                                            {paginatedEntries.map((entry) => (
+                                                                                <tr key={entry.id} className="hover:bg-gray-50">
+                                                                                    <td className="px-3 py-2 font-mono text-gray-700">
+                                                                                        {entry.pecahBonId ?? '-'}
+                                                                                    </td>
+                                                                                    <td className="px-3 py-2 text-gray-600">
+                                                                                        {formatDate(entry.pecahBonDate)}
+                                                                                    </td>
+                                                                                    <td className="px-3 py-2 font-medium text-gray-900">
+                                                                                        {entry.grade?.code ?? '-'}
+                                                                                    </td>
+                                                                                    <td className="px-3 py-2 text-gray-700">
+                                                                                        {entry.featherCondition}
+                                                                                    </td>
+                                                                                    <td className="px-3 py-2 text-center font-mono">
+                                                                                        {entry.pieceCount}
+                                                                                    </td>
+                                                                                    <td className="px-3 py-2 text-right font-mono text-gray-900">
+                                                                                        {formatNumber(entry.initialWeightGram)}
+                                                                                    </td>
+                                                                                    <td className="px-3 py-2 text-right font-mono text-gray-900">
+                                                                                        {formatNumber(entry.moisturePercent, 1)}%
+                                                                                    </td>
+                                                                                    <td className="px-3 py-2 text-right font-mono font-semibold text-green-700">
+                                                                                        {formatNumber(entry.dryWeightGram)}
+                                                                                    </td>
+                                                                                    <td className="px-3 py-2 text-center">
+                                                                                        <Button
+                                                                                            size="sm"
+                                                                                            variant="outline"
+                                                                                            onClick={() => openPrintDialog(batch, entry)}
+                                                                                            disabled={!entry.pecahBonId}
+                                                                                        >
+                                                                                            <Printer className="h-4 w-4" />
+                                                                                            Cetak
+                                                                                        </Button>
+                                                                                    </td>
+                                                                                </tr>
+                                                                            ))}
+                                                                        </tbody>
+                                                                    </table>
+                                                                    {/* Pagination Footer (for tables with many entries) */}
+                                                                    {totalPages > 1 && (
+                                                                        <div className="flex items-center justify-center gap-2 border-t border-gray-200 bg-gray-50 px-3 py-2">
+                                                                            <Button
+                                                                                size="sm"
+                                                                                variant="ghost"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    goToPage(currentPage - 1);
+                                                                                }}
+                                                                                disabled={currentPage === 0}
+                                                                                className="h-7 px-2"
+                                                                            >
+                                                                                <ChevronLeft className="h-4 w-4" />
+                                                                            </Button>
+                                                                            <span className="text-sm text-gray-600 tabular-nums">
+                                                                                Halaman {currentPage + 1} dari {totalPages}
+                                                                            </span>
+                                                                            <Button
+                                                                                size="sm"
+                                                                                variant="ghost"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    goToPage(currentPage + 1);
+                                                                                }}
+                                                                                disabled={currentPage >= totalPages - 1}
+                                                                                className="h-7 px-2"
+                                                                            >
+                                                                                <ChevronRight className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })() : (
                                                             <div className="text-sm text-gray-500 py-2">
                                                                 Belum ada pecah bon untuk batch ini.
                                                             </div>

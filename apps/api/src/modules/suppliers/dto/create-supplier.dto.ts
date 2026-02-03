@@ -7,11 +7,6 @@ export class CreateSupplierDto {
   @MinLength(1)
   name: string;
 
-  @ApiProperty()
-  @IsString()
-  @MinLength(1)
-  origin: string;
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

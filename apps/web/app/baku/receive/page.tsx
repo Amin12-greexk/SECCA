@@ -12,13 +12,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
     Command,
@@ -32,15 +25,13 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/lib/toast';
 import {
     getSuppliers,
-    getGrades,
     submitBakuReceive,
-    type Grade,
     type Supplier,
 } from '@/lib/api';
 
 const formSchema = z.object({
     supplierId: z.string().min(1, 'Supplier wajib dipilih'),
-    featherCondition: z.string().min(1, 'Grading wajib dipilih'),
+    featherCondition: z.string().min(1, 'Kondisi baku wajib diisi'),
     wetWeightGram: z.number().min(0.1, 'Minimal 0.1 gram'),
     moisturePercent: z.number().min(0, 'Minimal 0%').max(100, 'Maksimal 100%'),
     notes: z.string().optional(),
@@ -52,11 +43,8 @@ function TerimaBakuContent() {
     const toast = useToast();
     const router = useRouter();
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-    const [grades, setGrades] = useState<Grade[]>([]);
     const [supplierLoadError, setSupplierLoadError] = useState<string | null>(null);
-    const [gradeLoadError, setGradeLoadError] = useState<string | null>(null);
     const [loadingSuppliers, setLoadingSuppliers] = useState(true);
-    const [loadingGrades, setLoadingGrades] = useState(true);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [supplierOpen, setSupplierOpen] = useState(false);
 
@@ -73,7 +61,6 @@ function TerimaBakuContent() {
     });
 
     const supplierId = form.watch('supplierId');
-    const gradingValue = form.watch('featherCondition');
 
     const selectedSupplier = useMemo(
         () => suppliers.find((supplier) => supplier.id === supplierId),
@@ -82,25 +69,15 @@ function TerimaBakuContent() {
 
     useEffect(() => {
         async function loadData() {
-            const results = await Promise.allSettled([getSuppliers(), getGrades()]);
-            const [supplierResult, gradeResult] = results;
-
-            if (supplierResult.status === 'fulfilled') {
-                setSuppliers(supplierResult.value);
-            } else {
-                console.error('Failed to load suppliers:', supplierResult.reason);
+            try {
+                const supplierData = await getSuppliers();
+                setSuppliers(supplierData);
+            } catch (error) {
+                console.error('Failed to load suppliers:', error);
                 setSupplierLoadError('Gagal memuat supplier. Masukkan ID supplier secara manual.');
+            } finally {
+                setLoadingSuppliers(false);
             }
-
-            if (gradeResult.status === 'fulfilled') {
-                setGrades(gradeResult.value);
-            } else {
-                console.error('Failed to load grades:', gradeResult.reason);
-                setGradeLoadError('Gagal memuat grading. Masukkan grading secara manual.');
-            }
-
-            setLoadingSuppliers(false);
-            setLoadingGrades(false);
         }
 
         loadData();
@@ -128,7 +105,7 @@ function TerimaBakuContent() {
         }
     };
 
-    if (loadingSuppliers || loadingGrades) {
+    if (loadingSuppliers) {
         return (
             <div className="min-h-[calc(100vh-72px)] flex items-center justify-center">
                 <div className="flex items-center gap-3 text-gray-600">
@@ -230,40 +207,15 @@ function TerimaBakuContent() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label>Grading</Label>
-                                    {gradeLoadError ? (
-                                        <Input
-                                            placeholder="Masukkan grading"
-                                            {...form.register('featherCondition')}
-                                        />
-                                    ) : (
-                                        <Select
-                                            value={gradingValue}
-                                            onValueChange={(value) =>
-                                                form.setValue('featherCondition', value, {
-                                                    shouldValidate: true,
-                                                })
-                                            }
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Pilih grading" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {grades.map((grade) => (
-                                                    <SelectItem key={grade.id} value={grade.code}>
-                                                        {grade.code} - {grade.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    )}
+                                    <Label>Kondisi Baku</Label>
+                                    <Input
+                                        placeholder="Contoh: terlalu banyak BB / bulu berat"
+                                        {...form.register('featherCondition')}
+                                    />
                                     {form.formState.errors.featherCondition && (
                                         <p className="text-xs text-red-600">
                                             {form.formState.errors.featherCondition.message}
                                         </p>
-                                    )}
-                                    {gradeLoadError && (
-                                        <p className="text-xs text-amber-600">{gradeLoadError}</p>
                                     )}
                                 </div>
                             </div>

@@ -36,12 +36,6 @@ let BakuService = BakuService_1 = class BakuService {
         if (!supplier) {
             return (0, errors_1.notFound)("Supplier not found", { supplierId: dto.supplierId });
         }
-        const supplierOrigin = supplier.origin;
-        if (!supplierOrigin) {
-            return (0, errors_1.badRequest)("Supplier origin is not set", {
-                supplierId: dto.supplierId,
-            });
-        }
         const createdAt = new Date();
         for (let attempt = 0; attempt < 3; attempt += 1) {
             try {
@@ -52,7 +46,6 @@ let BakuService = BakuService_1 = class BakuService {
                             batchNumber,
                             cardId,
                             supplierId: dto.supplierId,
-                            origin: supplierOrigin,
                             featherCondition: dto.featherCondition,
                             wetWeightGram: this.roundToTwoDecimals(dto.wetWeightGram),
                             moisturePercent: this.roundToTwoDecimals(dto.moisturePercent),
@@ -98,9 +91,7 @@ let BakuService = BakuService_1 = class BakuService {
                 id: rawBatch.supplier.id,
                 name: rawBatch.supplier.name,
                 code: rawBatch.supplier.code,
-                origin: rawBatch.supplier.origin,
             },
-            origin: rawBatch.origin,
             featherCondition: rawBatch.featherCondition,
             wetWeightGram: rawBatch.wetWeightGram,
             moisturePercent: rawBatch.moisturePercent,
@@ -131,9 +122,7 @@ let BakuService = BakuService_1 = class BakuService {
                 id: rawBatch.supplier.id,
                 name: rawBatch.supplier.name,
                 code: rawBatch.supplier.code,
-                origin: rawBatch.supplier.origin,
             },
-            origin: rawBatch.origin,
             featherCondition: rawBatch.featherCondition,
             wetWeightGram: rawBatch.wetWeightGram,
             moisturePercent: rawBatch.moisturePercent,

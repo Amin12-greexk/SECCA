@@ -10,9 +10,7 @@ export type BatchCardData = {
     id: string;
     name: string;
     code?: string | null;
-    origin?: string | null;
   };
-  origin: string;
   featherCondition: string;
   wetWeightGram: number;
   originalWetWeightGram?: number;
@@ -52,13 +50,10 @@ const BatchCard = React.forwardRef<HTMLDivElement, BatchCardProps>(({ batch }, r
     batchNumber: batch.batchNumber,
     cardId: batch.cardId ?? null,
     supplier: batch.supplier ?? null,
-    origin: batch.origin,
-    featherCondition: batch.featherCondition,
     wetWeightGram: displayWeightGram,
     remainingWetWeightGram: batch.wetWeightGram,
     moisturePercent: batch.moisturePercent,
     notes: batch.notes ?? null,
-    createdAt: toIsoString(batch.createdAt),
     updatedAt: toIsoString(batch.updatedAt),
   });
 
@@ -66,7 +61,7 @@ const BatchCard = React.forwardRef<HTMLDivElement, BatchCardProps>(({ batch }, r
       <>
         <style>{`
 @page {
-  size: 72mm auto;
+  size: 72mm 200mm;
   margin: 0;
 }
 html, body {
@@ -87,10 +82,11 @@ html, body {
   #printable-content {
     visibility: visible;
     position: absolute;
-    left: 0;
+    left: -50mm;
     top: 0;
     width: 72mm;
     padding: 2mm;
+    box-sizing: border-box;
   }
 }
       `}</style>
@@ -117,8 +113,8 @@ html, body {
             <div className="font-semibold">Tgl Masuk</div>
             <div className="text-right">{formatDateTime(batch.createdAt)}</div>
 
-            <div className="font-semibold">Asal</div>
-            <div className="text-right">{batch.origin}</div>
+            <div className="font-semibold">Supplier</div>
+            <div className="text-right">{batch.supplier?.name ?? "-"}</div>
 
             <div className="font-semibold">Grading</div>
             <div className="text-right">{batch.featherCondition}</div>

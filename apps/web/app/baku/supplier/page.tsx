@@ -11,13 +11,6 @@ import Alert from '@/components/Alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import { useToast } from '@/lib/toast';
 import {
     createSupplier,
@@ -27,17 +20,8 @@ import {
     type Supplier,
 } from '@/lib/api';
 
-const originOptions = [
-    { value: 'KAL', label: 'Kalimantan (KAL)' },
-    { value: 'SBY', label: 'Surabaya (SBY)' },
-    { value: 'RBI', label: 'Riau (RBI)' },
-    { value: 'LPG', label: 'Lampung (LPG)' },
-    { value: 'OTHER', label: 'Lainnya (OTHER)' },
-];
-
 const formSchema = z.object({
     name: z.string().min(1, 'Nama supplier wajib diisi'),
-    origin: z.string().min(1, 'Asal wajib dipilih'),
     code: z.string().optional(),
     phone: z.string().optional(),
 });
@@ -46,7 +30,6 @@ type FormValues = z.infer<typeof formSchema>;
 
 const defaultValues: FormValues = {
     name: '',
-    origin: '',
     code: '',
     phone: '',
 };
@@ -69,8 +52,6 @@ function SupplierContent() {
         mode: 'onSubmit',
         defaultValues,
     });
-
-    const originValue = form.watch('origin');
 
     useEffect(() => {
         if (containerRef.current) {
@@ -105,7 +86,6 @@ function SupplierContent() {
         try {
             const payload = {
                 name: values.name.trim(),
-                origin: values.origin,
                 code: normalizeOptional(values.code),
                 phone: normalizeOptional(values.phone),
             };
@@ -131,7 +111,6 @@ function SupplierContent() {
         setEditingSupplier(supplier);
         form.reset({
             name: supplier.name,
-            origin: supplier.origin ?? '',
             code: supplier.code ?? '',
             phone: supplier.phone ?? '',
         });
@@ -166,7 +145,7 @@ function SupplierContent() {
                         {editingSupplier ? 'Edit Supplier' : 'Tambah Supplier'}
                     </h1>
                     <p className="text-sm text-gray-600">
-                        Kelola data supplier, termasuk asal pemasok untuk pencatatan bahan baku.
+                        Kelola data supplier untuk pencatatan bahan baku.
                     </p>
                 </div>
 
@@ -178,29 +157,6 @@ function SupplierContent() {
                                 <Input placeholder="Contoh: Supplier Utama" {...form.register('name')} />
                                 {form.formState.errors.name && (
                                     <p className="text-xs text-red-600">{form.formState.errors.name.message}</p>
-                                )}
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Asal</Label>
-                                <Select
-                                    value={originValue}
-                                    onValueChange={(value) =>
-                                        form.setValue('origin', value, { shouldValidate: true })
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Pilih asal supplier" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {originOptions.map((option) => (
-                                            <SelectItem key={option.value} value={option.value}>
-                                                {option.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {form.formState.errors.origin && (
-                                    <p className="text-xs text-red-600">{form.formState.errors.origin.message}</p>
                                 )}
                             </div>
                             <div className="space-y-2">
@@ -262,7 +218,6 @@ function SupplierContent() {
                                 <thead>
                                     <tr className="border-b border-gray-200 text-left text-gray-500">
                                         <th className="py-3 pr-4 font-medium">Nama</th>
-                                        <th className="py-3 pr-4 font-medium">Asal</th>
                                         <th className="py-3 pr-4 font-medium">Kode</th>
                                         <th className="py-3 pr-4 font-medium">Telepon</th>
                                         <th className="py-3 text-right font-medium">Aksi</th>
@@ -270,17 +225,11 @@ function SupplierContent() {
                                 </thead>
                                 <tbody>
                                     {suppliers.map((supplier) => {
-                                        const originLabel =
-                                            originOptions.find((option) => option.value === supplier.origin)?.label ??
-                                            supplier.origin ??
-                                            '-';
-
                                         return (
                                             <tr key={supplier.id} className="border-b border-gray-100">
                                                 <td className="py-3 pr-4 font-medium text-gray-900">
                                                     {supplier.name}
                                                 </td>
-                                                <td className="py-3 pr-4 text-gray-700">{originLabel}</td>
                                                 <td className="py-3 pr-4 text-gray-700">{supplier.code ?? '-'}</td>
                                                 <td className="py-3 pr-4 text-gray-700">{supplier.phone ?? '-'}</td>
                                                 <td className="py-3 text-right">

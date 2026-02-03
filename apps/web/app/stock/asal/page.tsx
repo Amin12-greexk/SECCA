@@ -37,7 +37,173 @@ function StockAsalContent() {
     const streamRef = useRef<MediaStream | null>(null);
     const frameRef = useRef<number | null>(null);
 
-    const handlePrint = () => window.print();
+    const buildPrintOptions = () => {
+        // Options for electron-secure-pos-printer library
+        // BP Lite 80D1: 80mm paper, ~72mm printable area
+        return {
+            silent: true,
+            preview: false, // Direct print
+            margin: '0',
+            pageSize: { width: 80000, height: 297000 },
+            addFinalMargin: true,
+            bodyAttributes: {
+                style: 'width: 80mm !important; max-width: 80mm !important; margin: 0 !important; padding: 0 !important;',
+            },
+            containerAttributes: {
+                style: 'width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important; padding: 2mm !important;',
+            },
+            styleSheet: `
+                @page {
+                    size: 80mm auto;
+                    margin: 0 !important;
+                }
+                * {
+                    box-sizing: border-box !important;
+                }
+                html, body {
+                    width: 80mm !important;
+                    max-width: 80mm !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    font-family: Arial, Helvetica, sans-serif;
+                    font-size: 10pt;
+                }
+                #container {
+                    width: 76mm !important;
+                    max-width: 76mm !important;
+                    margin: 0 auto !important;
+                    padding: 2mm !important;
+                    text-align: center !important;
+                }
+                #container .section {
+                    width: 100% !important;
+                    max-width: 72mm !important;
+                    margin: 0 auto !important;
+                    padding: 1mm 0 !important;
+                    text-align: center !important;
+                }
+                img {
+                    max-width: 100% !important;
+                    display: block !important;
+                    margin: 0 auto !important;
+                }
+            `,
+        };
+    };
+
+    const buildBatchPrintData = (batch: RawBatch) => {
+        const displayWeightGram = getDisplayWeight(batch);
+        const supplierName = batch.supplier?.name ?? batch.supplierId;
+        const dateStr = formatDate(batch.createdAt);
+
+        return [
+            {
+                type: 'text',
+                raw: true,
+                value: `<div style="text-align:center;font-size:11pt;font-weight:bold;padding:1mm 0;">KARTU BAKU - TEI</div>`,
+            },
+            {
+                type: 'qrCode',
+                value: JSON.stringify({
+                    type: 'RAW_BATCH',
+                    batchNumber: batch.batchNumber,
+                    cardId: batch.cardId ?? null,
+                    supplier: batch.supplier ?? null,
+                    wetWeightGram: displayWeightGram,
+                    remainingWetWeightGram: batch.wetWeightGram,
+                    moisturePercent: batch.moisturePercent,
+                    notes: batch.notes ?? null,
+                }),
+                width: 80,
+                height: 80,
+                sectionStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1mm 0' },
+            },
+            {
+                type: 'text',
+                raw: true,
+                value: `
+                    <div style="border:1px solid #333;padding:1.5mm;font-size:8pt;width:100%;box-sizing:border-box;">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
+                            <span style="font-weight:bold;">Batch No</span><span>${batch.batchNumber}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
+                            <span style="font-weight:bold;">Tgl Masuk</span><span>${dateStr}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
+                            <span style="font-weight:bold;">Supplier</span><span>${supplierName}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="font-weight:bold;">Grading</span><span>${batch.featherCondition}</span>
+                        </div>
+                    </div>
+                `,
+            },
+            {
+                type: 'text',
+                raw: true,
+                value: `
+                    <div style="border:1.5px solid #000;padding:1.5mm;margin-top:1mm;text-align:center;width:100%;box-sizing:border-box;">
+                        <div style="font-size:9pt;font-weight:bold;">BERAT: ${formatNumber(displayWeightGram, 2)} Gr</div>
+                        <div style="font-size:9pt;font-weight:bold;">KADAR AIR: ${formatNumber(batch.moisturePercent, 1)}%</div>
+                    </div>
+                `,
+            },
+            {
+                type: 'text',
+                raw: true,
+                value: `<div style="margin-top:2mm;border-top:1px dashed #000;width:100%;"></div>`,
+            },
+        ];
+    };
+
+    const handlePrint = async () => {
+        if (!printBatch) {
+            return;
+        }
+
+        // Try electron-secure-pos-printer first (preferred for thermal printers)
+        if (typeof window !== 'undefined' && window.securePOSPrinter?.print) {
+            try {
+                const options = buildPrintOptions();
+                const data = buildBatchPrintData(printBatch);
+                await window.securePOSPrinter.print(data, options);
+                toast.success('Berhasil mencetak kartu!');
+                return;
+            } catch (error) {
+                console.error('Secure POS print failed.', error);
+                await window.seccaDesktop?.log?.({
+                    scope: 'stock-asal',
+                    message: 'securePOSPrinter.print failed',
+                    error: error instanceof Error ? error.message : String(error),
+                });
+                // Don't show error yet, try fallback
+            }
+        }
+
+        // Fallback to seccaPrint (Electron webContents.print)
+        if (typeof window !== 'undefined' && window.seccaPrint?.print) {
+            try {
+                await window.seccaPrint.print({
+                    silent: true,
+                    printBackground: true,
+                    margins: { marginType: 'none' },
+                    preferCSSPageSize: true,
+                });
+                toast.success('Berhasil mencetak kartu!');
+                return;
+            } catch (error) {
+                console.error('Silent print failed.', error);
+                await window.seccaDesktop?.log?.({
+                    scope: 'stock-asal',
+                    message: 'seccaPrint.print failed',
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        }
+
+        // If we reach here, no print method worked
+        toast.error('Gagal cetak. Pastikan aplikasi desktop terpasang dan printer terhubung.');
+    };
 
     const loadData = async () => {
         setLoading(true);
@@ -48,6 +214,7 @@ function StockAsalContent() {
                 ...item,
                 id: item.rawBatchId ?? item.id,
             }));
+            mapped.sort((left, right) => left.batchNumber.localeCompare(right.batchNumber));
             setRawBatches(mapped);
         } catch (err) {
             console.error('Error loading raw batches:', err);
@@ -197,7 +364,7 @@ function StockAsalContent() {
         return () => {
             stopCamera();
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+
     }, []);
 
     const formatDate = (dateStr: string) => {
@@ -277,7 +444,7 @@ function StockAsalContent() {
                                             Supplier
                                         </th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Grading
+                                            Kondisi Baku
                                         </th>
                                         <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                                             Berat (gr)
@@ -498,11 +665,7 @@ function StockAsalContent() {
                                         )}
                                     </div>
                                     <div>
-                                        <div className="text-xs text-emerald-700">Asal</div>
-                                        <div className="font-semibold">{scanResult.origin}</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-xs text-emerald-700">Grading</div>
+                                        <div className="text-xs text-emerald-700">Kondisi Baku</div>
                                         <div className="font-semibold">{scanResult.featherCondition}</div>
                                     </div>
                                     <div>
@@ -537,7 +700,10 @@ function StockAsalContent() {
                         <Button variant="outline" onClick={() => setScanOpen(false)}>
                             Tutup
                         </Button>
-                        <Button onClick={handleScan} disabled={scanLoading || !scanValue.trim()}>
+                        <Button
+                            onClick={() => handleScan()}
+                            disabled={scanLoading || !scanValue.trim()}
+                        >
                             {scanLoading ? 'Memproses...' : 'Cek Kartu'}
                         </Button>
                     </DialogFooter>

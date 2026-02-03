@@ -11,12 +11,6 @@ export class UpdateSupplierDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  @MinLength(1)
-  origin?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
   code?: string;
 
   @ApiPropertyOptional()

@@ -7,7 +7,6 @@ export interface Supplier {
     name: string;
     code?: string | null;
     phone?: string | null;
-    origin?: string | null;
 }
 
 export interface BakuReceiveRequest {
@@ -24,7 +23,6 @@ export interface RawBatch {
     cardId: string;
     supplierId: string;
     supplier?: Supplier;
-    origin: string;
     featherCondition: string;
     wetWeightGram: number;
     originalWetWeightGram?: number;
@@ -247,7 +245,6 @@ export async function getSuppliers(): Promise<Supplier[]> {
 
 export async function createSupplier(data: {
     name: string;
-    origin: string;
     code?: string | null;
     phone?: string | null;
 }): Promise<Supplier> {
@@ -275,7 +272,6 @@ export async function updateSupplier(
     supplierId: string,
     data: {
         name?: string;
-        origin?: string;
         code?: string | null;
         phone?: string | null;
     }
