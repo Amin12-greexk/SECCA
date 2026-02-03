@@ -101,9 +101,6 @@ html, body {
               <div className="font-semibold">Grade</div>
               <div className="text-right">{entry.gradeCode ?? "-"}</div>
 
-              <div className="font-semibold">Kondisi</div>
-              <div className="text-right">{entry.featherCondition}</div>
-
               <div className="font-semibold">Keping</div>
               <div className="text-right">{entry.pieceCount}</div>
             </div>

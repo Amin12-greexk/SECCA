@@ -64,7 +64,9 @@ let SuppliersService = class SuppliersService {
         catch (error) {
             if (error instanceof client_1.Prisma.PrismaClientKnownRequestError) {
                 if (error.code === "P2003") {
-                    return (0, errors_1.conflict)("Supplier is in use and cannot be deleted", { supplierId: id });
+                    return (0, errors_1.conflict)("Supplier sedang dipakai dan tidak bisa dihapus", {
+                        supplierId: id,
+                    });
                 }
             }
             throw error;

@@ -50,7 +50,7 @@ function StockAsalContent() {
                 style: 'width: 80mm !important; max-width: 80mm !important; margin: 0 !important; padding: 0 !important;',
             },
             containerAttributes: {
-                style: 'width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important; padding: 2mm !important;',
+                style: 'width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important; margin-left: -2mm !important; padding: 2mm !important;',
             },
             styleSheet: `
                 @page {
@@ -72,6 +72,7 @@ function StockAsalContent() {
                     width: 76mm !important;
                     max-width: 76mm !important;
                     margin: 0 auto !important;
+                    margin-left: -2mm !important;
                     padding: 2mm !important;
                     text-align: center !important;
                 }

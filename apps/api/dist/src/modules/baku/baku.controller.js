@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+//# sourceMappingURL=baku.controller.js.map toute 
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BakuController = void 0;
 const common_1 = require("@nestjs/common");

@@ -6,29 +6,29 @@ export declare class GradesController {
     constructor(gradesService: GradesService);
     create(dto: CreateGradeDto): import("@prisma/client").Prisma.Prisma__GradeClient<{
         id: string;
-        code: string;
         name: string;
+        code: string;
         createdAt: Date;
         updatedAt: Date;
     }, never, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
     findAll(): import("@prisma/client").Prisma.PrismaPromise<{
         id: string;
-        code: string;
         name: string;
+        code: string;
         createdAt: Date;
         updatedAt: Date;
     }[]>;
     update(gradeId: string, dto: UpdateGradeDto): Promise<{
         id: string;
-        code: string;
         name: string;
+        code: string;
         createdAt: Date;
         updatedAt: Date;
     }>;
     remove(gradeId: string): Promise<{
         id: string;
-        code: string;
         name: string;
+        code: string;
         createdAt: Date;
         updatedAt: Date;
     }>;

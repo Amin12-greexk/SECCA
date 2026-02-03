@@ -82,7 +82,7 @@ function PecahBonContent() {
                 style: 'width: 80mm !important; max-width: 80mm !important; margin: 0 !important; padding: 0 !important;',
             },
             containerAttributes: {
-                style: 'width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important; padding: 2mm !important;',
+                style: 'width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important; margin-left: -1.5mm !important; padding: 0 !important;',
             },
             styleSheet: `
                 @page {
@@ -98,13 +98,14 @@ function PecahBonContent() {
                     margin: 0 !important;
                     padding: 0 !important;
                     font-family: Arial, Helvetica, sans-serif;
-                    font-size: 10pt;
+                    font-size: 11pt;
                 }
                 #container {
                     width: 76mm !important;
                     max-width: 76mm !important;
                     margin: 0 auto !important;
-                    padding: 2mm !important;
+                    margin-left: -1.5mm !important;
+                    padding: 0 !important;
                     text-align: center !important;
                 }
                 #container .section {
@@ -129,7 +130,7 @@ function PecahBonContent() {
             {
                 type: 'text',
                 raw: true,
-                value: `<div style="text-align:center;font-size:11pt;font-weight:bold;padding:1mm 0;">KARTU PECAH BON - TEI</div>`,
+                value: `<div style="text-align:center;font-size:12pt;font-weight:bold;padding:1mm 0;">KARTU PECAH BON - TEI</div>`,
             },
             {
                 type: 'qrCode',
@@ -142,7 +143,7 @@ function PecahBonContent() {
                 type: 'text',
                 raw: true,
                 value: `
-                    <div style="border:1px solid #333;padding:1.5mm;font-size:8pt;width:100%;box-sizing:border-box;">
+                    <div style="border:1px solid #333;padding:1.5mm;font-size:9pt;width:100%;box-sizing:border-box;">
                         <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
                             <span style="font-weight:bold;">ID Pecah</span><span>${entry.pecahBonId ?? '-'}</span>
                         </div>
@@ -152,15 +153,12 @@ function PecahBonContent() {
                         <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
                             <span style="font-weight:bold;">Tgl Pecah</span><span>${dateStr}</span>
                         </div>
-                        <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
-                            <span style="font-weight:bold;">Grade</span><span>${entry.grade?.code ?? '-'}</span>
-                        </div>
-                        <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
-                            <span style="font-weight:bold;">Kondisi</span><span>${entry.featherCondition}</span>
-                        </div>
-                        <div style="display:flex;justify-content:space-between;">
-                            <span style="font-weight:bold;">Keping</span><span>${entry.pieceCount}</span>
-                        </div>
+                          <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
+                              <span style="font-weight:bold;">Grade</span><span>${entry.grade?.code ?? '-'}</span>
+                          </div>
+                          <div style="display:flex;justify-content:space-between;">
+                              <span style="font-weight:bold;">Keping</span><span>${entry.pieceCount}</span>
+                          </div>
                     </div>
                 `,
             },
@@ -169,9 +167,9 @@ function PecahBonContent() {
                 raw: true,
                 value: `
                     <div style="border:1.5px solid #000;padding:1.5mm;margin-top:1mm;text-align:center;width:100%;box-sizing:border-box;">
-                        <div style="font-size:9pt;font-weight:bold;">BERAT AWAL: ${formatNumber(entry.initialWeightGram, 2)} Gr</div>
-                        <div style="font-size:9pt;font-weight:bold;">KADAR AIR: ${formatNumber(entry.moisturePercent, 1)}%</div>
-                        <div style="font-size:9pt;font-weight:bold;">BERAT KERING: ${formatNumber(entry.dryWeightGram, 2)} Gr</div>
+                        <div style="font-size:10pt;font-weight:bold;">BERAT AWAL: ${formatNumber(entry.initialWeightGram, 2)} Gr</div>
+                        <div style="font-size:10pt;font-weight:bold;">KADAR AIR: ${formatNumber(entry.moisturePercent, 1)}%</div>
+                        <div style="font-size:10pt;font-weight:bold;">BERAT KERING: ${formatNumber(entry.dryWeightGram, 2)} Gr</div>
                     </div>
                 `,
             },
@@ -179,6 +177,137 @@ function PecahBonContent() {
                 type: 'text',
                 raw: true,
                 value: `<div style="margin-top:2mm;border-top:1px dashed #000;width:100%;"></div>`,
+            },
+        ];
+    };
+
+    const buildSetoranPrintData = (batch: BatchWithEntries, entry: PecahBonEntry) => {
+        const dateStr = formatDate(entry.pecahBonDate);
+        const gradeCode = entry.grade?.code ?? '-';
+        const pieceCount = entry.pieceCount;
+        const wetWeight = formatNumber(entry.initialWeightGram, 2);
+        const moisture = formatNumber(entry.moisturePercent, 1);
+        const dryWeight = formatNumber(entry.dryWeightGram, 2);
+
+        return [
+            // Header - lebih compact
+            {
+                type: 'text',
+                raw: true,
+                value: `<div style="text-align:center;font-size:11pt;font-weight:700;padding:0.5mm 0;border-bottom:1px solid #000;">SETORAN</div>`,
+            },
+            // Info section - 2 kolom untuk hemat ruang
+            {
+                type: 'text',
+                raw: true,
+                value: `
+                    <div style="font-size:7pt;font-weight:600;line-height:1.2;padding:0.4mm 0;max-width:70mm;margin:0 auto;">
+                        <table style="width:100%;border-collapse:collapse;">
+                            <tr>
+                                <td style="padding:0.1mm 0;width:52%;">NAMA: TEI</td>
+                                <td style="padding:0.1mm 0;width:48%;">GRADE: ${gradeCode}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0.1mm 0;">TGL: ${dateStr.split(',')[0]}</td>
+                                <td style="padding:0.1mm 0;">BIJI: ${pieceCount} kpg</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0.1mm 0;">NO LP: ${entry.pecahBonId ?? '-'}</td>
+                                <td style="padding:0.1mm 0;">B.BASAH: ${wetWeight}g</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0.1mm 0;">KARTU: ${batch.batchNumber}</td>
+                                <td style="padding:0.1mm 0;">K.AIR: ${moisture}%</td>
+                            </tr>
+                        </table>
+                    </div>
+                `,
+            },
+            // BERAT KERING - lebih compact
+            {
+                type: 'text',
+                raw: true,
+                value: `
+                    <div style="margin:0.5mm auto;max-width:70mm;">
+                        <table style="width:100%;border-collapse:collapse;font-size:7pt;font-weight:600;border:1px solid #000;">
+                            <tr style="background:#ddd;">
+                                <td style="border:1px solid #000;padding:0.2mm;width:45%;"></td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;width:15%;">BIJI</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;width:25%;">GRAM</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;width:15%;">%</td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #000;padding:0.2mm;font-size:8pt;">BERAT KERING</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;">${pieceCount}</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;">${dryWeight}</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;">100</td>
+                            </tr>
+                        </table>
+                    </div>
+                `,
+            },
+            // HASIL JADI - compact
+            {
+                type: 'text',
+                raw: true,
+                value: `
+                    <div style="margin:0.5mm auto;max-width:70mm;">
+                        <table style="width:100%;border-collapse:collapse;font-size:7pt;font-weight:600;border:1px solid #000;">
+                            <tr style="background:#ff9;">
+                                <td style="border:1px solid #000;padding:0.2mm;font-size:8pt;" colspan="2">HASIL JADI:</td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #000;padding:0.2mm;width:65%;">MANGKOK</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;width:35%;">(.....)</td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #000;padding:0.2mm;">HANCURAN</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">(.....)</td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #000;padding:0.2mm;">SESEKAN</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">(.....)</td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #000;padding:0.2mm;">KAKI</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">(.....)</td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #000;padding:0.2mm;">LAIN-LAIN</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">(.....)</td>
+                            </tr>
+                        </table>
+                    </div>
+                `,
+            },
+            // Summary - compact
+            {
+                type: 'text',
+                raw: true,
+                value: `
+                    <div style="margin:0.5mm auto;max-width:70mm;">
+                        <table style="width:100%;border-collapse:collapse;font-size:7pt;font-weight:600;border:1px solid #000;">
+                            <tr style="background:#ddd;">
+                                <td style="border:1px solid #000;padding:0.2mm;width:65%;font-size:8pt;">TOTAL BARANG JADI</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;width:35%;">(.....)</td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #000;padding:0.2mm;">HILANG/SUSUT</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">(.....)</td>
+                            </tr>
+                            <tr style="background:#ddd;">
+                                <td style="border:1px solid #000;padding:0.2mm;">SUSUT PROSES</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">(.....)</td>
+                            </tr>
+                        </table>
+                    </div>
+                `,
+            },
+            // Footer
+            {
+                type: 'text',
+                raw: true,
+                value: `<div style="margin-top:1mm;border-top:1px dashed #000;"></div>`,
             },
         ];
     };
@@ -241,7 +370,30 @@ function PecahBonContent() {
             }
         }
 
-        // If we reach here, no print method worked
+        // jika return ke sini maka tidak ada printer
+        toast.error('Gagal cetak. Pastikan aplikasi desktop terpasang dan printer terhubung.');
+    };
+
+    const handlePrintSetoran = async (batch: BatchWithEntries, entry: PecahBonEntry) => {
+        if (typeof window !== 'undefined' && window.securePOSPrinter?.print) {
+            try {
+                const options = buildPrintOptions();
+                const data = buildSetoranPrintData(batch, entry);
+                await window.securePOSPrinter.print(data, options);
+                toast.success('Berhasil mencetak setoran!');
+                return;
+            } catch (error) {
+                console.error('[SECCA] securePOSPrinter.print failed:', error);
+                await window.seccaDesktop?.log?.({
+                    scope: 'setoran',
+                    message: 'securePOSPrinter.print failed',
+                    error: error instanceof Error ? error.message : String(error),
+                });
+                toast.error('securePOSPrinter gagal: ' + (error instanceof Error ? error.message : String(error)));
+                return;
+            }
+        }
+
         toast.error('Gagal cetak. Pastikan aplikasi desktop terpasang dan printer terhubung.');
     };
 
@@ -670,6 +822,15 @@ function PecahBonContent() {
                                                                                         >
                                                                                             <Printer className="h-4 w-4" />
                                                                                             Cetak
+                                                                                        </Button>
+                                                                                        <Button
+                                                                                            size="sm"
+                                                                                            variant="outline"
+                                                                                            onClick={() => handlePrintSetoran(batch, entry)}
+                                                                                            disabled={!entry.pecahBonId}
+                                                                                        >
+                                                                                            <Printer className="h-4 w-4" />
+                                                                                            Cetak Setoran
                                                                                         </Button>
                                                                                     </td>
                                                                                 </tr>

@@ -60,7 +60,9 @@ export class SuppliersService {
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === "P2003") {
-          return conflict("Supplier is in use and cannot be deleted", { supplierId: id });
+          return conflict("Supplier sedang dipakai dan tidak bisa dihapus", {
+            supplierId: id,
+          });
         }
       }
       throw error;
