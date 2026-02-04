@@ -95,6 +95,11 @@ function PecahBonContent() {
         entry: PecahBonEntry;
     } | null>(null);
     const [printOpen, setPrintOpen] = useState(false);
+    const [setoranContext, setSetoranContext] = useState<{
+        batch: BatchWithEntries;
+        entry: PecahBonEntry;
+    } | null>(null);
+    const [setoranOpen, setSetoranOpen] = useState(false);
 
     // Multi-entry state for bulk pecah bon
     const [multiEntries, setMultiEntries] = useState<MultiEntryRow[]>([]);
@@ -609,6 +614,11 @@ function PecahBonContent() {
         setPrintOpen(true);
     };
 
+    const openSetoranDialog = (batch: BatchWithEntries, entry: PecahBonEntry) => {
+        setSetoranContext({ batch, entry });
+        setSetoranOpen(true);
+    };
+
     const onSubmit = async (values: PecahBonFormValues) => {
         if (!selectedBatch) return;
 
@@ -915,7 +925,7 @@ function PecahBonContent() {
                                                                                             <Button
                                                                                                 size="sm"
                                                                                                 variant="outline"
-                                                                                                onClick={() => handlePrintSetoran(batch, entry)}
+                                                                                                onClick={() => openSetoranDialog(batch, entry)}
                                                                                                 disabled={!entry.pecahBonId}
                                                                                                 className="h-8 px-2"
                                                                                             >
@@ -1311,6 +1321,81 @@ function PecahBonContent() {
                                     <Button onClick={handlePrint} disabled={!printContext.entry.pecahBonId}>
                                         <Printer className="h-4 w-4" />
                                         Cetak Kartu
+                                    </Button>
+                                </DialogFooter>
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Setoran Print Dialog */}
+            <Dialog open={setoranOpen} onOpenChange={setSetoranOpen}>
+                <DialogContent className="max-w-5xl">
+                    <DialogHeader>
+                        <DialogTitle>Preview Setoran</DialogTitle>
+                        <DialogDescription>
+                            Setoran siap dicetak ke printer Blueprint Lite 80D1 (lebar 72mm).
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {setoranContext && (
+                        <div className="grid gap-6 md:grid-cols-[1fr_280px]">
+                            <div className="flex items-start justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4">
+                                <div
+                                    className="bg-white p-3 text-black"
+                                    style={{ width: '72mm', fontFamily: 'Arial, Helvetica, sans-serif' }}
+                                    dangerouslySetInnerHTML={{
+                                        __html: buildSetoranPrintData(setoranContext.batch, setoranContext.entry)
+                                            .filter((item) => item.type === 'text' && item.raw)
+                                            .map((item) => item.value)
+                                            .join(''),
+                                    }}
+                                />
+                            </div>
+                            <div className="space-y-4">
+                                <div className="rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-gray-500">ID Pecah Bon</span>
+                                        <span className="font-semibold">
+                                            {setoranContext.entry.pecahBonId ?? '-'}
+                                        </span>
+                                    </div>
+                                    <div className="mt-2 flex items-center justify-between">
+                                        <span className="text-gray-500">Batch</span>
+                                        <span className="font-semibold">{setoranContext.batch.batchNumber}</span>
+                                    </div>
+                                    <div className="mt-2 flex items-center justify-between">
+                                        <span className="text-gray-500">Grade</span>
+                                        <span className="font-semibold">
+                                            {setoranContext.entry.grade?.code ?? '-'}
+                                        </span>
+                                    </div>
+                                    <div className="mt-2 flex items-center justify-between">
+                                        <span className="text-gray-500">Keping</span>
+                                        <span className="font-semibold">{setoranContext.entry.pieceCount}</span>
+                                    </div>
+                                    <div className="mt-2 flex items-center justify-between">
+                                        <span className="text-gray-500">Berat</span>
+                                        <span className="font-semibold">
+                                            {formatNumber(setoranContext.entry.initialWeightGram)} gr
+                                        </span>
+                                    </div>
+                                    <div className="mt-2 flex items-center justify-between">
+                                        <span className="text-gray-500">Kadar Air</span>
+                                        <span className="font-semibold">
+                                            {formatNumber(setoranContext.entry.moisturePercent, 1)}%
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <DialogFooter>
+                                    <Button variant="outline" onClick={() => setSetoranOpen(false)}>
+                                        Tutup
+                                    </Button>
+                                    <Button onClick={() => handlePrintSetoran(setoranContext.batch, setoranContext.entry)}>
+                                        <Printer className="h-4 w-4" />
+                                        Cetak Setoran
                                     </Button>
                                 </DialogFooter>
                             </div>
