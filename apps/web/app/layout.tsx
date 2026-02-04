@@ -3,7 +3,6 @@
 import { usePathname } from 'next/navigation';
 import { Inter } from "next/font/google";
 import "./globals.css";
-import LogoPlaceholder from "@/components/LogoPlaceholder";
 import UserMenu from "@/components/UserMenu";
 import Sidebar from "@/components/Sidebar";
 import { ToastProvider } from "@/lib/toast";
@@ -29,7 +28,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
           {/* Topbar */}
           <header className="bg-green-600 text-white shadow-md fixed top-0 left-0 right-0 z-40">
             <div className="px-4 py-4 flex items-center justify-between">
-              <LogoPlaceholder textClassName="text-white" />
+              <div className="text-xl font-semibold">SECCA</div>
               <UserMenu />
             </div>
           </header>
@@ -64,7 +63,7 @@ export default function RootLayout({
     <html lang="id">
       <head>
         <title>SECCA - Sistem Manajemen Baku</title>
-        <meta name="description" content="Aplikasi manajemen penerimaan bahan baku" />
+        <meta name="description" content="Sistem manajemen operasional SECCA untuk baku, mitra, dan manajemen" />
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
         <AuthProvider>

@@ -24,6 +24,7 @@ let GradesService = class GradesService {
             data: {
                 name: dto.name,
                 code: dto.code,
+                type: dto.type,
             },
         });
     }
@@ -44,6 +45,7 @@ let GradesService = class GradesService {
             data: {
                 name: dto.name,
                 code: dto.code,
+                type: dto.type,
             },
         });
     }
@@ -55,11 +57,35 @@ let GradesService = class GradesService {
             return (0, errors_1.notFound)("Grade not found", { gradeId: id });
         }
         const [tariffCount, stockCount, lotCount, payrollCount, pecahBonCount, moistureRuleCount,] = await Promise.all([
-            this.prisma.gradeTariff.count({ where: { gradeId: id } }),
+            this.prisma.gradeTariff.count({
+                where: {
+                    OR: [
+                        { shapeGradeId: id },
+                        { featherGradeId: id },
+                        { colorGradeId: id },
+                    ],
+                },
+            }),
             this.prisma.rawBatchGradeStock.count({ where: { gradeId: id } }),
-            this.prisma.productionLot.count({ where: { gradeId: id } }),
+            this.prisma.productionLot.count({
+                where: {
+                    OR: [
+                        { gradeId: id },
+                        { featherGradeId: id },
+                        { colorGradeId: id },
+                    ],
+                },
+            }),
             this.prisma.payrollEntry.count({ where: { gradeId: id } }),
-            this.prisma.pecahBonEntry.count({ where: { gradeId: id } }),
+            this.prisma.pecahBonEntry.count({
+                where: {
+                    OR: [
+                        { gradeId: id },
+                        { featherGradeId: id },
+                        { colorGradeId: id },
+                    ],
+                },
+            }),
             this.prisma.moistureRule.count({ where: { gradeId: id } }),
         ]);
         if (tariffCount > 0) {

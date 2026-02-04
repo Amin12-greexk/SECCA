@@ -11,6 +11,7 @@ import Alert from '@/components/Alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/lib/toast';
 import {
     createGrade,
@@ -23,6 +24,7 @@ import {
 const formSchema = z.object({
     code: z.string().min(1, 'Kode grading wajib diisi'),
     name: z.string().min(1, 'Nama grading wajib diisi'),
+    type: z.enum(['BULU', 'WARNA', 'BENTUK']),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -30,6 +32,7 @@ type FormValues = z.infer<typeof formSchema>;
 const defaultValues: FormValues = {
     code: '',
     name: '',
+    type: 'BULU',
 };
 
 function GradingContent() {
@@ -80,6 +83,7 @@ function GradingContent() {
             const payload = {
                 code: values.code.trim(),
                 name: values.name.trim(),
+                type: values.type,
             };
 
             if (editingGrade) {
@@ -104,6 +108,7 @@ function GradingContent() {
         form.reset({
             code: grade.code,
             name: grade.name,
+            type: (grade.type ?? 'BULU') as FormValues['type'],
         });
     };
 
@@ -128,6 +133,36 @@ function GradingContent() {
         }
     };
 
+    const groupedGrades = [
+        {
+            label: 'Grade Bulu',
+            description: 'Contoh: BR, BS, dll.',
+            type: 'BULU',
+            items: grades.filter((grade) => grade.type === 'BULU' || !grade.type),
+            badgeClass: 'bg-amber-100 text-amber-800',
+            headerClass: 'border-amber-200 bg-amber-50',
+            dotClass: 'bg-amber-500',
+        },
+        {
+            label: 'Grade Warna',
+            description: 'Contoh: W1, W2, W3.',
+            type: 'WARNA',
+            items: grades.filter((grade) => grade.type === 'WARNA'),
+            badgeClass: 'bg-sky-100 text-sky-800',
+            headerClass: 'border-sky-200 bg-sky-50',
+            dotClass: 'bg-sky-500',
+        },
+        {
+            label: 'Grade Bentuk',
+            description: 'Contoh: MK, SGTG.',
+            type: 'BENTUK',
+            items: grades.filter((grade) => grade.type === 'BENTUK'),
+            badgeClass: 'bg-emerald-100 text-emerald-800',
+            headerClass: 'border-emerald-200 bg-emerald-50',
+            dotClass: 'bg-emerald-500',
+        },
+    ];
+
     return (
         <div ref={containerRef} className="min-h-[calc(100vh-72px)] bg-gradient-to-br from-amber-50 via-white to-green-50 py-10 px-4">
             <div className="mx-auto max-w-5xl space-y-8">
@@ -145,16 +180,35 @@ function GradingContent() {
                         <div className="grid gap-6 md:grid-cols-2">
                             <div className="space-y-2">
                                 <Label>Kode Grading</Label>
-                                <Input placeholder="Contoh: A" {...form.register('code')} />
+                                <Input {...form.register('code')} />
                                 {form.formState.errors.code && (
                                     <p className="text-xs text-red-600">{form.formState.errors.code.message}</p>
                                 )}
                             </div>
                             <div className="space-y-2">
                                 <Label>Nama Grading</Label>
-                                <Input placeholder="Contoh: Grade A" {...form.register('name')} />
+                                <Input {...form.register('name')} />
                                 {form.formState.errors.name && (
                                     <p className="text-xs text-red-600">{form.formState.errors.name.message}</p>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Jenis Grading</Label>
+                                <Select
+                                    value={form.watch('type')}
+                                    onValueChange={(value) => form.setValue('type', value as FormValues['type'], { shouldValidate: true })}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="BULU">Bulu</SelectItem>
+                                        <SelectItem value="WARNA">Warna</SelectItem>
+                                        <SelectItem value="BENTUK">Bentuk</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                {form.formState.errors.type && (
+                                    <p className="text-xs text-red-600">{form.formState.errors.type.message}</p>
                                 )}
                             </div>
                         </div>
@@ -203,46 +257,71 @@ function GradingContent() {
                     ) : grades.length === 0 ? (
                         <p className="py-6 text-sm text-gray-500">Belum ada data grading.</p>
                     ) : (
-                        <div className="mt-4 overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-gray-200 text-left text-gray-500">
-                                        <th className="py-3 pr-4 font-medium">Kode</th>
-                                        <th className="py-3 pr-4 font-medium">Nama</th>
-                                        <th className="py-3 text-right font-medium">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {grades.map((grade) => (
-                                        <tr key={grade.id} className="border-b border-gray-100">
-                                            <td className="py-3 pr-4 font-medium text-gray-900">{grade.code}</td>
-                                            <td className="py-3 pr-4 text-gray-700">{grade.name}</td>
-                                            <td className="py-3 text-right">
-                                                <div className="flex justify-end gap-2">
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => startEdit(grade)}
-                                                    >
-                                                        <Pencil className="h-4 w-4" />
-                                                        Edit
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        variant="destructive"
-                                                        size="sm"
-                                                        onClick={() => handleDelete(grade)}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                        Hapus
-                                                    </Button>
+                        <div className="mt-4 grid gap-6 lg:grid-cols-3">
+                            {groupedGrades.map((group) =>
+                                group.items.length === 0 ? null : (
+                                    <div key={group.type} className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                                        <div className={`flex items-start justify-between gap-4 border-b px-4 py-3 ${group.headerClass}`}>
+                                            <div className="flex items-start gap-3">
+                                                <span className={`mt-1 inline-flex h-2.5 w-2.5 rounded-full ${group.dotClass}`} />
+                                                <div>
+                                                    <h3 className="text-sm font-semibold text-gray-900">{group.label}</h3>
+                                                    <p className="text-xs text-gray-600">{group.description}</p>
                                                 </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                            </div>
+                                            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${group.badgeClass}`}>
+                                                {group.items.length} item
+                                            </span>
+                                        </div>
+                                        <div className="max-h-[480px] overflow-auto">
+                                            <table className="w-full text-xs">
+                                                <thead className="sticky top-0 z-10 bg-white">
+                                                    <tr className="border-b border-gray-200 text-left text-gray-500">
+                                                        <th className="px-3 py-1.5 font-medium">Kode</th>
+                                                        <th className="px-3 py-1.5 font-medium">Nama</th>
+                                                        <th className="px-3 py-1.5 text-right font-medium">Aksi</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {group.items.map((grade, index) => (
+                                                        <tr
+                                                            key={grade.id}
+                                                            className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                                                        >
+                                                            <td className="px-3 py-1 font-semibold text-gray-900">{grade.code}</td>
+                                                            <td className="px-3 py-1 text-gray-700">{grade.name}</td>
+                                                            <td className="px-3 py-1 text-right">
+                                                                <div className="flex justify-end gap-1">
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        onClick={() => startEdit(grade)}
+                                                                        className="h-6 w-6 p-0"
+                                                                        title="Edit"
+                                                                    >
+                                                                        <Pencil className="h-3 w-3" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        onClick={() => handleDelete(grade)}
+                                                                        className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                                                                        title="Hapus"
+                                                                    >
+                                                                        <Trash2 className="h-3 w-3" />
+                                                                    </Button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )
+                            )}
                         </div>
                     )}
                 </div>
@@ -258,3 +337,4 @@ export default function GradingPage() {
         </ProtectedRoute>
     );
 }
+

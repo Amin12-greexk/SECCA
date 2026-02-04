@@ -6,7 +6,6 @@ import { gsap } from 'gsap';
 import { useAuth } from '@/lib/auth/AuthContext';
 import LoadingCircle from '@/components/LoadingCircle';
 import Alert from '@/components/Alert';
-import LogoPlaceholder from '@/components/LogoPlaceholder';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -63,9 +62,8 @@ export default function LoginPage() {
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-white px-4">
             <div ref={formRef} className="w-full max-w-md">
-                {/* Logo */}
                 <div className="flex justify-center mb-8">
-                    <LogoPlaceholder />
+                    <div className="text-2xl font-semibold text-green-600">SECCA</div>
                 </div>
 
                 {/* Login Card */}
@@ -88,7 +86,6 @@ export default function LoginPage() {
                                 id="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder="nama@email.com"
                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition"
                                 required
                                 disabled={loading}
@@ -106,7 +103,6 @@ export default function LoginPage() {
                                     id="password"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="••••••••"
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition pr-12"
                                     required
                                     disabled={loading}
@@ -162,18 +158,9 @@ export default function LoginPage() {
                         </a>
                     </div>
                 </div>
-
-                {/* Demo Credentials Info */}
-                <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <p className="text-sm text-blue-800 font-medium mb-2">Demo Credentials:</p>
-                    <div className="text-xs text-blue-700 space-y-1">
-                        <p>• Baku: baku@secca.com / password</p>
-                        <p>• Mitra: mitra@secca.com / password</p>
-                        <p>• Koreksi: koreksi@secca.com / password</p>
-                        <p>• Manager: manager@secca.com / password</p>
-                    </div>
-                </div>
             </div>
         </div>
     );
 }
+
+

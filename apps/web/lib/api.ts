@@ -12,6 +12,7 @@ export interface Supplier {
 export interface BakuReceiveRequest {
     supplierId: string;
     featherCondition: string;
+    invoiceWeightGram: number;
     wetWeightGram: number;
     moisturePercent: number;
     notes?: string;
@@ -24,6 +25,7 @@ export interface RawBatch {
     supplierId: string;
     supplier?: Supplier;
     featherCondition: string;
+    invoiceWeightGram: number;
     wetWeightGram: number;
     originalWetWeightGram?: number;
     moisturePercent: number;
@@ -44,12 +46,16 @@ export interface ProductionLot {
     lotNumber: string;
     externalId?: string | null;
     gradeId: string;
+    featherGradeId?: string | null;
+    colorGradeId?: string | null;
     wetWeightGram: number;
     dryWeightGramLocked: number;
     moistureBps: number;
     status: string;
     locationId: string;
     grade?: Grade;
+    featherGrade?: Grade | null;
+    colorGrade?: Grade | null;
     location?: RackLocation;
     createdAt: string;
     updatedAt: string;
@@ -57,6 +63,8 @@ export interface ProductionLot {
 
 export interface PecahBonRequest {
     gradeId: string;
+    featherGradeId: string;
+    colorGradeId: string;
     pecahBonDate: string;
     featherCondition: string;
     pieceCount: number;
@@ -69,6 +77,8 @@ export interface PecahBonEntry {
     pecahBonId?: string | null;
     rawBatchId: string;
     gradeId: string;
+    featherGradeId?: string | null;
+    colorGradeId?: string | null;
     pecahBonDate: string;
     featherCondition: string;
     pieceCount: number;
@@ -76,6 +86,8 @@ export interface PecahBonEntry {
     moisturePercent: number;
     dryWeightGram: number;
     grade?: Grade;
+    featherGrade?: Grade | null;
+    colorGrade?: Grade | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -86,15 +98,20 @@ export interface Grade {
     id: string;
     name: string;
     code: string;
+    type: string;
 }
 
 export interface GradeTariff {
     id: string;
-    gradeId: string;
+    shapeGradeId: string;
+    featherGradeId?: string | null;
+    colorGradeId?: string | null;
     rateRpPerGram: number;
     effectiveFrom: string;
     effectiveTo: string | null;
-    grade?: Grade;
+    shapeGrade?: Grade;
+    featherGrade?: Grade | null;
+    colorGrade?: Grade | null;
 }
 
 export interface MoistureRule {
@@ -134,6 +151,13 @@ export interface User {
     id: string;
     name: string;
     email: string;
+    role: string;
+}
+
+export interface CreateUserRequest {
+    name: string;
+    email: string;
+    password: string;
     role: string;
 }
 
@@ -220,6 +244,45 @@ export async function getProfile(): Promise<User> {
         return unwrap<User>(json);
     } catch (error) {
         console.error('Error fetching profile:', error);
+        throw error;
+    }
+}
+
+export async function getUsers(): Promise<User[]> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/users`, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch users: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<User[]>(json);
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        throw error;
+    }
+}
+
+export async function createUser(data: CreateUserRequest): Promise<User> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/users`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to create user: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<User>(json);
+    } catch (error) {
+        console.error('Error creating user:', error);
         throw error;
     }
 }
@@ -331,7 +394,7 @@ export async function getGrades(): Promise<Grade[]> {
     }
 }
 
-export async function createGrade(data: { name: string; code: string }): Promise<Grade> {
+export async function createGrade(data: { name: string; code: string; type: string }): Promise<Grade> {
     try {
         const response = await fetch(`${API_BASE_URL}/api/grades`, {
             method: 'POST',
@@ -354,7 +417,7 @@ export async function createGrade(data: { name: string; code: string }): Promise
 
 export async function updateGrade(
     gradeId: string,
-    data: { name?: string; code?: string }
+    data: { name?: string; code?: string; type?: string }
 ): Promise<Grade> {
     try {
         const response = await fetch(`${API_BASE_URL}/api/grades/${gradeId}`, {
@@ -531,10 +594,16 @@ export async function moveLot(lotId: string, toLocationCode: string): Promise<Pr
     }
 }
 
-export async function getGradeTariffs(gradeId?: string): Promise<GradeTariff[]> {
+export async function getGradeTariffs(params?: {
+    shapeGradeId?: string;
+    featherGradeId?: string;
+    colorGradeId?: string;
+}): Promise<GradeTariff[]> {
     try {
         const url = new URL(`${API_BASE_URL}/api/rules/grade-tariffs`);
-        if (gradeId) url.searchParams.set('gradeId', gradeId);
+        if (params?.shapeGradeId) url.searchParams.set('shapeGradeId', params.shapeGradeId);
+        if (params?.featherGradeId) url.searchParams.set('featherGradeId', params.featherGradeId);
+        if (params?.colorGradeId) url.searchParams.set('colorGradeId', params.colorGradeId);
 
         const response = await fetch(url.toString(), {
             headers: getAuthHeaders({ json: false }),
@@ -548,6 +617,34 @@ export async function getGradeTariffs(gradeId?: string): Promise<GradeTariff[]> 
         return unwrap<GradeTariff[]>(json);
     } catch (error) {
         console.error('Error fetching grade tariffs:', error);
+        throw error;
+    }
+}
+
+export async function createGradeTariff(data: {
+    shapeGradeId: string;
+    featherGradeId?: string | null;
+    colorGradeId?: string | null;
+    rateRpPerGram: number;
+    effectiveFrom: string;
+    effectiveTo?: string | null;
+}): Promise<GradeTariff> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/rules/grade-tariffs`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to create grade tariff: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<GradeTariff>(json);
+    } catch (error) {
+        console.error('Error creating grade tariff:', error);
         throw error;
     }
 }

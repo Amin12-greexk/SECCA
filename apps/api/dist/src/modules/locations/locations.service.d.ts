@@ -6,81 +6,84 @@ export declare class LocationsService {
     constructor(prisma: PrismaService);
     create(dto: CreateLocationDto): Promise<{
         id: string;
-        code: string;
-        workerId: string | null;
         name: string;
-        type: import("@prisma/client").$Enums.RackType;
         createdAt: Date;
         updatedAt: Date;
+        code: string;
+        type: import("@prisma/client").$Enums.RackType;
+        workerId: string | null;
     } | {
         defaults: {
             id: string;
-            code: string;
-            workerId: string | null;
             name: string;
-            type: import("@prisma/client").$Enums.RackType;
             createdAt: Date;
             updatedAt: Date;
+            code: string;
+            type: import("@prisma/client").$Enums.RackType;
+            workerId: string | null;
         }[];
         workerLocations: unknown[];
     }>;
     createDefaults(): Promise<{
         defaults: {
             id: string;
-            code: string;
-            workerId: string | null;
             name: string;
-            type: import("@prisma/client").$Enums.RackType;
             createdAt: Date;
             updatedAt: Date;
+            code: string;
+            type: import("@prisma/client").$Enums.RackType;
+            workerId: string | null;
         }[];
         workerLocations: unknown[];
     }>;
     findAll(): Prisma.PrismaPromise<({
         worker: {
             id: string;
-            code: string | null;
             name: string;
             createdAt: Date;
             updatedAt: Date;
+            code: string | null;
         } | null;
     } & {
         id: string;
-        code: string;
-        workerId: string | null;
         name: string;
-        type: import("@prisma/client").$Enums.RackType;
         createdAt: Date;
         updatedAt: Date;
+        code: string;
+        type: import("@prisma/client").$Enums.RackType;
+        workerId: string | null;
     })[]>;
     findLots(locationId: string): Promise<{
         location: {
             id: string;
-            code: string;
-            workerId: string | null;
             name: string;
-            type: import("@prisma/client").$Enums.RackType;
             createdAt: Date;
             updatedAt: Date;
+            code: string;
+            type: import("@prisma/client").$Enums.RackType;
+            workerId: string | null;
         };
         lots: ({
             grade: {
                 id: string;
-                code: string;
                 name: string;
                 createdAt: Date;
                 updatedAt: Date;
+                code: string;
+                type: import("@prisma/client").$Enums.GradeType;
             };
         } & {
             id: string;
             createdAt: Date;
             updatedAt: Date;
-            gradeId: string;
-            moistureBps: number;
             lotNumber: string;
             wetWeightGram: number;
+            gradeId: string;
+            featherGradeId: string | null;
+            colorGradeId: string | null;
             externalId: string | null;
             dryWeightGramLocked: number;
+            moistureBps: number;
             status: import("@prisma/client").$Enums.LotStatus;
             locationId: string;
         })[];
@@ -88,31 +91,34 @@ export declare class LocationsService {
     findLotsByCode(code: string): Promise<{
         location: {
             id: string;
-            code: string;
-            workerId: string | null;
             name: string;
-            type: import("@prisma/client").$Enums.RackType;
             createdAt: Date;
             updatedAt: Date;
+            code: string;
+            type: import("@prisma/client").$Enums.RackType;
+            workerId: string | null;
         };
         lots: ({
             grade: {
                 id: string;
-                code: string;
                 name: string;
                 createdAt: Date;
                 updatedAt: Date;
+                code: string;
+                type: import("@prisma/client").$Enums.GradeType;
             };
         } & {
             id: string;
             createdAt: Date;
             updatedAt: Date;
-            gradeId: string;
-            moistureBps: number;
             lotNumber: string;
             wetWeightGram: number;
+            gradeId: string;
+            featherGradeId: string | null;
+            colorGradeId: string | null;
             externalId: string | null;
             dryWeightGramLocked: number;
+            moistureBps: number;
             status: import("@prisma/client").$Enums.LotStatus;
             locationId: string;
         })[];

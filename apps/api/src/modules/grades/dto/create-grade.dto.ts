@@ -1,5 +1,7 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsString, MinLength } from "class-validator";
+import { Transform } from "class-transformer";
+import { IsEnum, IsString, MinLength } from "class-validator";
+import { GradeType } from "@prisma/client";
 
 export class CreateGradeDto {
   @ApiProperty()
@@ -11,4 +13,9 @@ export class CreateGradeDto {
   @IsString()
   @MinLength(1)
   code: string;
+
+  @ApiProperty({ enum: GradeType })
+  @Transform(({ value }) => String(value).toUpperCase())
+  @IsEnum(GradeType)
+  type: GradeType;
 }

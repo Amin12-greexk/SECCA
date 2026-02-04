@@ -4,7 +4,17 @@ import { IsDateString, IsInt, IsOptional, IsUUID, Min } from "class-validator";
 export class CreateGradeTariffDto {
   @ApiProperty()
   @IsUUID()
-  gradeId: string;
+  shapeGradeId: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  featherGradeId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  colorGradeId?: string;
 
   @ApiProperty()
   @IsInt()

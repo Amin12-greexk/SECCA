@@ -11,25 +11,56 @@ export declare class RulesController {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        gradeId: string;
+        featherGradeId: string | null;
+        colorGradeId: string | null;
+        shapeGradeId: string;
         rateRpPerGram: number;
         effectiveFrom: Date;
         effectiveTo: Date | null;
     }>;
-    findGradeTariffs(query: GradeTariffQueryDto): Promise<{
+    findGradeTariffs(query: GradeTariffQueryDto): Promise<({
+        featherGrade: {
+            id: string;
+            name: string;
+            createdAt: Date;
+            updatedAt: Date;
+            code: string;
+            type: import("@prisma/client").$Enums.GradeType;
+        } | null;
+        colorGrade: {
+            id: string;
+            name: string;
+            createdAt: Date;
+            updatedAt: Date;
+            code: string;
+            type: import("@prisma/client").$Enums.GradeType;
+        } | null;
+        shapeGrade: {
+            id: string;
+            name: string;
+            createdAt: Date;
+            updatedAt: Date;
+            code: string;
+            type: import("@prisma/client").$Enums.GradeType;
+        };
+    } & {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        gradeId: string;
+        featherGradeId: string | null;
+        colorGradeId: string | null;
+        shapeGradeId: string;
         rateRpPerGram: number;
         effectiveFrom: Date;
         effectiveTo: Date | null;
-    }[]>;
+    })[]>;
     deleteGradeTariff(id: string): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        gradeId: string;
+        featherGradeId: string | null;
+        colorGradeId: string | null;
+        shapeGradeId: string;
         rateRpPerGram: number;
         effectiveFrom: Date;
         effectiveTo: Date | null;
@@ -38,31 +69,31 @@ export declare class RulesController {
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        supplierId: string | null;
         gradeId: string | null;
+        moistureBps: number;
         effectiveFrom: Date;
         effectiveTo: Date | null;
-        supplierId: string | null;
-        moistureBps: number;
     }>;
     findMoistureRules(query: MoistureRuleQueryDto): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        supplierId: string | null;
         gradeId: string | null;
+        moistureBps: number;
         effectiveFrom: Date;
         effectiveTo: Date | null;
-        supplierId: string | null;
-        moistureBps: number;
     }[]>;
     deleteMoistureRule(id: string): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
+        supplierId: string | null;
         gradeId: string | null;
+        moistureBps: number;
         effectiveFrom: Date;
         effectiveTo: Date | null;
-        supplierId: string | null;
-        moistureBps: number;
     }>;
     createPreset(dto: CreatePecahBonPresetDto): import("@prisma/client").Prisma.Prisma__PecahBonPresetClient<{
         id: string;

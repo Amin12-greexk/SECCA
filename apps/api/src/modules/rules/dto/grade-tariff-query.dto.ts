@@ -5,7 +5,17 @@ export class GradeTariffQueryDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsUUID()
-  gradeId?: string;
+  shapeGradeId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  featherGradeId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  colorGradeId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

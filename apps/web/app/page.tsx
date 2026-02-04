@@ -34,52 +34,42 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-72px)] flex items-center justify-center bg-gradient-to-br from-green-50 to-white">
-      <div ref={containerRef} className="text-center max-w-2xl px-4">
-        <h1 className="text-5xl font-bold text-gray-900 mb-4">
-          Selamat Datang di <span className="text-green-600">SECCA</span>
-        </h1>
-        <p className="text-xl text-gray-600 mb-8">
-          Sistem Manajemen Penerimaan Bahan Baku
-        </p>
+    <div className="min-h-[100dvh] bg-white">
+      <div
+        ref={containerRef}
+        className="grid min-h-[100dvh] w-full grid-cols-1 md:grid-cols-2"
+      >
+        <section className="flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100 p-10">
+          <div className="text-4xl font-semibold text-green-700">SECCA</div>
+        </section>
 
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link
-            href="/baku/receive"
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors shadow-md hover:shadow-lg"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path d="M12 4v16m8-8H4" />
-            </svg>
-            Terima Baku
-          </Link>
+        <section className="flex flex-col justify-center bg-white p-10 md:px-14">
+          <h1 className="text-4xl font-bold text-gray-900">
+            Selamat Datang di <span className="text-green-600">SECCA</span>
+          </h1>
+          <p className="mt-3 text-base text-gray-600">
+            Sistem Manajemen Operasional untuk Baku, Mitra, dan Manajemen.
+          </p>
 
-          <Link
-            href="/baku/list"
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-green-600 font-medium rounded-lg border-2 border-green-600 hover:bg-green-50 transition-colors"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+          <div className="mt-8 flex flex-col gap-3">
+            <Link
+              href="/login"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-6 py-3 font-medium text-white shadow-md transition-colors hover:bg-green-700"
             >
-              <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            Lihat Daftar Baku
-          </Link>
-        </div>
+              Masuk Aplikasi
+            </Link>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border-2 border-green-600 px-6 py-3 font-medium text-green-700 transition-colors hover:bg-green-50"
+            >
+              Buka Dashboard
+            </Link>
+          </div>
+
+          <div className="mt-6 text-sm text-gray-500">
+            Akses sesuai peran: Baku, Manager, Mitra, dan Admin.
+          </div>
+        </section>
       </div>
     </div>
   );

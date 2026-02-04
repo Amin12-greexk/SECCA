@@ -108,13 +108,10 @@ html, body {
 
           <div className="mt-2 border-2 border-black p-2 text-center">
             <div className="text-[16px] font-bold">
-              BERAT AWAL: {formatNumber(entry.initialWeightGram, 2)} Gr
+              BERAT: {formatNumber(entry.initialWeightGram, 2)} Gr
             </div>
             <div className="text-[16px] font-bold">
               KADAR AIR: {formatNumber(entry.moisturePercent, 1)}%
-            </div>
-            <div className="text-[16px] font-bold">
-              BERAT KERING: {formatNumber(entry.dryWeightGram, 2)} Gr
             </div>
           </div>
 

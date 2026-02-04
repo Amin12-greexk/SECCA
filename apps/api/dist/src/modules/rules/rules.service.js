@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RulesService = void 0;
 const common_1 = require("@nestjs/common");
+const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const errors_1 = require("../../common/errors");
 let RulesService = class RulesService {
@@ -19,11 +20,57 @@ let RulesService = class RulesService {
         this.prisma = prisma;
     }
     async createGradeTariff(dto) {
-        const grade = await this.prisma.grade.findUnique({
-            where: { id: dto.gradeId },
+        const shapeGrade = await this.prisma.grade.findUnique({
+            where: { id: dto.shapeGradeId },
         });
-        if (!grade) {
-            return (0, errors_1.notFound)("Grade not found", { gradeId: dto.gradeId });
+        if (!shapeGrade) {
+            return (0, errors_1.notFound)("Grade bentuk tidak ditemukan", {
+                gradeId: dto.shapeGradeId,
+            });
+        }
+        if (shapeGrade.type !== client_1.GradeType.BENTUK) {
+            return (0, errors_1.badRequest)("Grade bentuk tidak sesuai", {
+                gradeId: dto.shapeGradeId,
+                expected: client_1.GradeType.BENTUK,
+                actual: shapeGrade.type,
+            });
+        }
+        if (dto.colorGradeId && !dto.featherGradeId) {
+            return (0, errors_1.badRequest)("Grade warna harus memiliki grade bulu");
+        }
+        if (dto.featherGradeId) {
+            const featherGrade = await this.prisma.grade.findUnique({
+                where: { id: dto.featherGradeId },
+            });
+            if (!featherGrade) {
+                return (0, errors_1.notFound)("Grade bulu tidak ditemukan", {
+                    gradeId: dto.featherGradeId,
+                });
+            }
+            if (featherGrade.type !== client_1.GradeType.BULU) {
+                return (0, errors_1.badRequest)("Grade bulu tidak sesuai", {
+                    gradeId: dto.featherGradeId,
+                    expected: client_1.GradeType.BULU,
+                    actual: featherGrade.type,
+                });
+            }
+        }
+        if (dto.colorGradeId) {
+            const colorGrade = await this.prisma.grade.findUnique({
+                where: { id: dto.colorGradeId },
+            });
+            if (!colorGrade) {
+                return (0, errors_1.notFound)("Grade warna tidak ditemukan", {
+                    gradeId: dto.colorGradeId,
+                });
+            }
+            if (colorGrade.type !== client_1.GradeType.WARNA) {
+                return (0, errors_1.badRequest)("Grade warna tidak sesuai", {
+                    gradeId: dto.colorGradeId,
+                    expected: client_1.GradeType.WARNA,
+                    actual: colorGrade.type,
+                });
+            }
         }
         const effectiveFrom = new Date(dto.effectiveFrom);
         const effectiveTo = dto.effectiveTo ? new Date(dto.effectiveTo) : null;
@@ -32,7 +79,9 @@ let RulesService = class RulesService {
         }
         return this.prisma.gradeTariff.create({
             data: {
-                gradeId: dto.gradeId,
+                shapeGradeId: dto.shapeGradeId,
+                featherGradeId: dto.featherGradeId ?? null,
+                colorGradeId: dto.colorGradeId ?? null,
                 rateRpPerGram: dto.rateRpPerGram,
                 effectiveFrom,
                 effectiveTo,
@@ -43,7 +92,9 @@ let RulesService = class RulesService {
         const at = query.at ? new Date(query.at) : null;
         return this.prisma.gradeTariff.findMany({
             where: {
-                gradeId: query.gradeId,
+                shapeGradeId: query.shapeGradeId,
+                featherGradeId: query.featherGradeId,
+                colorGradeId: query.colorGradeId,
                 ...(at
                     ? {
                         effectiveFrom: { lte: at },
@@ -52,6 +103,11 @@ let RulesService = class RulesService {
                     : undefined),
             },
             orderBy: { effectiveFrom: "desc" },
+            include: {
+                shapeGrade: true,
+                featherGrade: true,
+                colorGrade: true,
+            },
         });
     }
     async createMoistureRule(dto) {

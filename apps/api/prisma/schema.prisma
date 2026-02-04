@@ -42,6 +42,12 @@ enum UserRole {
   MANAGER
 }
 
+enum GradeType {
+  BULU
+  WARNA
+  BENTUK
+}
+
 model AppUser {
   id           String   @id @default(uuid())
   name         String
@@ -70,29 +76,40 @@ model Grade {
   id        String   @id @default(uuid())
   name      String
   code      String   @unique
+  type      GradeType @default(BULU)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tariffs         GradeTariff[]
+  shapeTariffs    GradeTariff[] @relation("ShapeTariffs")
+  featherTariffs  GradeTariff[] @relation("FeatherTariffs")
+  colorTariffs    GradeTariff[] @relation("ColorTariffs")
   moistureRules   MoistureRule[]
   gradeStocks     RawBatchGradeStock[]
   lots            ProductionLot[]
+  featherLots     ProductionLot[] @relation("LotFeatherGrade")
+  colorLots       ProductionLot[] @relation("LotColorGrade")
   payrolls        PayrollEntry[]
   pecahBonEntries PecahBonEntry[]
+  pecahBonFeatherEntries PecahBonEntry[] @relation("PecahBonFeather")
+  pecahBonColorEntries   PecahBonEntry[] @relation("PecahBonColor")
 }
 
 model GradeTariff {
-  id             String   @id @default(uuid())
-  gradeId        String
-  rateRpPerGram  Int
-  effectiveFrom  DateTime
-  effectiveTo    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id              String   @id @default(uuid())
+  shapeGradeId    String
+  featherGradeId  String?
+  colorGradeId    String?
+  rateRpPerGram   Int
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  grade Grade @relation(fields: [gradeId], references: [id])
+  shapeGrade   Grade  @relation("ShapeTariffs", fields: [shapeGradeId], references: [id])
+  featherGrade Grade? @relation("FeatherTariffs", fields: [featherGradeId], references: [id])
+  colorGrade   Grade? @relation("ColorTariffs", fields: [colorGradeId], references: [id])
 
-  @@index([gradeId, effectiveFrom])
+  @@index([shapeGradeId, featherGradeId, colorGradeId, effectiveFrom])
 }
 
 model MoistureRule {
@@ -163,6 +180,7 @@ model RawBatch {
   cardId           String   @unique
   supplierId       String
   featherCondition String
+  invoiceWeightGram Float
   wetWeightGram    Float
   moisturePercent  Float
   notes            String?
@@ -181,6 +199,8 @@ model PecahBonEntry {
   pecahBonId        String?  @unique
   rawBatchId        String
   gradeId           String
+  featherGradeId    String?
+  colorGradeId      String?
   pecahBonDate      DateTime
   featherCondition  String
   pieceCount        Int
@@ -190,8 +210,10 @@ model PecahBonEntry {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  rawBatch RawBatch @relation(fields: [rawBatchId], references: [id])
-  grade    Grade    @relation(fields: [gradeId], references: [id])
+  rawBatch     RawBatch @relation(fields: [rawBatchId], references: [id])
+  grade        Grade    @relation(fields: [gradeId], references: [id])
+  featherGrade Grade?   @relation("PecahBonFeather", fields: [featherGradeId], references: [id])
+  colorGrade   Grade?   @relation("PecahBonColor", fields: [colorGradeId], references: [id])
 
   @@index([rawBatchId, createdAt])
 }
@@ -217,6 +239,8 @@ model ProductionLot {
   lotNumber          String    @unique
   externalId         String?
   gradeId            String
+  featherGradeId     String?
+  colorGradeId       String?
   wetWeightGram      Int
   dryWeightGramLocked Int
   moistureBps        Int
@@ -225,8 +249,10 @@ model ProductionLot {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  grade      Grade        @relation(fields: [gradeId], references: [id])
-  location   RackLocation @relation(fields: [locationId], references: [id])
+  grade        Grade        @relation(fields: [gradeId], references: [id])
+  featherGrade Grade?       @relation("LotFeatherGrade", fields: [featherGradeId], references: [id])
+  colorGrade   Grade?       @relation("LotColorGrade", fields: [colorGradeId], references: [id])
+  location     RackLocation @relation(fields: [locationId], references: [id])
   sources    LotSource[]
   workItem   WorkOrderItem?
   movements  InventoryMovement[]

@@ -1,4 +1,6 @@
 export declare class GradeTariffQueryDto {
-    gradeId?: string;
+    shapeGradeId?: string;
+    featherGradeId?: string;
+    colorGradeId?: string;
     at?: string;
 }

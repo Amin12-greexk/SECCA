@@ -47,6 +47,7 @@ let BakuService = BakuService_1 = class BakuService {
                             cardId,
                             supplierId: dto.supplierId,
                             featherCondition: dto.featherCondition,
+                            invoiceWeightGram: this.roundToTwoDecimals(dto.invoiceWeightGram),
                             wetWeightGram: this.roundToTwoDecimals(dto.wetWeightGram),
                             moisturePercent: this.roundToTwoDecimals(dto.moisturePercent),
                             notes: dto.notes ?? null,
@@ -93,6 +94,7 @@ let BakuService = BakuService_1 = class BakuService {
                 code: rawBatch.supplier.code,
             },
             featherCondition: rawBatch.featherCondition,
+            invoiceWeightGram: rawBatch.invoiceWeightGram,
             wetWeightGram: rawBatch.wetWeightGram,
             moisturePercent: rawBatch.moisturePercent,
             notes: rawBatch.notes,
@@ -124,6 +126,7 @@ let BakuService = BakuService_1 = class BakuService {
                 code: rawBatch.supplier.code,
             },
             featherCondition: rawBatch.featherCondition,
+            invoiceWeightGram: rawBatch.invoiceWeightGram,
             wetWeightGram: rawBatch.wetWeightGram,
             moisturePercent: rawBatch.moisturePercent,
             notes: rawBatch.notes,
@@ -143,6 +146,43 @@ let BakuService = BakuService_1 = class BakuService {
         });
         if (!grade) {
             return (0, errors_1.notFound)("Grade not found", { gradeId: dto.gradeId });
+        }
+        if (grade.type !== client_1.GradeType.BENTUK) {
+            return (0, errors_1.badRequest)("Grade bentuk tidak sesuai", {
+                gradeId: dto.gradeId,
+                expected: client_1.GradeType.BENTUK,
+                actual: grade.type,
+            });
+        }
+        const featherGrade = await this.prisma.grade.findUnique({
+            where: { id: dto.featherGradeId },
+        });
+        if (!featherGrade) {
+            return (0, errors_1.notFound)("Grade bulu tidak ditemukan", {
+                gradeId: dto.featherGradeId,
+            });
+        }
+        if (featherGrade.type !== client_1.GradeType.BULU) {
+            return (0, errors_1.badRequest)("Grade bulu tidak sesuai", {
+                gradeId: dto.featherGradeId,
+                expected: client_1.GradeType.BULU,
+                actual: featherGrade.type,
+            });
+        }
+        const colorGrade = await this.prisma.grade.findUnique({
+            where: { id: dto.colorGradeId },
+        });
+        if (!colorGrade) {
+            return (0, errors_1.notFound)("Grade warna tidak ditemukan", {
+                gradeId: dto.colorGradeId,
+            });
+        }
+        if (colorGrade.type !== client_1.GradeType.WARNA) {
+            return (0, errors_1.badRequest)("Grade warna tidak sesuai", {
+                gradeId: dto.colorGradeId,
+                expected: client_1.GradeType.WARNA,
+                actual: colorGrade.type,
+            });
         }
         if (rawBatch.wetWeightGram < dto.initialWeightGram) {
             return (0, errors_1.badRequest)("Berat awal melebihi sisa berat batch", {
@@ -166,6 +206,8 @@ let BakuService = BakuService_1 = class BakuService {
                     rawBatchId,
                     pecahBonId,
                     gradeId: dto.gradeId,
+                    featherGradeId: dto.featherGradeId,
+                    colorGradeId: dto.colorGradeId,
                     pecahBonDate,
                     featherCondition: dto.featherCondition,
                     pieceCount: dto.pieceCount,
@@ -176,6 +218,8 @@ let BakuService = BakuService_1 = class BakuService {
                 include: {
                     rawBatch: true,
                     grade: true,
+                    featherGrade: true,
+                    colorGrade: true,
                 },
             });
             const gradedStock = await tx.rawBatchGradeStock.upsert({
@@ -220,6 +264,8 @@ let BakuService = BakuService_1 = class BakuService {
                     lotNumber,
                     externalId: pecahBonId,
                     gradeId: dto.gradeId,
+                    featherGradeId: dto.featherGradeId,
+                    colorGradeId: dto.colorGradeId,
                     wetWeightGram: lotWetWeightGram,
                     dryWeightGramLocked: dryWeightLocked,
                     moistureBps,
@@ -257,6 +303,8 @@ let BakuService = BakuService_1 = class BakuService {
             where: { rawBatchId },
             include: {
                 grade: true,
+                featherGrade: true,
+                colorGrade: true,
             },
             orderBy: { createdAt: "desc" },
         });

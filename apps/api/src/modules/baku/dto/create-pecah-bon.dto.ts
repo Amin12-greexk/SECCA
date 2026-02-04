@@ -17,6 +17,16 @@ export class CreatePecahBonDto {
     gradeId: string;
 
     @ApiProperty()
+    @IsUUID()
+    @IsNotEmpty()
+    featherGradeId: string;
+
+    @ApiProperty()
+    @IsUUID()
+    @IsNotEmpty()
+    colorGradeId: string;
+
+    @ApiProperty()
     @IsDateString()
     @IsNotEmpty()
     pecahBonDate: string;

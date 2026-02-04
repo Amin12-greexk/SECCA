@@ -25,7 +25,7 @@ export class FinishService {
       const workItem = await tx.workOrderItem.findUnique({
         where: { id: dto.workOrderItemId },
         include: {
-          lot: { include: { grade: true, location: true } },
+          lot: { include: { grade: true, featherGrade: true, colorGrade: true, location: true } },
           workOrder: { include: { worker: true } },
         },
       });
@@ -60,23 +60,56 @@ export class FinishService {
       const susutProsesPctBps = toBps(susutProsesGram, dryIn);
       const susutHilangPctBps = toBps(susutHilangGram, dryIn);
 
-      const tariff = await tx.gradeTariff.findFirst({
+      const baseTariff = await tx.gradeTariff.findFirst({
         where: {
-          gradeId: workItem.lot.gradeId,
+          shapeGradeId: workItem.lot.gradeId,
+          featherGradeId: null,
+          colorGradeId: null,
           effectiveFrom: { lte: returnedAt },
           OR: [{ effectiveTo: null }, { effectiveTo: { gt: returnedAt } }],
         },
         orderBy: { effectiveFrom: "desc" },
       });
 
-      if (!tariff) {
-        return unprocessable("Grade tariff not configured", {
-          gradeId: workItem.lot.gradeId,
+      if (!baseTariff) {
+        return unprocessable("Tarif bentuk belum dikonfigurasi", {
+          shapeGradeId: workItem.lot.gradeId,
           at: returnedAt.toISOString(),
         });
       }
 
-      const amountRp = tariff.rateRpPerGram * dryIn;
+      let featherRate = 0;
+      if (workItem.lot.featherGradeId) {
+        const featherTariff = await tx.gradeTariff.findFirst({
+          where: {
+            shapeGradeId: workItem.lot.gradeId,
+            featherGradeId: workItem.lot.featherGradeId,
+            colorGradeId: null,
+            effectiveFrom: { lte: returnedAt },
+            OR: [{ effectiveTo: null }, { effectiveTo: { gt: returnedAt } }],
+          },
+          orderBy: { effectiveFrom: "desc" },
+        });
+        featherRate = featherTariff?.rateRpPerGram ?? 0;
+      }
+
+      let colorRate = 0;
+      if (workItem.lot.featherGradeId && workItem.lot.colorGradeId) {
+        const colorTariff = await tx.gradeTariff.findFirst({
+          where: {
+            shapeGradeId: workItem.lot.gradeId,
+            featherGradeId: workItem.lot.featherGradeId,
+            colorGradeId: workItem.lot.colorGradeId,
+            effectiveFrom: { lte: returnedAt },
+            OR: [{ effectiveTo: null }, { effectiveTo: { gt: returnedAt } }],
+          },
+          orderBy: { effectiveFrom: "desc" },
+        });
+        colorRate = colorTariff?.rateRpPerGram ?? 0;
+      }
+
+      const rateRpPerGram = baseTariff.rateRpPerGram + featherRate + colorRate;
+      const amountRp = rateRpPerGram * dryIn;
       const finishedLocation = await tx.rackLocation.upsert({
         where: { code: LOCATION_CODES.FINISHED },
         update: { name: "Rak Finished", type: RackType.FINISHED },
@@ -107,7 +140,7 @@ export class FinishService {
           workOrderItemId: workItem.id,
           workerId: workItem.workOrder.workerId,
           gradeId: workItem.lot.gradeId,
-          rateRpPerGram: tariff.rateRpPerGram,
+          rateRpPerGram,
           amountRp,
         },
       });
@@ -157,7 +190,7 @@ export class FinishService {
         susutProsesPctBps,
         susutHilangPctBps,
         payroll: {
-          rateRpPerGram: tariff.rateRpPerGram,
+          rateRpPerGram,
           amountRp,
         },
       };

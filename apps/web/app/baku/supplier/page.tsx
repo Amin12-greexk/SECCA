@@ -154,18 +154,18 @@ function SupplierContent() {
                         <div className="grid gap-6 md:grid-cols-2">
                             <div className="space-y-2">
                                 <Label>Nama Supplier</Label>
-                                <Input placeholder="Contoh: Supplier Utama" {...form.register('name')} />
+                                <Input {...form.register('name')} />
                                 {form.formState.errors.name && (
                                     <p className="text-xs text-red-600">{form.formState.errors.name.message}</p>
                                 )}
                             </div>
                             <div className="space-y-2">
                                 <Label>Kode (opsional)</Label>
-                                <Input placeholder="Contoh: SUP-01" {...form.register('code')} />
+                                <Input {...form.register('code')} />
                             </div>
                             <div className="space-y-2">
                                 <Label>Telepon (opsional)</Label>
-                                <Input placeholder="Contoh: 08123456789" {...form.register('phone')} />
+                                <Input {...form.register('phone')} />
                             </div>
                         </div>
 
@@ -274,3 +274,4 @@ export default function SupplierPage() {
         </ProtectedRoute>
     );
 }
+

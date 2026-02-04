@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { GradeType } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { badRequest, notFound } from "../../common/errors";
 import { CreateGradeTariffDto } from "./dto/create-grade-tariff.dto";
@@ -12,12 +13,62 @@ export class RulesService {
   constructor(private readonly prisma: PrismaService) { }
 
   async createGradeTariff(dto: CreateGradeTariffDto) {
-    const grade = await this.prisma.grade.findUnique({
-      where: { id: dto.gradeId },
+    const shapeGrade = await this.prisma.grade.findUnique({
+      where: { id: dto.shapeGradeId },
     });
 
-    if (!grade) {
-      return notFound("Grade not found", { gradeId: dto.gradeId });
+    if (!shapeGrade) {
+      return notFound("Grade bentuk tidak ditemukan", {
+        gradeId: dto.shapeGradeId,
+      });
+    }
+
+    if (shapeGrade.type !== GradeType.BENTUK) {
+      return badRequest("Grade bentuk tidak sesuai", {
+        gradeId: dto.shapeGradeId,
+        expected: GradeType.BENTUK,
+        actual: shapeGrade.type,
+      });
+    }
+
+    if (dto.colorGradeId && !dto.featherGradeId) {
+      return badRequest("Grade warna harus memiliki grade bulu");
+    }
+
+    if (dto.featherGradeId) {
+      const featherGrade = await this.prisma.grade.findUnique({
+        where: { id: dto.featherGradeId },
+      });
+      if (!featherGrade) {
+        return notFound("Grade bulu tidak ditemukan", {
+          gradeId: dto.featherGradeId,
+        });
+      }
+      if (featherGrade.type !== GradeType.BULU) {
+        return badRequest("Grade bulu tidak sesuai", {
+          gradeId: dto.featherGradeId,
+          expected: GradeType.BULU,
+          actual: featherGrade.type,
+        });
+      }
+    }
+
+    if (dto.colorGradeId) {
+      const colorGrade = await this.prisma.grade.findUnique({
+        where: { id: dto.colorGradeId },
+      });
+      if (!colorGrade) {
+        return notFound("Grade warna tidak ditemukan", {
+          gradeId: dto.colorGradeId,
+        });
+      }
+      if (colorGrade.type !== GradeType.WARNA) {
+        return badRequest("Grade warna tidak sesuai", {
+          gradeId: dto.colorGradeId,
+          expected: GradeType.WARNA,
+          actual: colorGrade.type,
+        });
+      }
     }
 
     const effectiveFrom = new Date(dto.effectiveFrom);
@@ -28,7 +79,9 @@ export class RulesService {
 
     return this.prisma.gradeTariff.create({
       data: {
-        gradeId: dto.gradeId,
+        shapeGradeId: dto.shapeGradeId,
+        featherGradeId: dto.featherGradeId ?? null,
+        colorGradeId: dto.colorGradeId ?? null,
         rateRpPerGram: dto.rateRpPerGram,
         effectiveFrom,
         effectiveTo,
@@ -41,7 +94,9 @@ export class RulesService {
 
     return this.prisma.gradeTariff.findMany({
       where: {
-        gradeId: query.gradeId,
+        shapeGradeId: query.shapeGradeId,
+        featherGradeId: query.featherGradeId,
+        colorGradeId: query.colorGradeId,
         ...(at
           ? {
             effectiveFrom: { lte: at },
@@ -50,6 +105,11 @@ export class RulesService {
           : undefined),
       },
       orderBy: { effectiveFrom: "desc" },
+      include: {
+        shapeGrade: true,
+        featherGrade: true,
+        colorGrade: true,
+      },
     });
   }
 

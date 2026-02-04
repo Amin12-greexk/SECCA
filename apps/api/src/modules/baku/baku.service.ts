@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { LotStatus, MovementType, Prisma, RackType } from "@prisma/client";
+import { GradeType, LotStatus, MovementType, Prisma, RackType } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { badRequest, conflict, notFound } from "../../common/errors";
 import { ReceiveRawBatchDto } from "./dto/receive-raw-batch.dto";
@@ -44,6 +44,7 @@ export class BakuService {
               cardId,
               supplierId: dto.supplierId,
               featherCondition: dto.featherCondition,
+              invoiceWeightGram: this.roundToTwoDecimals(dto.invoiceWeightGram),
               wetWeightGram: this.roundToTwoDecimals(dto.wetWeightGram),
               moisturePercent: this.roundToTwoDecimals(dto.moisturePercent),
               notes: dto.notes ?? null,
@@ -99,6 +100,7 @@ export class BakuService {
         code: rawBatch.supplier.code,
       },
       featherCondition: rawBatch.featherCondition,
+      invoiceWeightGram: rawBatch.invoiceWeightGram,
       wetWeightGram: rawBatch.wetWeightGram,
       moisturePercent: rawBatch.moisturePercent,
       notes: rawBatch.notes,
@@ -136,6 +138,7 @@ export class BakuService {
         code: rawBatch.supplier.code,
       },
       featherCondition: rawBatch.featherCondition,
+      invoiceWeightGram: rawBatch.invoiceWeightGram,
       wetWeightGram: rawBatch.wetWeightGram,
       moisturePercent: rawBatch.moisturePercent,
       notes: rawBatch.notes,
@@ -159,6 +162,50 @@ export class BakuService {
 
     if (!grade) {
       return notFound("Grade not found", { gradeId: dto.gradeId });
+    }
+
+    if (grade.type !== GradeType.BENTUK) {
+      return badRequest("Grade bentuk tidak sesuai", {
+        gradeId: dto.gradeId,
+        expected: GradeType.BENTUK,
+        actual: grade.type,
+      });
+    }
+
+    const featherGrade = await this.prisma.grade.findUnique({
+      where: { id: dto.featherGradeId },
+    });
+
+    if (!featherGrade) {
+      return notFound("Grade bulu tidak ditemukan", {
+        gradeId: dto.featherGradeId,
+      });
+    }
+
+    if (featherGrade.type !== GradeType.BULU) {
+      return badRequest("Grade bulu tidak sesuai", {
+        gradeId: dto.featherGradeId,
+        expected: GradeType.BULU,
+        actual: featherGrade.type,
+      });
+    }
+
+    const colorGrade = await this.prisma.grade.findUnique({
+      where: { id: dto.colorGradeId },
+    });
+
+    if (!colorGrade) {
+      return notFound("Grade warna tidak ditemukan", {
+        gradeId: dto.colorGradeId,
+      });
+    }
+
+    if (colorGrade.type !== GradeType.WARNA) {
+      return badRequest("Grade warna tidak sesuai", {
+        gradeId: dto.colorGradeId,
+        expected: GradeType.WARNA,
+        actual: colorGrade.type,
+      });
     }
 
     if (rawBatch.wetWeightGram < dto.initialWeightGram) {
@@ -188,6 +235,8 @@ export class BakuService {
           rawBatchId,
           pecahBonId,
           gradeId: dto.gradeId,
+          featherGradeId: dto.featherGradeId,
+          colorGradeId: dto.colorGradeId,
           pecahBonDate,
           featherCondition: dto.featherCondition,
           pieceCount: dto.pieceCount,
@@ -198,6 +247,8 @@ export class BakuService {
         include: {
           rawBatch: true,
           grade: true,
+          featherGrade: true,
+          colorGrade: true,
         },
       });
 
@@ -250,6 +301,8 @@ export class BakuService {
           lotNumber,
           externalId: pecahBonId,
           gradeId: dto.gradeId,
+          featherGradeId: dto.featherGradeId,
+          colorGradeId: dto.colorGradeId,
           wetWeightGram: lotWetWeightGram,
           dryWeightGramLocked: dryWeightLocked,
           moistureBps,
@@ -298,6 +351,8 @@ export class BakuService {
       where: { rawBatchId },
       include: {
         grade: true,
+        featherGrade: true,
+        colorGrade: true,
       },
       orderBy: { createdAt: "desc" },
     });

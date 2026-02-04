@@ -4,7 +4,9 @@
   "scripts": {
     "dev": "pnpm --filter api dev",
     "api:dev": "pnpm --filter api dev",
+    "api:prod": "node scripts/run-with-env.js apps/api/.env.production \"pnpm --filter api dev\"",
     "web:dev": "pnpm --filter web dev",
+    "web:prod": "node scripts/run-with-env.js apps/web/.env.production \"pnpm --filter web dev\"",
     "web:build": "pnpm --filter web build",
     "desktop:dev": "pnpm --filter desktop dev",
     "desktop:start": "pnpm --filter desktop start",
@@ -18,6 +20,7 @@
     "prisma:migrate": "pnpm --filter api exec prisma migrate dev",
     "prisma:generate": "pnpm --filter api exec prisma generate",
     "prisma:studio": "pnpm --filter api exec prisma studio",
-    "seed": "pnpm --filter api db:seed"
+    "seed": "pnpm --filter api db:seed",
+    "seed:prod": "node scripts/run-with-env.js apps/api/.env.production \"pnpm --filter api db:seed\""
   }
 }

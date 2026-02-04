@@ -5,16 +5,16 @@ export declare class WorkersController {
     constructor(workersService: WorkersService);
     create(dto: CreateWorkerDto): import("@prisma/client").Prisma.Prisma__WorkerClient<{
         id: string;
-        code: string | null;
         name: string;
         createdAt: Date;
         updatedAt: Date;
+        code: string | null;
     }, never, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
     findAll(): import("@prisma/client").Prisma.PrismaPromise<{
         id: string;
-        code: string | null;
         name: string;
         createdAt: Date;
         updatedAt: Date;
+        code: string | null;
     }[]>;
 }

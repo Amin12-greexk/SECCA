@@ -194,6 +194,17 @@ const menuItems: MenuItem[] = [
                 ),
                 roles: ['manager'],
             },
+            {
+                name: 'Manajemen Akun',
+                href: '/admin/users',
+                icon: (
+                    <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                        <path d="M16 11a4 4 0 10-8 0 4 4 0 008 0z" />
+                        <path d="M12 15c-4.418 0-8 2.239-8 5v1h16v-1c0-2.761-3.582-5-8-5z" />
+                    </svg>
+                ),
+                roles: ['manager'],
+            },
         ],
     },
 ];

@@ -26,6 +26,12 @@ export class ReceiveRawBatchDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.1)
+  invoiceWeightGram: number;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.1)
   wetWeightGram: number;
 
   @ApiProperty()

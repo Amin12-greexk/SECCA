@@ -27,30 +27,33 @@ export declare class LotsController {
     moveLot(id: string, dto: MoveLotDto): Promise<{
         grade: {
             id: string;
-            code: string;
             name: string;
             createdAt: Date;
             updatedAt: Date;
+            code: string;
+            type: import("@prisma/client").$Enums.GradeType;
         };
         location: {
             id: string;
-            code: string;
-            workerId: string | null;
             name: string;
-            type: import("@prisma/client").$Enums.RackType;
             createdAt: Date;
             updatedAt: Date;
+            code: string;
+            type: import("@prisma/client").$Enums.RackType;
+            workerId: string | null;
         };
     } & {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        gradeId: string;
-        moistureBps: number;
         lotNumber: string;
         wetWeightGram: number;
+        gradeId: string;
+        featherGradeId: string | null;
+        colorGradeId: string | null;
         externalId: string | null;
         dryWeightGramLocked: number;
+        moistureBps: number;
         status: import("@prisma/client").$Enums.LotStatus;
         locationId: string;
     }>;

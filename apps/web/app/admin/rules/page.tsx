@@ -6,14 +6,20 @@ import { Loader2, Trash2 } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Alert from '@/components/Alert';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/lib/toast';
 import {
+    createGradeTariff,
     deleteGradeTariff,
     deleteMoistureRule,
     deletePecahBonPreset,
+    getGrades,
     getGradeTariffs,
     getMoistureRules,
     getPecahBonPresets,
+    type Grade,
     type GradeTariff,
     type MoistureRule,
     type PecahBonPreset,
@@ -30,6 +36,17 @@ function AdminRulesContent() {
     const [tariffs, setTariffs] = useState<GradeTariff[]>([]);
     const [tariffsLoading, setTariffsLoading] = useState(true);
     const [tariffsError, setTariffsError] = useState<string | null>(null);
+    const [grades, setGrades] = useState<Grade[]>([]);
+    const [gradesLoading, setGradesLoading] = useState(true);
+
+    const [tariffForm, setTariffForm] = useState({
+        shapeGradeId: '',
+        featherGradeId: '',
+        colorGradeId: '',
+        rateRpPerGram: '',
+        effectiveFrom: '',
+        effectiveTo: '',
+    });
 
     // State for Moisture Rules
     const [moistureRules, setMoistureRules] = useState<MoistureRule[]>([]);
@@ -65,6 +82,19 @@ function AdminRulesContent() {
         }
     };
 
+    const loadGrades = async () => {
+        setGradesLoading(true);
+        try {
+            const data = await getGrades();
+            setGrades(data);
+        } catch (err) {
+            console.error('Failed to load grades:', err);
+            toast.error('Gagal memuat daftar grade.');
+        } finally {
+            setGradesLoading(false);
+        }
+    };
+
     const loadMoistureRules = async () => {
         setMoistureLoading(true);
         setMoistureError(null);
@@ -95,12 +125,20 @@ function AdminRulesContent() {
 
     useEffect(() => {
         loadTariffs();
+        loadGrades();
         loadMoistureRules();
         loadPresets();
     }, []);
 
     const handleDeleteTariff = async (item: GradeTariff) => {
-        const confirmed = window.confirm(`Hapus tarif untuk grade "${item.grade?.name || item.gradeId}"?`);
+        const label = [
+            item.shapeGrade?.code ?? item.shapeGradeId,
+            item.featherGrade?.code ?? item.featherGradeId,
+            item.colorGrade?.code ?? item.colorGradeId,
+        ]
+            .filter(Boolean)
+            .join(' / ');
+        const confirmed = window.confirm(`Hapus tarif untuk kombinasi "${label}"?`);
         if (!confirmed) return;
 
         try {
@@ -157,6 +195,59 @@ function AdminRulesContent() {
         }).format(value);
     };
 
+    const shapeGrades = grades.filter((grade) => grade.type === 'BENTUK');
+    const featherGrades = grades.filter((grade) => grade.type === 'BULU');
+    const colorGrades = grades.filter((grade) => grade.type === 'WARNA');
+
+    const handleTariffSubmit = async () => {
+        if (!tariffForm.shapeGradeId) {
+            toast.error('Pilih grade bentuk terlebih dulu.');
+            return;
+        }
+
+        if (tariffForm.colorGradeId && !tariffForm.featherGradeId) {
+            toast.error('Grade warna harus dipasangkan dengan grade bulu.');
+            return;
+        }
+
+        const rate = Number(tariffForm.rateRpPerGram);
+        if (!rate || rate <= 0) {
+            toast.error('Tarif per gram harus lebih dari 0.');
+            return;
+        }
+
+        if (!tariffForm.effectiveFrom) {
+            toast.error('Tanggal mulai berlaku wajib diisi.');
+            return;
+        }
+
+        try {
+            await createGradeTariff({
+                shapeGradeId: tariffForm.shapeGradeId,
+                featherGradeId: tariffForm.featherGradeId || null,
+                colorGradeId: tariffForm.colorGradeId || null,
+                rateRpPerGram: rate,
+                effectiveFrom: new Date(tariffForm.effectiveFrom).toISOString(),
+                effectiveTo: tariffForm.effectiveTo
+                    ? new Date(tariffForm.effectiveTo).toISOString()
+                    : null,
+            });
+            toast.success('Tarif berhasil disimpan.');
+            setTariffForm({
+                shapeGradeId: '',
+                featherGradeId: '',
+                colorGradeId: '',
+                rateRpPerGram: '',
+                effectiveFrom: '',
+                effectiveTo: '',
+            });
+            await loadTariffs();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Gagal menyimpan tarif.';
+            toast.error(message);
+        }
+    };
+
     const tabs: { id: TabType; label: string; count: number }[] = [
         { id: 'tariffs', label: 'Tarif Grade', count: tariffs.length },
         { id: 'moisture', label: 'Aturan Kelembaban', count: moistureRules.length },
@@ -209,6 +300,132 @@ function AdminRulesContent() {
                             </Button>
                         </div>
 
+                        <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                            <h3 className="text-sm font-semibold text-gray-800">Tambah Tarif Hirarki</h3>
+                            <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                                <div className="space-y-2">
+                                    <Label>Grade Bentuk</Label>
+                                    <Select
+                                        value={tariffForm.shapeGradeId}
+                                        onValueChange={(value) =>
+                                            setTariffForm((prev) => ({ ...prev, shapeGradeId: value }))
+                                        }
+                                        disabled={gradesLoading}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={gradesLoading ? 'Memuat...' : 'Pilih bentuk'} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {shapeGrades.map((grade) => (
+                                                <SelectItem key={grade.id} value={grade.id}>
+                                                    {grade.code} - {grade.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Grade Bulu (opsional)</Label>
+                                    <Select
+                                        value={tariffForm.featherGradeId}
+                                        onValueChange={(value) =>
+                                            setTariffForm((prev) => ({
+                                                ...prev,
+                                                featherGradeId: value === 'none' ? '' : value,
+                                                colorGradeId: value === 'none' ? '' : prev.colorGradeId,
+                                            }))
+                                        }
+                                        disabled={gradesLoading}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={gradesLoading ? 'Memuat...' : 'Pilih bulu'} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">Tanpa grade bulu</SelectItem>
+                                            {featherGrades.map((grade) => (
+                                                <SelectItem key={grade.id} value={grade.id}>
+                                                    {grade.code} - {grade.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Grade Warna (opsional)</Label>
+                                    <Select
+                                        value={tariffForm.colorGradeId}
+                                        onValueChange={(value) =>
+                                            setTariffForm((prev) => ({
+                                                ...prev,
+                                                colorGradeId: value === 'none' ? '' : value,
+                                            }))
+                                        }
+                                        disabled={gradesLoading || !tariffForm.featherGradeId}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue
+                                                placeholder={
+                                                    !tariffForm.featherGradeId
+                                                        ? 'Pilih bulu dulu'
+                                                        : gradesLoading
+                                                            ? 'Memuat...'
+                                                            : 'Pilih warna'
+                                                }
+                                            />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">Tanpa grade warna</SelectItem>
+                                            {colorGrades.map((grade) => (
+                                                <SelectItem key={grade.id} value={grade.id}>
+                                                    {grade.code} - {grade.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <div className="mt-4 grid gap-4 md:grid-cols-3">
+                                <div className="space-y-2">
+                                    <Label>Tarif per gram</Label>
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        value={tariffForm.rateRpPerGram}
+                                        onChange={(event) =>
+                                            setTariffForm((prev) => ({ ...prev, rateRpPerGram: event.target.value }))
+                                        }
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Berlaku Dari</Label>
+                                    <Input
+                                        type="date"
+                                        value={tariffForm.effectiveFrom}
+                                        onChange={(event) =>
+                                            setTariffForm((prev) => ({ ...prev, effectiveFrom: event.target.value }))
+                                        }
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Berlaku Sampai (opsional)</Label>
+                                    <Input
+                                        type="date"
+                                        value={tariffForm.effectiveTo}
+                                        onChange={(event) =>
+                                            setTariffForm((prev) => ({ ...prev, effectiveTo: event.target.value }))
+                                        }
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="mt-4">
+                                <Button type="button" onClick={handleTariffSubmit}>
+                                    Simpan Tarif
+                                </Button>
+                            </div>
+                        </div>
+
                         {tariffsError && (
                             <div className="mb-4">
                                 <Alert variant="error">{tariffsError}</Alert>
@@ -227,7 +444,9 @@ function AdminRulesContent() {
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr className="border-b border-gray-200 text-left text-gray-500">
-                                            <th className="py-3 pr-4 font-medium">Grade</th>
+                                            <th className="py-3 pr-4 font-medium">Bentuk</th>
+                                            <th className="py-3 pr-4 font-medium">Bulu</th>
+                                            <th className="py-3 pr-4 font-medium">Warna</th>
                                             <th className="py-3 pr-4 font-medium">Tarif/gram</th>
                                             <th className="py-3 pr-4 font-medium">Berlaku Dari</th>
                                             <th className="py-3 pr-4 font-medium">Berlaku Sampai</th>
@@ -238,7 +457,13 @@ function AdminRulesContent() {
                                         {tariffs.map((item) => (
                                             <tr key={item.id} className="border-b border-gray-100">
                                                 <td className="py-3 pr-4 font-medium text-gray-900">
-                                                    {item.grade?.name || item.gradeId}
+                                                    {item.shapeGrade?.code || item.shapeGradeId}
+                                                </td>
+                                                <td className="py-3 pr-4 text-gray-700">
+                                                    {item.featherGrade?.code || item.featherGradeId || '-'}
+                                                </td>
+                                                <td className="py-3 pr-4 text-gray-700">
+                                                    {item.colorGrade?.code || item.colorGradeId || '-'}
                                                 </td>
                                                 <td className="py-3 pr-4 text-gray-700">
                                                     {formatCurrency(item.rateRpPerGram)}

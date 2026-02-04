@@ -13,7 +13,9 @@ exports.GradeTariffQueryDto = void 0;
 const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class GradeTariffQueryDto {
-    gradeId;
+    shapeGradeId;
+    featherGradeId;
+    colorGradeId;
     at;
 }
 exports.GradeTariffQueryDto = GradeTariffQueryDto;
@@ -22,7 +24,19 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
-], GradeTariffQueryDto.prototype, "gradeId", void 0);
+], GradeTariffQueryDto.prototype, "shapeGradeId", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)(),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], GradeTariffQueryDto.prototype, "featherGradeId", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)(),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], GradeTariffQueryDto.prototype, "colorGradeId", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)(),
     (0, class_validator_1.IsOptional)(),

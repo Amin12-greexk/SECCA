@@ -32,6 +32,7 @@ import {
 const formSchema = z.object({
     supplierId: z.string().min(1, 'Supplier wajib dipilih'),
     featherCondition: z.string().min(1, 'Kondisi baku wajib diisi'),
+    invoiceWeightGram: z.number().min(0.1, 'Minimal 0.1 gram'),
     wetWeightGram: z.number().min(0.1, 'Minimal 0.1 gram'),
     moisturePercent: z.number().min(0, 'Minimal 0%').max(100, 'Maksimal 100%'),
     notes: z.string().optional(),
@@ -54,8 +55,9 @@ function TerimaBakuContent() {
         defaultValues: {
             supplierId: '',
             featherCondition: '',
-            wetWeightGram: 0,
-            moisturePercent: 0,
+            invoiceWeightGram: undefined,
+            wetWeightGram: undefined,
+            moisturePercent: undefined,
             notes: '',
         },
     });
@@ -92,8 +94,9 @@ function TerimaBakuContent() {
             form.reset({
                 supplierId: '',
                 featherCondition: values.featherCondition,
-                wetWeightGram: 0,
-                moisturePercent: 0,
+                invoiceWeightGram: undefined,
+                wetWeightGram: undefined,
+                moisturePercent: undefined,
                 notes: '',
             });
             // Navigate to Stock Asal page
@@ -141,7 +144,6 @@ function TerimaBakuContent() {
                                     <Label>Supplier</Label>
                                     {supplierLoadError ? (
                                         <Input
-                                            placeholder="Masukkan ID supplier"
                                             {...form.register('supplierId')}
                                         />
                                     ) : (
@@ -159,7 +161,7 @@ function TerimaBakuContent() {
                                             </PopoverTrigger>
                                             <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
                                                 <Command>
-                                                    <CommandInput placeholder="Cari supplier..." />
+                                                    <CommandInput />
                                                     <CommandList>
                                                         <CommandEmpty>Supplier tidak ditemukan.</CommandEmpty>
                                                         <CommandGroup>
@@ -209,7 +211,6 @@ function TerimaBakuContent() {
                                 <div className="space-y-2">
                                     <Label>Kondisi Baku</Label>
                                     <Input
-                                        placeholder="Contoh: terlalu banyak BB / bulu berat"
                                         {...form.register('featherCondition')}
                                     />
                                     {form.formState.errors.featherCondition && (
@@ -222,17 +223,31 @@ function TerimaBakuContent() {
 
                             <div className="space-y-4">
                                 <div className="space-y-2">
-                                    <Label>Berat Basah (gram)</Label>
+                                    <Label>Berat Kedatangan (gram)</Label>
                                     <Input
                                         type="number"
                                         min={0.1}
                                         step="0.01"
-                                        placeholder="Contoh: 1050.5"
                                         {...form.register('wetWeightGram', { valueAsNumber: true })}
                                     />
                                     {form.formState.errors.wetWeightGram && (
                                         <p className="text-xs text-red-600">
                                             {form.formState.errors.wetWeightGram.message}
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Berat Nota (gram)</Label>
+                                    <Input
+                                        type="number"
+                                        min={0.1}
+                                        step="0.01"
+                                        {...form.register('invoiceWeightGram', { valueAsNumber: true })}
+                                    />
+                                    {form.formState.errors.invoiceWeightGram && (
+                                        <p className="text-xs text-red-600">
+                                            {form.formState.errors.invoiceWeightGram.message}
                                         </p>
                                     )}
                                 </div>
@@ -244,7 +259,6 @@ function TerimaBakuContent() {
                                         min={0}
                                         max={100}
                                         step="0.1"
-                                        placeholder="Contoh: 17.5"
                                         {...form.register('moisturePercent', { valueAsNumber: true })}
                                     />
                                     {form.formState.errors.moisturePercent && (
@@ -260,7 +274,6 @@ function TerimaBakuContent() {
                         <div className="space-y-2">
                             <Label>Catatan (Opsional)</Label>
                             <Textarea
-                                placeholder="Tambahkan catatan untuk penerimaan ini..."
                                 rows={3}
                                 {...form.register('notes')}
                             />
@@ -301,3 +314,4 @@ export default function TerimaBakuPage() {
         </ProtectedRoute>
     );
 }
+

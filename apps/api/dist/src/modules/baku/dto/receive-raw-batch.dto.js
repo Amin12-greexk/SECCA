@@ -16,6 +16,7 @@ const class_validator_1 = require("class-validator");
 class ReceiveRawBatchDto {
     supplierId;
     featherCondition;
+    invoiceWeightGram;
     wetWeightGram;
     moisturePercent;
     notes;
@@ -33,6 +34,13 @@ __decorate([
     (0, class_validator_1.MinLength)(1),
     __metadata("design:type", String)
 ], ReceiveRawBatchDto.prototype, "featherCondition", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)({ maxDecimalPlaces: 2 }),
+    (0, class_validator_1.Min)(0.1),
+    __metadata("design:type", Number)
+], ReceiveRawBatchDto.prototype, "invoiceWeightGram", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)(),
     (0, class_transformer_1.Type)(() => Number),

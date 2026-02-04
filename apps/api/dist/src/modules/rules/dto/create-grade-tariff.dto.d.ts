@@ -1,5 +1,7 @@
 export declare class CreateGradeTariffDto {
-    gradeId: string;
+    shapeGradeId: string;
+    featherGradeId?: string;
+    colorGradeId?: string;
     rateRpPerGram: number;
     effectiveFrom: string;
     effectiveTo?: string;

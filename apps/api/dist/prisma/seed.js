@@ -5,7 +5,6 @@ const adapter_pg_1 = require("@prisma/adapter-pg");
 const client_1 = require("@prisma/client");
 const crypto_1 = require("crypto");
 const pg_1 = require("pg");
-const constants_1 = require("../src/common/constants");
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
     throw new Error("DATABASE_URL is not set");
@@ -16,103 +15,46 @@ const prisma = new client_1.PrismaClient({
 });
 const hashPassword = (password) => (0, crypto_1.createHash)("sha256").update(password).digest("hex");
 async function main() {
-    await prisma.rackLocation.upsert({
-        where: { code: constants_1.LOCATION_CODES.PRE_SALE },
-        update: { name: "Rak Sementara", type: "PRE_SALE" },
-        create: { code: constants_1.LOCATION_CODES.PRE_SALE, name: "Rak Sementara", type: "PRE_SALE" },
-    });
-    await prisma.rackLocation.upsert({
-        where: { code: constants_1.LOCATION_CODES.FINISHED },
-        update: { name: "Rak Finished", type: "FINISHED" },
-        create: { code: constants_1.LOCATION_CODES.FINISHED, name: "Rak Finished", type: "FINISHED" },
-    });
-    const grades = [
-        { code: "A", name: "Grade A" },
-        { code: "B", name: "Grade B" },
-    ];
-    for (const grade of grades) {
-        await prisma.grade.upsert({
-            where: { code: grade.code },
-            update: { name: grade.name },
-            create: grade,
-        });
-    }
-    const now = new Date();
-    const gradeRows = await prisma.grade.findMany();
-    for (const grade of gradeRows) {
-        const existing = await prisma.gradeTariff.findFirst({
-            where: {
-                gradeId: grade.id,
-                effectiveTo: null,
-            },
-        });
-        if (!existing) {
-            await prisma.gradeTariff.create({
-                data: {
-                    gradeId: grade.id,
-                    rateRpPerGram: grade.code === "A" ? 60 : 50,
-                    effectiveFrom: now,
-                },
-            });
-        }
-    }
-    const defaultMoisture = await prisma.moistureRule.findFirst({
-        where: { gradeId: null, supplierId: null },
-    });
-    if (!defaultMoisture) {
-        await prisma.moistureRule.create({
-            data: {
-                gradeId: null,
-                supplierId: null,
-                moistureBps: 1200,
-                effectiveFrom: now,
-            },
-        });
-    }
-    const presets = [
-        { name: "Preset 75g", weightGram: 75 },
-        { name: "Preset 100g", weightGram: 100 },
-    ];
-    for (const preset of presets) {
-        const existing = await prisma.pecahBonPreset.findFirst({
-            where: { name: preset.name },
-        });
-        if (!existing) {
-            await prisma.pecahBonPreset.create({
-                data: { ...preset, isActive: true },
-            });
-        }
-    }
-    const demoUsers = [
-        {
-            name: "Baku Demo",
-            email: "baku@secca.com",
-            role: client_1.UserRole.BAKU,
-        },
-        {
-            name: "Mitra Demo",
-            email: "mitra@secca.com",
-            role: client_1.UserRole.MITRA,
-        },
-        {
-            name: "Koreksi Demo",
-            email: "koreksi@secca.com",
-            role: client_1.UserRole.KOREKSI,
-        },
-        {
+    await prisma.inventoryMovement.deleteMany();
+    await prisma.payrollEntry.deleteMany();
+    await prisma.finishReceipt.deleteMany();
+    await prisma.workOrderItem.deleteMany();
+    await prisma.workOrder.deleteMany();
+    await prisma.lotSource.deleteMany();
+    await prisma.productionLot.deleteMany();
+    await prisma.rawBatchGradeStock.deleteMany();
+    await prisma.pecahBonEntry.deleteMany();
+    await prisma.rawBatch.deleteMany();
+    await prisma.supplier.deleteMany();
+    await prisma.gradeTariff.deleteMany();
+    await prisma.moistureRule.deleteMany();
+    await prisma.grade.deleteMany();
+    await prisma.pecahBonPreset.deleteMany();
+    await prisma.rackLocation.deleteMany();
+    await prisma.worker.deleteMany();
+    await prisma.numberSequence.deleteMany();
+    await prisma.appUser.deleteMany();
+    const passwordHash = hashPassword("password");
+    await prisma.appUser.upsert({
+        where: { email: "manager@secca.com" },
+        update: { name: "Manager Demo", role: client_1.UserRole.MANAGER, passwordHash },
+        create: {
             name: "Manager Demo",
             email: "manager@secca.com",
             role: client_1.UserRole.MANAGER,
+            passwordHash,
         },
-    ];
-    const passwordHash = hashPassword("password");
-    for (const user of demoUsers) {
-        await prisma.appUser.upsert({
-            where: { email: user.email },
-            update: { name: user.name, role: user.role, passwordHash },
-            create: { ...user, passwordHash },
-        });
-    }
+    });
+    await prisma.appUser.upsert({
+        where: { email: "amiq@tunasestaindonesia.com" },
+        update: { name: "Amiq", role: client_1.UserRole.BAKU, passwordHash },
+        create: {
+            name: "Amiq",
+            email: "amiq@tunasestaindonesia.com",
+            role: client_1.UserRole.BAKU,
+            passwordHash,
+        },
+    });
 }
 main()
     .catch((error) => {

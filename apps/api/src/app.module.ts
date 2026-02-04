@@ -16,6 +16,7 @@ import { SuppliersModule } from "./modules/suppliers/suppliers.module";
 import { TraceabilityModule } from "./modules/traceability/traceability.module";
 import { WorkOrdersModule } from "./modules/work-orders/work-orders.module";
 import { WorkersModule } from "./modules/workers/workers.module";
+import { UsersModule } from "./modules/users/users.module";
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { WorkersModule } from "./modules/workers/workers.module";
     FinishModule,
     TraceabilityModule,
     PayrollModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

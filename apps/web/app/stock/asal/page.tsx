@@ -633,7 +633,6 @@ function StockAsalContent() {
                             <Textarea
                                 value={scanValue}
                                 onChange={(event) => setScanValue(event.target.value)}
-                                placeholder="Tempel hasil scan QR di sini..."
                                 rows={4}
                             />
                         </div>
@@ -721,3 +720,4 @@ export default function StockAsalPage() {
         </ProtectedRoute>
     );
 }
+
