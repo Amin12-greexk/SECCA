@@ -97,12 +97,6 @@ html, body {
               <div className="text-right">
                 {formatDateTime(entry.pecahBonDate)}
               </div>
-
-              <div className="font-semibold">Grade</div>
-              <div className="text-right">{entry.gradeCode ?? "-"}</div>
-
-              <div className="font-semibold">Keping</div>
-              <div className="text-right">{entry.pieceCount}</div>
             </div>
           </div>
 

@@ -57,7 +57,9 @@ function createWindow() {
   mainWindow.loadURL(config.serverUrl || defaultUrl);
 
   // Open DevTools for debugging (remove in production)
-  mainWindow.webContents.openDevTools({ mode: 'right' });
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools({ mode: 'right' });
+  }
 
   mainWindow.on('closed', () => {
     mainWindow = null;

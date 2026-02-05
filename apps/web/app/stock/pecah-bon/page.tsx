@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -30,6 +30,7 @@ import {
     getGrades,
     createPecahBon,
     getPecahBonEntries,
+    getPecahBonById,
     type RawBatch,
     type Grade,
     type PecahBonEntry,
@@ -85,6 +86,8 @@ const createEmptyRow = (moisturePercent: number = 0): MultiEntryRow => ({
 
 function PecahBonContent() {
     const toast = useToast();
+    const preferDocumentPrint = false;
+    const preferDocumentPrintSetoran = false;
     const [rawBatches, setRawBatches] = useState<BatchWithEntries[]>([]);
     const [grades, setGrades] = useState<Grade[]>([]);
     const [loading, setLoading] = useState(true);
@@ -100,6 +103,9 @@ function PecahBonContent() {
         entry: PecahBonEntry;
     } | null>(null);
     const [setoranOpen, setSetoranOpen] = useState(false);
+    const [, setScanLoading] = useState(false);
+    const scanBufferRef = useRef('');
+    const scanLastAtRef = useRef(0);
 
     // Multi-entry state for bulk pecah bon
     const [multiEntries, setMultiEntries] = useState<MultiEntryRow[]>([]);
@@ -189,7 +195,7 @@ function PecahBonContent() {
                 style: 'width: 80mm !important; max-width: 80mm !important; margin: 0 !important; padding: 0 !important;',
             },
             containerAttributes: {
-                style: 'width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important; margin-left: -1.5mm !important; padding: 0 !important;',
+                style: 'width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important; margin-left: -2mm !important; padding: 0 !important;',
             },
             styleSheet: `
                 @page {
@@ -211,7 +217,7 @@ function PecahBonContent() {
                     width: 76mm !important;
                     max-width: 76mm !important;
                     margin: 0 auto !important;
-                    margin-left: -1.5mm !important;
+                    margin-left: -2mm !important;
                     padding: 0 !important;
                     text-align: center !important;
                 }
@@ -257,15 +263,9 @@ function PecahBonContent() {
                         <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
                             <span style="font-weight:bold;">Batch No</span><span>${batch.batchNumber}</span>
                         </div>
-                        <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
+                        <div style="display:flex;justify-content:space-between;">
                             <span style="font-weight:bold;">Tgl Pecah</span><span>${dateStr}</span>
                         </div>
-                          <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
-                              <span style="font-weight:bold;">Grade</span><span>${entry.grade?.code ?? '-'}</span>
-                          </div>
-                          <div style="display:flex;justify-content:space-between;">
-                              <span style="font-weight:bold;">Keping</span><span>${entry.pieceCount}</span>
-                          </div>
                     </div>
                 `,
             },
@@ -305,7 +305,7 @@ function PecahBonContent() {
                 type: 'text',
                 raw: true,
                 value: `
-                    <div style="font-size:7pt;font-weight:600;line-height:1.2;padding:0.4mm 0;max-width:70mm;margin:0 auto;">
+                    <div style="font-size:7pt;font-weight:600;line-height:1.2;padding:0.4mm 0;width:100%;max-width:72mm;margin:0 auto;">
                         <table style="width:100%;border-collapse:collapse;">
                             <tr>
                                 <td style="padding:0.1mm 0;width:52%;">NAMA: TEI</td>
@@ -331,7 +331,7 @@ function PecahBonContent() {
                 type: 'text',
                 raw: true,
                 value: `
-                    <div style="margin:0.5mm auto;max-width:70mm;">
+                    <div style="margin:0.5mm auto;width:100%;max-width:72mm;">
                         <table style="width:100%;border-collapse:collapse;font-size:7pt;font-weight:600;border:1px solid #000;">
                             <tr style="background:#ddd;">
                                 <td style="border:1px solid #000;padding:0.2mm;width:45%;"></td>
@@ -353,30 +353,40 @@ function PecahBonContent() {
                 type: 'text',
                 raw: true,
                 value: `
-                    <div style="margin:0.5mm auto;max-width:70mm;">
+                    <div style="margin:0.5mm auto;width:100%;max-width:72mm;">
                         <table style="width:100%;border-collapse:collapse;font-size:7pt;font-weight:600;border:1px solid #000;">
                             <tr style="background:#ff9;">
                                 <td style="border:1px solid #000;padding:0.2mm;font-size:8pt;" colspan="2">HASIL JADI:</td>
                             </tr>
                             <tr>
                                 <td style="border:1px solid #000;padding:0.2mm;width:65%;">MANGKOK</td>
-                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;width:35%;">(.....)</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;width:35%;">
+                                    <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
+                                </td>
                             </tr>
                             <tr>
                                 <td style="border:1px solid #000;padding:0.2mm;">HANCURAN</td>
-                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">(.....)</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">
+                                    <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
+                                </td>
                             </tr>
                             <tr>
                                 <td style="border:1px solid #000;padding:0.2mm;">SESEKAN</td>
-                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">(.....)</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">
+                                    <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
+                                </td>
                             </tr>
                             <tr>
                                 <td style="border:1px solid #000;padding:0.2mm;">KAKI</td>
-                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">(.....)</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">
+                                    <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
+                                </td>
                             </tr>
                             <tr>
                                 <td style="border:1px solid #000;padding:0.2mm;">LAIN-LAIN</td>
-                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">(.....)</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">
+                                    <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
+                                </td>
                             </tr>
                         </table>
                     </div>
@@ -386,19 +396,25 @@ function PecahBonContent() {
                 type: 'text',
                 raw: true,
                 value: `
-                    <div style="margin:0.5mm auto;max-width:70mm;">
+                    <div style="margin:0.5mm auto;width:100%;max-width:72mm;">
                         <table style="width:100%;border-collapse:collapse;font-size:7pt;font-weight:600;border:1px solid #000;">
                             <tr style="background:#ddd;">
                                 <td style="border:1px solid #000;padding:0.2mm;width:65%;font-size:8pt;">TOTAL BARANG JADI</td>
-                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;width:35%;">(.....)</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;width:35%;">
+                                    <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
+                                </td>
                             </tr>
                             <tr>
                                 <td style="border:1px solid #000;padding:0.2mm;">HILANG/SUSUT</td>
-                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">(.....)</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">
+                                    <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
+                                </td>
                             </tr>
                             <tr style="background:#ddd;">
                                 <td style="border:1px solid #000;padding:0.2mm;">SUSUT PROSES</td>
-                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">(.....)</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">
+                                    <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
+                                </td>
                             </tr>
                         </table>
                     </div>
@@ -414,6 +430,28 @@ function PecahBonContent() {
 
     const handlePrint = async () => {
         if (!printContext) return;
+
+        if (preferDocumentPrint && typeof window !== 'undefined' && window.seccaPrint?.print) {
+            try {
+                await window.seccaPrint.print({
+                    silent: true,
+                    printBackground: true,
+                    margins: { marginType: 'none' },
+                    preferCSSPageSize: true,
+                });
+                toast.success('Berhasil mencetak kartu!');
+                return;
+            } catch (error) {
+                console.error('[SECCA] seccaPrint.print failed:', error);
+                await window.seccaDesktop?.log?.({
+                    scope: 'pecah-bon',
+                    message: 'seccaPrint.print failed (document)',
+                    error: error instanceof Error ? error.message : String(error),
+                });
+                toast.error('Gagal cetak (document): ' + (error instanceof Error ? error.message : String(error)));
+                return;
+            }
+        }
 
         if (typeof window !== 'undefined' && window.securePOSPrinter?.print) {
             try {
@@ -458,6 +496,28 @@ function PecahBonContent() {
     };
 
     const handlePrintSetoran = async (batch: BatchWithEntries, entry: PecahBonEntry) => {
+        if (preferDocumentPrintSetoran && typeof window !== 'undefined' && window.seccaPrint?.print) {
+            try {
+                await window.seccaPrint.print({
+                    silent: true,
+                    printBackground: true,
+                    margins: { marginType: 'none' },
+                    preferCSSPageSize: true,
+                });
+                toast.success('Berhasil mencetak setoran!');
+                return;
+            } catch (error) {
+                console.error('[SECCA] seccaPrint.print failed:', error);
+                await window.seccaDesktop?.log?.({
+                    scope: 'setoran',
+                    message: 'seccaPrint.print failed (document)',
+                    error: error instanceof Error ? error.message : String(error),
+                });
+                toast.error('Gagal cetak (document): ' + (error instanceof Error ? error.message : String(error)));
+                return;
+            }
+        }
+
         if (typeof window !== 'undefined' && window.securePOSPrinter?.print) {
             try {
                 const options = buildPrintOptions();
@@ -619,6 +679,140 @@ function PecahBonContent() {
         setSetoranOpen(true);
     };
 
+    const openFromScan = async (entry: PecahBonEntry) => {
+        const batchId = entry.rawBatchId ?? entry.rawBatch?.id;
+        if (!batchId) {
+            toast.error('Batch tidak ditemukan untuk QR ini.');
+            return;
+        }
+
+        let batch = rawBatches.find((b) => b.id === batchId);
+        if (!batch) {
+            try {
+                const batchData = await getRawBatches();
+                const mapped = batchData.map((item: RawBatch & { rawBatchId?: string }) => ({
+                    ...item,
+                    id: item.rawBatchId ?? item.id,
+                    expanded: false,
+                    pecahBonEntries: undefined,
+                    entriesLoading: false,
+                    entriesPage: 0,
+                }));
+                mapped.sort((left, right) => left.batchNumber.localeCompare(right.batchNumber));
+                setRawBatches(mapped);
+                batch = mapped.find((b) => b.id === batchId);
+            } catch (err) {
+                console.error('Error loading data:', err);
+            }
+        }
+
+        if (!batch) {
+            toast.error('Batch tidak ditemukan di daftar.');
+            return;
+        }
+
+        if (!batch.pecahBonEntries) {
+            setRawBatches((prev) =>
+                prev.map((b) =>
+                    b.id === batchId ? { ...b, entriesLoading: true, expanded: true } : b
+                )
+            );
+            try {
+                const entries = await getPecahBonEntries(batchId);
+                setRawBatches((prev) =>
+                    prev.map((b) =>
+                        b.id === batchId
+                            ? {
+                                ...b,
+                                pecahBonEntries: [...entries].sort((left, right) => {
+                                    const leftId = left.pecahBonId ?? '';
+                                    const rightId = right.pecahBonId ?? '';
+                                    if (leftId && rightId) {
+                                        return leftId.localeCompare(rightId);
+                                    }
+                                    if (leftId) return -1;
+                                    if (rightId) return 1;
+                                    return new Date(left.pecahBonDate).getTime() - new Date(right.pecahBonDate).getTime();
+                                }),
+                                entriesLoading: false,
+                                expanded: true,
+                            }
+                            : b
+                    )
+                );
+            } catch (err) {
+                console.error('Error loading pecah bon entries:', err);
+                toast.error('Gagal memuat pecah bon entries.');
+                setRawBatches((prev) =>
+                    prev.map((b) =>
+                        b.id === batchId ? { ...b, entriesLoading: false } : b
+                    )
+                );
+            }
+        } else {
+            setRawBatches((prev) =>
+                prev.map((b) => (b.id === batchId ? { ...b, expanded: true } : b))
+            );
+        }
+
+        const entryFromList =
+            batch.pecahBonEntries?.find(
+                (item) => item.id === entry.id || item.pecahBonId === entry.pecahBonId
+            ) ?? entry;
+
+        openPrintDialog(batch, entryFromList);
+    };
+
+    const handleScanOpen = async (value: string) => {
+        const trimmed = value.trim();
+        if (!trimmed) return;
+        setScanLoading(true);
+        try {
+            const entry = await getPecahBonById(trimmed);
+            await openFromScan(entry);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Gagal menemukan QR.';
+            toast.error(message);
+        } finally {
+            setScanLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            const target = event.target as HTMLElement | null;
+            const tagName = target?.tagName?.toLowerCase();
+            const isEditable =
+                tagName === 'input' ||
+                tagName === 'textarea' ||
+                tagName === 'select' ||
+                target?.isContentEditable;
+            if (isEditable) return;
+
+            const now = Date.now();
+            if (now - scanLastAtRef.current > 300) {
+                scanBufferRef.current = '';
+            }
+            scanLastAtRef.current = now;
+
+            if (event.key === 'Enter') {
+                const payload = scanBufferRef.current.trim();
+                scanBufferRef.current = '';
+                if (payload) {
+                    handleScanOpen(payload);
+                }
+                return;
+            }
+
+            if (event.key.length === 1) {
+                scanBufferRef.current += event.key;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
     const onSubmit = async (values: PecahBonFormValues) => {
         if (!selectedBatch) return;
 
@@ -626,6 +820,7 @@ function PecahBonContent() {
             const today = new Date().toISOString();
             await createPecahBon(selectedBatch.id, {
                 ...values,
+                featherCondition: selectedBatch.featherCondition,
                 pecahBonDate: today,
             });
             toast.success('Pecah Bon berhasil disimpan.');
@@ -640,7 +835,7 @@ function PecahBonContent() {
     const onBulkSubmit = async () => {
         if (!selectedBatch) return;
 
-        const featherCondition = form.getValues('featherCondition');
+        const featherCondition = selectedBatch.featherCondition;
 
         const validEntries = multiEntries.filter(entry =>
             entry.gradeId &&
@@ -748,10 +943,12 @@ function PecahBonContent() {
                             </p>
                         </div>
                     </div>
-                    <Button variant="outline" onClick={loadData} disabled={loading}>
-                        <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                        Refresh
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button variant="outline" onClick={loadData} disabled={loading} className="h-9">
+                            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                            Refresh
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -1002,10 +1199,6 @@ function PecahBonContent() {
                         {/* Mode Toggle & Shared Fields */}
                         <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                             <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                                    Mode Batch Aktif
-                                </div>
                                 <div className="text-sm text-gray-600">
                                     Tanggal: <strong>{todayFormatted}</strong>
                                 </div>
@@ -1014,10 +1207,11 @@ function PecahBonContent() {
                             
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
-                                    <Label className="text-xs text-gray-600">Kondisi Bulu</Label>
+                                    <Label className="text-xs text-gray-600">Kondisi Baku</Label>
                                     <Input
                                         className="h-9 text-sm"
-                                        {...form.register('featherCondition')}
+                                        value={selectedBatch?.featherCondition ?? ''}
+                                        disabled
                                     />
                                 </div>
                                 <div className="space-y-1">
@@ -1200,31 +1394,7 @@ function PecahBonContent() {
                                     </table>
                                 </div>
                         </div>
-
-                        {/* Summary */}
-                        <div className="rounded-lg border-2 border-green-200 bg-green-50 p-4">
-                            <div className="grid grid-cols-3 gap-6">
-                                <div>
-                                    <div className="text-xs text-green-700 mb-1">Total LP</div>
-                                    <div className="text-2xl font-bold text-green-900">{multiEntries.length}</div>
-                                </div>
-                                <div>
-                                    <div className="text-xs text-green-700 mb-1">LP Valid</div>
-                                    <div className="text-2xl font-bold text-green-900">
-                                        {validEntriesCount}
-                                        <span className="text-sm ml-2 text-green-600">/ {multiEntries.length}</span>
-                                    </div>
-                                </div>
-                                <div>
-                                    <div className="text-xs text-green-700 mb-1">Total Berat Basah</div>
-                                    <div className="text-2xl font-bold text-green-900">
-                                        {formatNumber(multiEntries.reduce((sum, entry) => sum + entry.initialWeightGram, 0), 2)} gr
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
+                         </div>                   
                     <DialogFooter className="border-t pt-4">
                         <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={isSubmitting}>
                             Batal

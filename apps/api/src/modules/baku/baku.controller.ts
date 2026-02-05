@@ -22,6 +22,12 @@ export class BakuController {
     return this.bakuService.findAll();
   }
 
+  @Get("pecah-bon/:pecahBonId")
+  @ApiParam({ name: "pecahBonId" })
+  findPecahBonById(@Param("pecahBonId") pecahBonId: string) {
+    return this.bakuService.findPecahBonById(pecahBonId);
+  }
+
   @Get(":cardId")
   @ApiParam({ name: "cardId" })
   findByCardId(@Param("cardId") cardId: string) {

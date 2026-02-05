@@ -310,6 +310,21 @@ let BakuService = BakuService_1 = class BakuService {
         });
         return entries;
     }
+    async findPecahBonById(pecahBonId) {
+        const entry = await this.prisma.pecahBonEntry.findUnique({
+            where: { pecahBonId },
+            include: {
+                rawBatch: true,
+                grade: true,
+                featherGrade: true,
+                colorGrade: true,
+            },
+        });
+        if (!entry) {
+            return (0, errors_1.notFound)("Pecah Bon not found", { pecahBonId });
+        }
+        return entry;
+    }
     async generatePecahBonId(tx, at) {
         const year = at.getUTCFullYear();
         const yearShort = String(year).slice(-2);

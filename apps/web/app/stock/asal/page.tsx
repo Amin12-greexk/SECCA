@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import jsQR from 'jsqr';
-import { ClipboardList, Loader2, Package, Printer, RefreshCw } from 'lucide-react';
+import { Loader2, Package, Printer, RefreshCw } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,7 +12,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/lib/toast';
 import { getRawBatchByCardId, getRawBatches, type RawBatch } from '@/lib/api';
 import BatchCard from '@/components/print/BatchCard';
@@ -24,18 +22,9 @@ function StockAsalContent() {
     const [loading, setLoading] = useState(true);
     const [printBatch, setPrintBatch] = useState<RawBatch | null>(null);
     const [printOpen, setPrintOpen] = useState(false);
-    const [scanOpen, setScanOpen] = useState(false);
-    const [scanValue, setScanValue] = useState('');
     const [scanLoading, setScanLoading] = useState(false);
-    const [scanError, setScanError] = useState<string | null>(null);
-    const [scanResult, setScanResult] = useState<RawBatch | null>(null);
-    const [cameraOpen, setCameraOpen] = useState(false);
-    const [cameraLoading, setCameraLoading] = useState(false);
-    const [cameraError, setCameraError] = useState<string | null>(null);
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const streamRef = useRef<MediaStream | null>(null);
-    const frameRef = useRef<number | null>(null);
+    const scanBufferRef = useRef('');
+    const scanLastAtRef = useRef(0);
 
     const buildPrintOptions = () => {
         // Options for electron-secure-pos-printer library
@@ -235,41 +224,12 @@ function StockAsalContent() {
         setPrintOpen(true);
     };
 
-    const openScanDialog = () => {
-        setScanValue('');
-        setScanError(null);
-        setScanResult(null);
-        setCameraError(null);
-        setScanOpen(true);
-    };
-
-    const stopCamera = () => {
-        if (frameRef.current) {
-            window.cancelAnimationFrame(frameRef.current);
-            frameRef.current = null;
-        }
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach((track) => track.stop());
-            streamRef.current = null;
-        }
-        setCameraOpen(false);
-    };
-
-    const handleScanDialogChange = (open: boolean) => {
-        if (!open) {
-            stopCamera();
-        }
-        setScanOpen(open);
-    };
-
-    const handleScan = async (overrideValue?: string) => {
-        const trimmed = (overrideValue ?? scanValue).trim();
+    const handleScanOpen = async (value: string) => {
+        const trimmed = value.trim();
         if (!trimmed) return;
+        if (scanLoading) return;
 
         setScanLoading(true);
-        setScanError(null);
-        setScanResult(null);
-
         try {
             const parsed = parseScanPayload(trimmed);
             const cardId =
@@ -277,10 +237,10 @@ function StockAsalContent() {
                 trimmed;
 
             const batch = await getRawBatchByCardId(cardId);
-            setScanResult(batch);
+            openPrintDialog(batch);
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Gagal membaca data kartu.';
-            setScanError(message);
+            toast.error(message);
         } finally {
             setScanLoading(false);
         }
@@ -298,75 +258,40 @@ function StockAsalContent() {
         }
     };
 
-    const startCamera = async () => {
-        if (cameraOpen || cameraLoading) {
-            return;
-        }
-        setCameraError(null);
-
-        if (!navigator.mediaDevices?.getUserMedia) {
-            setCameraError('Browser tidak mendukung akses kamera.');
-            return;
-        }
-
-        setCameraLoading(true);
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: 'environment' } },
-                audio: false,
-            });
-            streamRef.current = stream;
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                await videoRef.current.play();
-            }
-            setCameraOpen(true);
-            const scanFrame = () => {
-                const video = videoRef.current;
-                const canvas = canvasRef.current;
-                if (!video || !canvas) {
-                    frameRef.current = window.requestAnimationFrame(scanFrame);
-                    return;
-                }
-
-                if (video.readyState >= 2) {
-                    const ctx = canvas.getContext('2d');
-                    if (ctx) {
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                        const result = jsQR(imageData.data, imageData.width, imageData.height);
-                        if (result?.data) {
-                            setScanValue(result.data);
-                            stopCamera();
-                            handleScan(result.data);
-                            return;
-                        }
-                    }
-                }
-
-                frameRef.current = window.requestAnimationFrame(scanFrame);
-            };
-            frameRef.current = window.requestAnimationFrame(scanFrame);
-        } catch (err) {
-            const message =
-                err instanceof Error
-                    ? err.message
-                    : 'Gagal mengakses kamera. Pastikan izin kamera diaktifkan.';
-            setCameraError(message);
-            stopCamera();
-        } finally {
-            setCameraLoading(false);
-        }
-    };
-
     useEffect(() => {
-        return () => {
-            stopCamera();
+        const handleKeyDown = (event: KeyboardEvent) => {
+            const target = event.target as HTMLElement | null;
+            const tagName = target?.tagName?.toLowerCase();
+            const isEditable =
+                tagName === 'input' ||
+                tagName === 'textarea' ||
+                tagName === 'select' ||
+                target?.isContentEditable;
+            if (isEditable) return;
+
+            const now = Date.now();
+            if (now - scanLastAtRef.current > 300) {
+                scanBufferRef.current = '';
+            }
+            scanLastAtRef.current = now;
+
+            if (event.key === 'Enter') {
+                const payload = scanBufferRef.current.trim();
+                scanBufferRef.current = '';
+                if (payload) {
+                    handleScanOpen(payload);
+                }
+                return;
+            }
+
+            if (event.key.length === 1) {
+                scanBufferRef.current += event.key;
+            }
         };
 
-    }, []);
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [scanLoading]);
 
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);
@@ -415,10 +340,6 @@ function StockAsalContent() {
                         </div>
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
-                        <Button variant="outline" onClick={openScanDialog} disabled={loading}>
-                            <ClipboardList className="h-4 w-4" />
-                            Scan Kartu
-                        </Button>
                         <Button variant="outline" onClick={loadData} disabled={loading}>
                             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                             Refresh
@@ -572,143 +493,6 @@ function StockAsalContent() {
                 </DialogContent>
             </Dialog>
 
-            {/* Scan Dialog */}
-            <Dialog open={scanOpen} onOpenChange={handleScanDialogChange}>
-                <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle>Scan Kartu Baku</DialogTitle>
-                        <DialogDescription>
-                            Tempel hasil scan QR di bawah ini untuk melihat informasi lengkap kartu.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-4">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <p className="text-xs text-gray-500">
-                                Pengujian: aktifkan kamera laptop untuk scan tanpa mesin.
-                            </p>
-                            <div className="flex gap-2">
-                                {!cameraOpen ? (
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={startCamera}
-                                        disabled={cameraLoading}
-                                    >
-                                        {cameraLoading ? 'Mengaktifkan...' : 'Aktifkan Kamera'}
-                                    </Button>
-                                ) : (
-                                    <Button type="button" variant="outline" onClick={stopCamera}>
-                                        Matikan Kamera
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
-
-                        {cameraError && (
-                            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                                {cameraError}
-                            </div>
-                        )}
-
-                        {cameraOpen && (
-                            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                                <video
-                                    ref={videoRef}
-                                    className="w-full rounded-lg"
-                                    muted
-                                    playsInline
-                                />
-                                <canvas ref={canvasRef} className="hidden" />
-                                <p className="mt-2 text-xs text-gray-500">
-                                    Arahkan QR ke kamera. Data akan terisi otomatis.
-                                </p>
-                            </div>
-                        )}
-
-                        <div>
-                            <label className="mb-2 block text-sm font-medium text-gray-700">
-                                Data QR / Card ID
-                            </label>
-                            <Textarea
-                                value={scanValue}
-                                onChange={(event) => setScanValue(event.target.value)}
-                                rows={4}
-                            />
-                        </div>
-
-                        {scanError && (
-                            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                                {scanError}
-                            </div>
-                        )}
-
-                        {scanResult && (
-                            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-sm text-emerald-900">
-                                <div className="mb-3 text-base font-semibold">Traceability Kartu</div>
-                                <div className="grid gap-3 sm:grid-cols-2">
-                                    <div>
-                                        <div className="text-xs text-emerald-700">Batch</div>
-                                        <div className="font-semibold">{scanResult.batchNumber}</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-xs text-emerald-700">Tanggal Masuk</div>
-                                        <div className="font-semibold">{formatDate(scanResult.createdAt)}</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-xs text-emerald-700">Supplier</div>
-                                        <div className="font-semibold">
-                                            {scanResult.supplier?.name ?? scanResult.supplierId}
-                                        </div>
-                                        {scanResult.supplier?.code && (
-                                            <div className="text-xs text-emerald-700">{scanResult.supplier.code}</div>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <div className="text-xs text-emerald-700">Kondisi Baku</div>
-                                        <div className="font-semibold">{scanResult.featherCondition}</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-xs text-emerald-700">Kadar Air</div>
-                                        <div className="font-semibold">
-                                            {formatNumber(scanResult.moisturePercent, 1)}%
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div className="text-xs text-emerald-700">Berat Awal</div>
-                                        <div className="font-semibold">
-                                            {formatNumber(getDisplayWeight(scanResult))} gr
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div className="text-xs text-emerald-700">Sisa Berat</div>
-                                        <div className="font-semibold">
-                                            {formatNumber(scanResult.wetWeightGram)} gr
-                                        </div>
-                                    </div>
-                                </div>
-                                {scanResult.notes && (
-                                    <div className="mt-3 text-xs text-emerald-700">
-                                        Catatan: <span className="font-medium">{scanResult.notes}</span>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setScanOpen(false)}>
-                            Tutup
-                        </Button>
-                        <Button
-                            onClick={() => handleScan()}
-                            disabled={scanLoading || !scanValue.trim()}
-                        >
-                            {scanLoading ? 'Memproses...' : 'Cek Kartu'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

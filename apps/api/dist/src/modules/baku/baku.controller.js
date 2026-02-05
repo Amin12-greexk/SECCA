@@ -30,6 +30,9 @@ let BakuController = class BakuController {
     findAll() {
         return this.bakuService.findAll();
     }
+    findPecahBonById(pecahBonId) {
+        return this.bakuService.findPecahBonById(pecahBonId);
+    }
     findByCardId(cardId) {
         return this.bakuService.findByCardId(cardId);
     }
@@ -54,6 +57,14 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], BakuController.prototype, "findAll", null);
+__decorate([
+    (0, common_1.Get)("pecah-bon/:pecahBonId"),
+    (0, swagger_1.ApiParam)({ name: "pecahBonId" }),
+    __param(0, (0, common_1.Param)("pecahBonId")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], BakuController.prototype, "findPecahBonById", null);
 __decorate([
     (0, common_1.Get)(":cardId"),
     (0, swagger_1.ApiParam)({ name: "cardId" }),

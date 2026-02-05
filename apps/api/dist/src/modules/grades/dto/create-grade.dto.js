@@ -8,7 +8,6 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CreateGradeDto = void 0;
 const swagger_1 = require("@nestjs/swagger");
@@ -37,6 +36,6 @@ __decorate([
     (0, swagger_1.ApiProperty)({ enum: client_1.GradeType }),
     (0, class_transformer_1.Transform)(({ value }) => String(value).toUpperCase()),
     (0, class_validator_1.IsEnum)(client_1.GradeType),
-    __metadata("design:type", typeof (_a = typeof client_1.GradeType !== "undefined" && client_1.GradeType) === "function" ? _a : Object)
+    __metadata("design:type", String)
 ], CreateGradeDto.prototype, "type", void 0);
 //# sourceMappingURL=create-grade.dto.js.map

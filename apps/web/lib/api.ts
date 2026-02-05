@@ -88,6 +88,7 @@ export interface PecahBonEntry {
     grade?: Grade;
     featherGrade?: Grade | null;
     colorGrade?: Grade | null;
+    rawBatch?: RawBatch;
     createdAt: string;
     updatedAt: string;
 }
@@ -548,6 +549,24 @@ export async function getPecahBonEntries(rawBatchId: string): Promise<PecahBonEn
         return unwrap<PecahBonEntry[]>(json);
     } catch (error) {
         console.error('Error fetching pecah bon entries:', error);
+        throw error;
+    }
+}
+
+export async function getPecahBonById(pecahBonId: string): Promise<PecahBonEntry> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/baku/pecah-bon/${encodeURIComponent(pecahBonId)}`, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch pecah bon: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<PecahBonEntry>(json);
+    } catch (error) {
+        console.error('Error fetching pecah bon by id:', error);
         throw error;
     }
 }

@@ -360,6 +360,24 @@ export class BakuService {
     return entries;
   }
 
+  async findPecahBonById(pecahBonId: string) {
+    const entry = await this.prisma.pecahBonEntry.findUnique({
+      where: { pecahBonId },
+      include: {
+        rawBatch: true,
+        grade: true,
+        featherGrade: true,
+        colorGrade: true,
+      },
+    });
+
+    if (!entry) {
+      return notFound("Pecah Bon not found", { pecahBonId });
+    }
+
+    return entry;
+  }
+
   private async generatePecahBonId(
     tx: Prisma.TransactionClient,
     at: Date,
