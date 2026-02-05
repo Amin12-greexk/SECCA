@@ -19,14 +19,30 @@ let GradesService = class GradesService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    create(dto) {
-        return this.prisma.grade.create({
-            data: {
-                name: dto.name,
-                code: dto.code,
-                type: dto.type,
-            },
+    async create(dto) {
+        const existing = await this.prisma.grade.findUnique({
+            where: { code: dto.code },
         });
+        if (existing) {
+            return (0, errors_1.conflict)("Kode grade sudah terdaftar.", { code: dto.code });
+        }
+        try {
+            return await this.prisma.grade.create({
+                data: {
+                    name: dto.name,
+                    code: dto.code,
+                    type: dto.type,
+                },
+            });
+        }
+        catch (error) {
+            if (error instanceof client_1.Prisma.PrismaClientKnownRequestError) {
+                if (error.code === "P2002") {
+                    return (0, errors_1.conflict)("Kode grade sudah terdaftar.", { code: dto.code });
+                }
+            }
+            throw error;
+        }
     }
     findAll() {
         return this.prisma.grade.findMany({

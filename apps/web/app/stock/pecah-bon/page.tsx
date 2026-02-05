@@ -336,13 +336,12 @@ function PecahBonContent() {
                             <tr style="background:#ddd;">
                                 <td style="border:1px solid #000;padding:0.2mm;width:45%;"></td>
                                 <td style="border:1px solid #000;padding:0.2mm;text-align:center;width:15%;">BIJI</td>
-                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;width:25%;">GRAM</td>
+                                
                                 <td style="border:1px solid #000;padding:0.2mm;text-align:center;width:15%;">%</td>
                             </tr>
                             <tr>
                                 <td style="border:1px solid #000;padding:0.2mm;font-size:8pt;">BERAT KERING</td>
                                 <td style="border:1px solid #000;padding:0.2mm;text-align:center;">${pieceCount}</td>
-                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;">${dryWeight}</td>
                                 <td style="border:1px solid #000;padding:0.2mm;text-align:center;">100</td>
                             </tr>
                         </table>
@@ -359,7 +358,6 @@ function PecahBonContent() {
                                 <td style="border:1px solid #000;padding:0.2mm;font-size:8pt;" colspan="2">HASIL JADI:</td>
                             </tr>
                             <tr>
-                                <td style="border:1px solid #000;padding:0.2mm;width:65%;">MANGKOK</td>
                                 <td style="border:1px solid #000;padding:0.2mm;text-align:right;width:35%;">
                                     <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
                                 </td>
@@ -1091,7 +1089,7 @@ function PecahBonContent() {
                                                                                 <th className="px-3 py-2 text-center text-xs font-medium text-green-700">Keping</th>
                                                                                 <th className="px-3 py-2 text-right text-xs font-medium text-green-700">Berat Awal</th>
                                                                                 <th className="px-3 py-2 text-right text-xs font-medium text-green-700">Kadar Air</th>
-                                                                                <th className="px-3 py-2 text-right text-xs font-medium text-green-700">Berat Kering</th>
+                                                                                
                                                                                 <th className="px-3 py-2 text-center text-xs font-medium text-green-700">Aksi</th>
                                                                             </tr>
                                                                         </thead>
@@ -1107,7 +1105,7 @@ function PecahBonContent() {
                                                                                     <td className="px-3 py-2 text-center font-mono">{entry.pieceCount}</td>
                                                                                     <td className="px-3 py-2 text-right font-mono text-gray-900">{formatNumber(entry.initialWeightGram)}</td>
                                                                                     <td className="px-3 py-2 text-right font-mono text-gray-900">{formatNumber(entry.moisturePercent, 1)}%</td>
-                                                                                    <td className="px-3 py-2 text-right font-mono font-semibold text-green-700">{formatNumber(entry.dryWeightGram)}</td>
+                            
                                                                                     <td className="px-3 py-2 text-center">
                                                                                         <div className="flex items-center justify-center gap-1">
                                                                                             <Button
@@ -1265,7 +1263,7 @@ function PecahBonContent() {
                                                 <th className="px-3 py-2 text-left w-32 text-xs font-semibold text-gray-700">Bulu</th>
                                                 <th className="px-3 py-2 text-left w-32 text-xs font-semibold text-gray-700">Warna</th>
                                                 <th className="px-3 py-2 text-left w-20 text-xs font-semibold text-gray-700">Keping</th>
-                                                <th className="px-3 py-2 text-left w-28 text-xs font-semibold text-gray-700">Berat (gr)</th>
+
                                                 <th className="px-3 py-2 text-left w-24 text-xs font-semibold text-gray-700">Kadar %</th>
                                             </tr>
                                         </thead>

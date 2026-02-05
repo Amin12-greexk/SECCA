@@ -4,36 +4,36 @@ import { GradesService } from "./grades.service";
 export declare class GradesController {
     private readonly gradesService;
     constructor(gradesService: GradesService);
-    create(dto: CreateGradeDto): import("@prisma/client").Prisma.Prisma__GradeClient<{
+    create(dto: CreateGradeDto): Promise<{
+        code: string;
         id: string;
         name: string;
+        type: import("@prisma/client").$Enums.GradeType;
         createdAt: Date;
         updatedAt: Date;
-        code: string;
-        type: import("@prisma/client").$Enums.GradeType;
-    }, never, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
+    }>;
     findAll(): import("@prisma/client").Prisma.PrismaPromise<{
+        code: string;
         id: string;
         name: string;
+        type: import("@prisma/client").$Enums.GradeType;
         createdAt: Date;
         updatedAt: Date;
-        code: string;
-        type: import("@prisma/client").$Enums.GradeType;
     }[]>;
     update(gradeId: string, dto: UpdateGradeDto): Promise<{
+        code: string;
         id: string;
         name: string;
+        type: import("@prisma/client").$Enums.GradeType;
         createdAt: Date;
         updatedAt: Date;
-        code: string;
-        type: import("@prisma/client").$Enums.GradeType;
     }>;
     remove(gradeId: string): Promise<{
+        code: string;
         id: string;
         name: string;
+        type: import("@prisma/client").$Enums.GradeType;
         createdAt: Date;
         updatedAt: Date;
-        code: string;
-        type: import("@prisma/client").$Enums.GradeType;
     }>;
 }

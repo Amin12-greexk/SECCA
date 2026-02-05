@@ -6,25 +6,25 @@ export declare class BakuController {
     constructor(bakuService: BakuService);
     receive(dto: ReceiveRawBatchDto): Promise<{
         supplier: {
-            name: string;
             id: string;
+            name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string | null;
             phone: string | null;
         };
     } & {
-        supplierId: string;
         id: string;
-        batchNumber: string;
-        cardId: string;
+        createdAt: Date;
+        updatedAt: Date;
+        supplierId: string;
         featherCondition: string;
         invoiceWeightGram: number;
         wetWeightGram: number;
         moisturePercent: number;
         notes: string | null;
-        createdAt: Date;
-        updatedAt: Date;
+        batchNumber: string;
+        cardId: string;
     }>;
     findAll(): Promise<{
         originalWetWeightGram: number;
@@ -46,37 +46,37 @@ export declare class BakuController {
     }[]>;
     findPecahBonById(pecahBonId: string): Promise<{
         grade: {
-            name: string;
             id: string;
+            name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
             type: import("@prisma/client").$Enums.GradeType;
         };
         rawBatch: {
-            supplierId: string;
             id: string;
-            batchNumber: string;
-            cardId: string;
+            createdAt: Date;
+            updatedAt: Date;
+            supplierId: string;
             featherCondition: string;
             invoiceWeightGram: number;
             wetWeightGram: number;
             moisturePercent: number;
             notes: string | null;
-            createdAt: Date;
-            updatedAt: Date;
+            batchNumber: string;
+            cardId: string;
         };
         featherGrade: {
-            name: string;
             id: string;
+            name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
             type: import("@prisma/client").$Enums.GradeType;
         } | null;
         colorGrade: {
-            name: string;
             id: string;
+            name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
@@ -84,18 +84,18 @@ export declare class BakuController {
         } | null;
     } & {
         id: string;
-        featherCondition: string;
-        moisturePercent: number;
         createdAt: Date;
         updatedAt: Date;
-        pecahBonId: string | null;
-        rawBatchId: string;
+        featherCondition: string;
+        moisturePercent: number;
         gradeId: string;
         featherGradeId: string | null;
         colorGradeId: string | null;
         pecahBonDate: Date;
         pieceCount: number;
         initialWeightGram: number;
+        pecahBonId: string | null;
+        rawBatchId: string;
         dryWeightGram: number;
     }>;
     findByCardId(cardId: string): Promise<{
@@ -118,37 +118,37 @@ export declare class BakuController {
     }>;
     createPecahBon(id: string, dto: CreatePecahBonDto): Promise<{
         grade: {
-            name: string;
             id: string;
+            name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
             type: import("@prisma/client").$Enums.GradeType;
         };
         rawBatch: {
-            supplierId: string;
             id: string;
-            batchNumber: string;
-            cardId: string;
+            createdAt: Date;
+            updatedAt: Date;
+            supplierId: string;
             featherCondition: string;
             invoiceWeightGram: number;
             wetWeightGram: number;
             moisturePercent: number;
             notes: string | null;
-            createdAt: Date;
-            updatedAt: Date;
+            batchNumber: string;
+            cardId: string;
         };
         featherGrade: {
-            name: string;
             id: string;
+            name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
             type: import("@prisma/client").$Enums.GradeType;
         } | null;
         colorGrade: {
-            name: string;
             id: string;
+            name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
@@ -156,40 +156,40 @@ export declare class BakuController {
         } | null;
     } & {
         id: string;
-        featherCondition: string;
-        moisturePercent: number;
         createdAt: Date;
         updatedAt: Date;
-        pecahBonId: string | null;
-        rawBatchId: string;
+        featherCondition: string;
+        moisturePercent: number;
         gradeId: string;
         featherGradeId: string | null;
         colorGradeId: string | null;
         pecahBonDate: Date;
         pieceCount: number;
         initialWeightGram: number;
+        pecahBonId: string | null;
+        rawBatchId: string;
         dryWeightGram: number;
     }>;
     getPecahBonEntries(id: string): Promise<({
         grade: {
-            name: string;
             id: string;
+            name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
             type: import("@prisma/client").$Enums.GradeType;
         };
         featherGrade: {
-            name: string;
             id: string;
+            name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
             type: import("@prisma/client").$Enums.GradeType;
         } | null;
         colorGrade: {
-            name: string;
             id: string;
+            name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
@@ -197,18 +197,18 @@ export declare class BakuController {
         } | null;
     } & {
         id: string;
-        featherCondition: string;
-        moisturePercent: number;
         createdAt: Date;
         updatedAt: Date;
-        pecahBonId: string | null;
-        rawBatchId: string;
+        featherCondition: string;
+        moisturePercent: number;
         gradeId: string;
         featherGradeId: string | null;
         colorGradeId: string | null;
         pecahBonDate: Date;
         pieceCount: number;
         initialWeightGram: number;
+        pecahBonId: string | null;
+        rawBatchId: string;
         dryWeightGram: number;
     })[]>;
 }

@@ -9,14 +9,30 @@ import { UpdateGradeDto } from "./dto/update-grade.dto";
 export class GradesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(dto: CreateGradeDto) {
-    return this.prisma.grade.create({
-      data: {
-        name: dto.name,
-        code: dto.code,
-        type: dto.type,
-      },
+  async create(dto: CreateGradeDto) {
+    const existing = await this.prisma.grade.findUnique({
+      where: { code: dto.code },
     });
+    if (existing) {
+      return conflict("Kode grade sudah terdaftar.", { code: dto.code });
+    }
+
+    try {
+      return await this.prisma.grade.create({
+        data: {
+          name: dto.name,
+          code: dto.code,
+          type: dto.type,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === "P2002") {
+          return conflict("Kode grade sudah terdaftar.", { code: dto.code });
+        }
+      }
+      throw error;
+    }
   }
 
   findAll() {
