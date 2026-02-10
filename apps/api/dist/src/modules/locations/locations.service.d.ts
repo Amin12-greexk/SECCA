@@ -81,11 +81,12 @@ export declare class LocationsService {
             gradeId: string;
             featherGradeId: string | null;
             colorGradeId: string | null;
+            status: import("@prisma/client").$Enums.LotStatus;
             externalId: string | null;
             dryWeightGramLocked: number;
             moistureBps: number;
-            status: import("@prisma/client").$Enums.LotStatus;
             locationId: string;
+            printedAt: Date | null;
         })[];
     }>;
     findLotsByCode(code: string): Promise<{
@@ -116,11 +117,12 @@ export declare class LocationsService {
             gradeId: string;
             featherGradeId: string | null;
             colorGradeId: string | null;
+            status: import("@prisma/client").$Enums.LotStatus;
             externalId: string | null;
             dryWeightGramLocked: number;
             moistureBps: number;
-            status: import("@prisma/client").$Enums.LotStatus;
             locationId: string;
+            printedAt: Date | null;
         })[];
     }>;
     private ensureLocationByCode;

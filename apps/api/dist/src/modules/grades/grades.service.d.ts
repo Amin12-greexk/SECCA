@@ -6,35 +6,35 @@ export declare class GradesService {
     private readonly prisma;
     constructor(prisma: PrismaService);
     create(dto: CreateGradeDto): Promise<{
-        code: string;
         id: string;
         name: string;
-        type: import("@prisma/client").$Enums.GradeType;
         createdAt: Date;
         updatedAt: Date;
+        code: string;
+        type: import("@prisma/client").$Enums.GradeType;
     }>;
     findAll(): Prisma.PrismaPromise<{
-        code: string;
         id: string;
         name: string;
-        type: import("@prisma/client").$Enums.GradeType;
         createdAt: Date;
         updatedAt: Date;
+        code: string;
+        type: import("@prisma/client").$Enums.GradeType;
     }[]>;
     update(id: string, dto: UpdateGradeDto): Promise<{
-        code: string;
         id: string;
         name: string;
-        type: import("@prisma/client").$Enums.GradeType;
         createdAt: Date;
         updatedAt: Date;
+        code: string;
+        type: import("@prisma/client").$Enums.GradeType;
     }>;
     remove(id: string): Promise<{
-        code: string;
         id: string;
         name: string;
-        type: import("@prisma/client").$Enums.GradeType;
         createdAt: Date;
         updatedAt: Date;
+        code: string;
+        type: import("@prisma/client").$Enums.GradeType;
     }>;
 }

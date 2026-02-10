@@ -164,7 +164,7 @@ function GradingContent() {
     ];
 
     return (
-        <div ref={containerRef} className="min-h-[calc(100vh-72px)] bg-gradient-to-br from-amber-50 via-white to-green-50 py-10 px-4">
+        <div ref={containerRef} className="min-h-[calc(100vh-72px)] bg-green-50 py-10 px-4">
             <div className="mx-auto max-w-5xl space-y-8">
                 <div className="flex flex-col gap-3">
                     <h1 className="text-3xl font-semibold text-gray-900">
@@ -337,4 +337,3 @@ export default function GradingPage() {
         </ProtectedRoute>
     );
 }
-

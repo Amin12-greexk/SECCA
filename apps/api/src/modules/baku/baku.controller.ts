@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
 import { ApiBearerAuth, ApiParam, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../auth/roles.decorator";
 import { ReceiveRawBatchDto } from "./dto/receive-raw-batch.dto";
 import { CreatePecahBonDto } from "./dto/create-pecah-bon.dto";
+import { UpdatePecahBonDto } from "./dto/update-pecah-bon.dto";
 import { BakuService } from "./baku.service";
 
 @ApiTags("Baku")
@@ -38,6 +39,18 @@ export class BakuController {
   @ApiParam({ name: "id" })
   createPecahBon(@Param("id") id: string, @Body() dto: CreatePecahBonDto) {
     return this.bakuService.createPecahBon(id, dto);
+  }
+
+  @Patch("pecah-bon-entry/:id")
+  @ApiParam({ name: "id" })
+  updatePecahBonEntry(@Param("id") id: string, @Body() dto: UpdatePecahBonDto) {
+    return this.bakuService.updatePecahBonEntry(id, dto);
+  }
+
+  @Post("pecah-bon-entry/:id/printed")
+  @ApiParam({ name: "id" })
+  markPecahBonPrinted(@Param("id") id: string) {
+    return this.bakuService.markPecahBonPrinted(id);
   }
 
   @Get(":id/pecah-bon")

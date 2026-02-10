@@ -1,21 +1,65 @@
 @import "tailwindcss";
 
 :root {
-  --primary: 22 163 74;
-  /* green-600 */
-  --primary-hover: 21 128 61;
-  /* green-700 */
+  /* Primary Colors - Emerald/Teal Theme */
+  --primary: 16 185 129;
+  /* emerald-500 */
+  --primary-hover: 5 150 105;
+  /* emerald-600 */
+  --primary-dark: 4 120 87;
+  /* emerald-700 */
+
+  /* Sidebar */
+  --sidebar-width: 256px;
+  --sidebar-collapsed-width: 80px;
+  --header-height: 72px;
 }
 
 body {
-  background-color: white;
+  background-color: rgb(249 250 251);
+  /* gray-50 */
   color: rgb(17, 24, 39);
   /* gray-900 */
 }
 
+/* Custom Scrollbar */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgb(209 213 219);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgb(156 163 175);
+}
+
+/* Animations */
 @layer utilities {
   .animate-spin-slow {
     animation: spin 1s linear infinite;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-slide-in-left {
+    animation: slideInLeft 0.3s ease-out;
+  }
+
+  .animate-slide-in-right {
+    animation: slideInRight 0.3s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
   }
 }
 
@@ -26,6 +70,28 @@ body {
 
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
   }
 }
 
@@ -41,6 +107,71 @@ body {
   }
 }
 
-.animate-slide-in-right {
-  animation: slideInRight 0.3s ease-out;
+@keyframes scaleIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Glassmorphism Utility */
+.glass {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.glass-dark {
+  background: rgba(17, 24, 39, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Sidebar Specific Styles */
+.sidebar-gradient {
+  background: linear-gradient(180deg,
+      rgba(255, 255, 255, 0.98) 0%,
+      rgba(249, 250, 251, 0.95) 100%);
+}
+
+/* Menu Item Hover Effect */
+.menu-item-active {
+  background: linear-gradient(135deg,
+      rgb(16 185 129) 0%,
+      rgb(20 184 166) 100%);
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.25);
+}
+
+/* Responsive Utilities */
+@media (max-width: 768px) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .show-on-mobile {
+    display: none !important;
+  }
+}
+
+/* Focus Styles */
+*:focus-visible {
+  outline: 2px solid rgb(16 185 129);
+  outline-offset: 2px;
+}
+
+/* Button Press Effect */
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Smooth Page Transitions */
+.page-transition {
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }

@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { gsap } from 'gsap';
-import { Layers, RefreshCw, Truck, Search, Grid3x3, List, TrendingUp, Package, Filter, X } from 'lucide-react';
+import { RefreshCw, Truck, TrendingUp, Package } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import { Button } from '@/components/ui/button';
 import { useToast } from '@/lib/toast';
 import {
     getRackLotsByCode,
@@ -20,14 +19,14 @@ const RACKS: Record<RackKey, { code: string; title: string; description: string;
         code: 'RAK_SEMENTARA',
         title: 'Rak Sementara',
         description: 'LP hasil pecah bon ',
-        accent: 'from-amber-500 to-orange-600',
-        color: 'amber',
+        accent: 'bg-gray-500',
+        color: 'gray',
     },
     mitraOrder: {
         code: 'RAK_MITRA_ORDER',
         title: 'Rak Mitra Order',
         description: 'LP yang siap dikerjakan mitra.',
-        accent: 'from-emerald-500 to-teal-600',
+        accent: 'bg-emerald-700',
         color: 'emerald',
     },
 };
@@ -185,6 +184,12 @@ function RackContent() {
     };
 
     const renderLotCard = (lot: ProductionLot, from: RackKey, rackColor: string) => {
+        const isPrinted = !!lot.printedAt;
+        const printedLabel = isPrinted ? 'Sudah Cetak' : 'Belum Cetak';
+        const printedBadgeClass = isPrinted
+            ? 'bg-emerald-100 text-emerald-700'
+            : 'bg-amber-100 text-amber-700';
+
         if (viewMode === 'list') {
             return (
                 <div
@@ -206,6 +211,9 @@ function RackContent() {
                                     </span>
                                     <span className={`rounded-md bg-${rackColor}-100 px-2 py-0.5 text-xs font-medium text-${rackColor}-700`}>
                                         {lot.grade?.code ?? 'GRADE'}
+                                    </span>
+                                    <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${printedBadgeClass}`}>
+                                        {printedLabel}
                                     </span>
                                 </div>
                                 <div className="text-xs text-gray-500 mt-0.5">{lot.status}</div>
@@ -238,9 +246,14 @@ function RackContent() {
                     <div className={`flex h-9 w-9 items-center justify-center rounded-lg bg-${rackColor}-100 flex-shrink-0`}>
                         <Package className={`h-4 w-4 text-${rackColor}-600`} />
                     </div>
-                    <span className={`rounded-md bg-${rackColor}-100 px-2 py-1 text-[10px] font-semibold text-${rackColor}-700 uppercase tracking-wide`}>
-                        {lot.grade?.code ?? 'GRADE'}
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                        <span className={`rounded-md bg-${rackColor}-100 px-2 py-1 text-[10px] font-semibold text-${rackColor}-700 uppercase tracking-wide`}>
+                            {lot.grade?.code ?? 'GRADE'}
+                        </span>
+                        <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${printedBadgeClass}`}>
+                            {printedLabel}
+                        </span>
+                    </div>
                 </div>
                 <div className="mb-2.5">
                     <div className="text-xs text-gray-500 mb-0.5">LP Number</div>
@@ -270,90 +283,7 @@ function RackContent() {
     };
 
     return (
-        <div ref={containerRef} className="min-h-[calc(100vh-72px)] bg-gradient-to-br from-slate-50 via-white to-blue-50/30">
-            {/* Header Section */}
-            <div className="border-b border-gray-200 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
-                <div className="mx-auto max-w-7xl px-4 py-4">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-4">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg">
-                                <Layers className="h-6 w-6 text-white" />
-                            </div>
-                            <div>
-                                <h1 className="text-2xl font-bold text-gray-900">Manajemen Rak</h1>
-                                <p className="text-sm text-gray-600">
-                                    {totals.preSale.totalCount + totals.mitraOrder.totalCount} LP total
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <div className="flex rounded-lg border border-gray-200 bg-white p-1">
-                                <button
-                                    onClick={() => setViewMode('grid')}
-                                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                                        viewMode === 'grid'
-                                            ? 'bg-gray-900 text-white'
-                                            : 'text-gray-600 hover:text-gray-900'
-                                    }`}
-                                >
-                                    <Grid3x3 className="h-4 w-4" />
-                                </button>
-                                <button
-                                    onClick={() => setViewMode('list')}
-                                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                                        viewMode === 'list'
-                                            ? 'bg-gray-900 text-white'
-                                            : 'text-gray-600 hover:text-gray-900'
-                                    }`}
-                                >
-                                    <List className="h-4 w-4" />
-                                </button>
-                            </div>
-                            <Button variant="outline" onClick={loadData} disabled={loading || moving}>
-                                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                                Refresh
-                            </Button>
-                        </div>
-                    </div>
-
-                    {/* Filters */}
-                    <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                        <div className="relative flex-1">
-                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                            <input
-                                type="text"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-10 pr-4 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                            />
-                            {searchTerm && (
-                                <button
-                                    onClick={() => setSearchTerm('')}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                >
-                                    <X className="h-4 w-4" />
-                                </button>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Filter className="h-4 w-4 text-gray-500" />
-                            <select
-                                value={selectedGrade}
-                                onChange={(e) => setSelectedGrade(e.target.value)}
-                                className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                            >
-                                <option value="all">Semua Grade</option>
-                                {allGrades.map((grade) => (
-                                    <option key={grade} value={grade}>
-                                        {grade}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
+        <div ref={containerRef} className="min-h-[calc(100vh-72px)] bg-slate-50">
             {/* Main Content */}
             <div className="mx-auto max-w-7xl px-4 py-6">
                 <div className="grid gap-6 lg:grid-cols-2">
@@ -376,7 +306,7 @@ function RackContent() {
                                 }`}
                             >
                                 {/* Rack Header */}
-                                <div className={`rounded-t-2xl bg-gradient-to-br ${rack.accent} p-5 text-white`}>
+                                <div className={`rounded-t-2xl ${rack.accent} p-5 text-white`}>
                                     <div className="flex items-start justify-between mb-3">
                                         <div>
                                             <h2 className="text-xl font-bold mb-1">{rack.title}</h2>

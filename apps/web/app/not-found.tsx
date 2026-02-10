@@ -1,94 +1,80 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
 
 export default function NotFound() {
     const containerRef = useRef<HTMLDivElement>(null);
-    const leafRef = useRef<SVGPathElement>(null);
 
     useEffect(() => {
         if (containerRef.current) {
-            gsap.fromTo(
-                containerRef.current,
-                { opacity: 0, y: 20 },
-                { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' }
-            );
-        }
+            const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
 
-        if (leafRef.current) {
-            gsap.to(leafRef.current, {
-                rotation: 10,
-                transformOrigin: 'center',
-                duration: 2,
-                ease: 'power1.inOut',
-                yoyo: true,
-                repeat: -1,
-            });
+            tl.fromTo(
+                containerRef.current.querySelector('.logo-box'),
+                { opacity: 0, scale: 0.8, y: 20 },
+                { opacity: 1, scale: 1, y: 0, duration: 0.7 }
+            );
+            tl.fromTo(
+                containerRef.current.querySelector('.error-code'),
+                { opacity: 0, y: 30, scale: 0.9 },
+                { opacity: 1, y: 0, scale: 1, duration: 0.6 },
+                '-=0.3'
+            );
+            tl.fromTo(
+                containerRef.current.querySelectorAll('.fade-up'),
+                { opacity: 0, y: 20 },
+                { opacity: 1, y: 0, duration: 0.5, stagger: 0.1 },
+                '-=0.2'
+            );
         }
     }, []);
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-white px-4">
-            <div ref={containerRef} className="text-center max-w-md">
-                {/* Animated 404 Illustration */}
-                <div className="mb-8">
-                    <svg
-                        width="200"
-                        height="200"
-                        viewBox="0 0 200 200"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="mx-auto"
-                    >
-                        {/* Background Circle */}
-                        <circle cx="100" cy="100" r="80" fill="rgb(22, 163, 74)" opacity="0.1" />
+        <div className="min-h-screen relative overflow-hidden bg-gray-50">
+            {/* Background decorations */}
+            <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full bg-emerald-100/60 blur-3xl" />
+            <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-teal-100/50 blur-3xl" />
 
-                        {/* Large Leaf */}
-                        <path
-                            ref={leafRef}
-                            d="M100 40C100 40 70 50 70 90C70 130 100 140 100 140C100 140 130 130 130 90C130 50 100 40 100 40Z"
-                            fill="rgb(22, 163, 74)"
+            <div ref={containerRef} className="relative z-10 min-h-screen flex flex-col items-center justify-center px-6">
+                {/* Logo */}
+                <div className="logo-box mb-8">
+                    <div className="w-24 h-24 bg-white rounded-2xl shadow-lg shadow-emerald-500/10 flex items-center justify-center p-3 ring-1 ring-gray-100">
+                        <Image
+                            src="/Assets/Logo-secca.png"
+                            alt="Logo SECCA"
+                            width={80}
+                            height={80}
+                            className="w-full h-full object-contain"
                         />
+                    </div>
+                </div>
 
-                        {/* Leaf Vein */}
-                        <path
-                            d="M100 45L100 135"
-                            stroke="white"
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                        />
-
-                        {/* 404 Text */}
-                        <text
-                            x="100"
-                            y="180"
-                            fontSize="32"
-                            fontWeight="bold"
-                            fill="rgb(22, 163, 74)"
-                            textAnchor="middle"
-                        >
-                            404
-                        </text>
-                    </svg>
+                {/* 404 Number */}
+                <div className="error-code mb-6">
+                    <span className="text-8xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-b from-emerald-600 to-emerald-400 leading-none">
+                        404
+                    </span>
                 </div>
 
                 {/* Error Message */}
-                <h1 className="text-3xl font-bold text-gray-900 mb-4">
+                <h1 className="fade-up text-2xl md:text-3xl font-bold text-gray-900 mb-3 text-center">
                     Halaman Tidak Ditemukan
                 </h1>
-                <p className="text-gray-600 mb-8">
-                    Maaf, halaman yang Anda cari tidak dapat ditemukan. Silakan kembali ke halaman utama.
+                <p className="fade-up text-gray-500 mb-10 text-center max-w-md">
+                    Maaf, halaman yang Anda cari tidak dapat ditemukan.
+                    Silakan kembali ke halaman utama.
                 </p>
 
-                {/* Back to Home Button */}
+                {/* Back Button */}
                 <Link
                     href="/"
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
+                    className="fade-up group inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white font-semibold rounded-xl shadow-lg shadow-emerald-500/25 hover:bg-emerald-700 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
                 >
                     <svg
-                        className="w-5 h-5"
+                        className="w-5 h-5 transition-transform group-hover:-translate-x-0.5"
                         fill="none"
                         strokeLinecap="round"
                         strokeLinejoin="round"

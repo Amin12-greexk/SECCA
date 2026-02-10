@@ -16,7 +16,7 @@ import { useToast } from '@/lib/toast';
 import { getRawBatchByCardId, getRawBatches, type RawBatch } from '@/lib/api';
 import BatchCard from '@/components/print/BatchCard';
 
-function StockAsalContent() {
+export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
     const toast = useToast();
     const [rawBatches, setRawBatches] = useState<RawBatch[]>([]);
     const [loading, setLoading] = useState(true);
@@ -315,7 +315,7 @@ function StockAsalContent() {
 
     if (loading) {
         return (
-            <div className="min-h-[calc(100vh-72px)] flex items-center justify-center">
+            <div className={`${embedded ? 'py-10' : 'min-h-[calc(100vh-72px)]'} flex items-center justify-center`}>
                 <div className="flex items-center gap-3 text-gray-600">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     <span>Memuat data...</span>
@@ -325,8 +325,8 @@ function StockAsalContent() {
     }
 
     return (
-        <div className="min-h-[calc(100vh-72px)] bg-gradient-to-br from-amber-50 via-white to-green-50 py-10 px-4">
-            <div className="mx-auto max-w-6xl">
+        <div className={embedded ? 'py-6' : 'min-h-[calc(100vh-72px)] bg-green-50 py-10 px-4'}>
+            <div className={embedded ? 'w-full' : 'mx-auto max-w-6xl'}>
                 <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-4">
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-600/10">

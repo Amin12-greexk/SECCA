@@ -2,9 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { useSidebar } from '@/lib/context/SidebarContext';
 import type { UserRole } from '@/lib/types/auth';
+import { gsap } from 'gsap';
 
 interface MenuItem {
     name: string;
@@ -79,21 +81,11 @@ const menuItems: MenuItem[] = [
         roles: ['baku', 'manager'],
         children: [
             {
-                name: 'Stock Asal',
-                href: '/stock/asal',
+                name: 'Data Stock',
+                href: '/stock',
                 icon: (
                     <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                         <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                    </svg>
-                ),
-                roles: ['baku', 'manager'],
-            },
-            {
-                name: 'Pecah Bon',
-                href: '/stock/pecah-bon',
-                icon: (
-                    <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                        <path d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
                     </svg>
                 ),
                 roles: ['baku', 'manager'],
@@ -110,7 +102,7 @@ const menuItems: MenuItem[] = [
             },
         ],
     },
-    // Menu Mitra (existing)
+    // Menu Mitra
     {
         name: 'Daftar Mitra',
         href: '/mitra/list',
@@ -131,7 +123,7 @@ const menuItems: MenuItem[] = [
         ),
         roles: ['mitra', 'manager'],
     },
-    // Menu Koreksi (existing)
+    // Menu Koreksi
     {
         name: 'Data Koreksi',
         href: '/koreksi/data',
@@ -209,10 +201,47 @@ const menuItems: MenuItem[] = [
     },
 ];
 
+// Tooltip Component
+function Tooltip({ children, label, show }: { children: React.ReactNode; label: string; show: boolean }) {
+    if (!show) return <>{children}</>;
+
+    return (
+        <div className="relative group">
+            {children}
+            <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-gray-900 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50 shadow-lg">
+                {label}
+                <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900" />
+            </div>
+        </div>
+    );
+}
+
 export default function Sidebar() {
     const pathname = usePathname();
     const { user } = useAuth();
+    const { isCollapsed, isMobileOpen, isMobile, toggleSidebar, closeMobileMenu } = useSidebar();
     const [openMenus, setOpenMenus] = useState<string[]>([]);
+    const navRef = useRef<HTMLElement>(null);
+    const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+
+    // Animate menu items on mount
+    useEffect(() => {
+        if (navRef.current && !isMobile) {
+            const items = navRef.current.querySelectorAll('.menu-item');
+            gsap.fromTo(
+                items,
+                { opacity: 0, x: -20 },
+                {
+                    opacity: 1,
+                    x: 0,
+                    duration: 0.4,
+                    stagger: 0.05,
+                    ease: 'power2.out',
+                    delay: 0.1
+                }
+            );
+        }
+    }, [isMobile]);
 
     if (!user) return null;
 
@@ -229,47 +258,80 @@ export default function Sidebar() {
         );
     };
 
-    const renderMenuItem = (item: MenuItem, isChild = false) => {
+    const handleLinkClick = () => {
+        if (isMobile) {
+            closeMobileMenu();
+        }
+    };
+
+    const renderMenuItem = (item: MenuItem, isChild = false, index = 0) => {
         const hasChildren = item.children && item.children.length > 0;
         const isOpen = openMenus.includes(item.name);
         const isActive = item.href ? pathname === item.href : false;
+        const showTooltip = false;
 
         if (hasChildren) {
             // Parent menu with children (dropdown)
-            return (
-                <div key={item.name}>
-                    <button
-                        onClick={() => toggleMenu(item.name)}
-                        className={`flex items-center justify-between w-full px-4 py-3 rounded-lg transition-colors ${isActive
-                            ? 'bg-green-50 text-green-700 font-medium'
-                            : 'text-gray-700 hover:bg-gray-50'
-                            }`}
-                    >
-                        <div className="flex items-center gap-3">
-                            <span className={isActive ? 'text-green-600' : 'text-gray-500'}>
-                                {item.icon}
-                            </span>
-                            <span>{item.name}</span>
-                        </div>
-                        <svg
-                            className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-                            fill="none"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                        >
-                            <path d="M19 9l-7 7-7-7" />
-                        </svg>
-                    </button>
+            const isAnyChildActive = item.children?.some(child => pathname === child.href);
+            const handleParentClick = () => {
+                if (isCollapsed && !isMobile) {
+                    toggleSidebar();
+                    setOpenMenus((prev) => (prev.includes(item.name) ? prev : [...prev, item.name]));
+                    return;
+                }
+                toggleMenu(item.name);
+            };
 
-                    {/* Dropdown children */}
-                    {isOpen && (
-                        <div className="ml-4 mt-1 space-y-1">
+            return (
+                <div key={item.name} className="menu-item">
+                    <Tooltip label={item.name} show={showTooltip}>
+                        <button
+                            onClick={handleParentClick}
+                            onMouseEnter={() => setHoveredItem(item.name)}
+                            onMouseLeave={() => setHoveredItem(null)}
+                            className={`
+                                flex items-center w-full rounded-xl transition-all duration-200
+                                ${isCollapsed && !isMobile ? 'justify-center px-3 py-3' : 'justify-between px-4 py-3'}
+                                ${isAnyChildActive
+                                    ? 'bg-emerald-50 text-emerald-700 shadow-sm'
+                                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                }
+                                ${hoveredItem === item.name ? 'scale-[1.02]' : ''}
+                            `}
+                        >
+                            <div className={`flex items-center ${isCollapsed && !isMobile ? '' : 'gap-3'}`}>
+                                <span className={`
+                                    flex-shrink-0 transition-colors duration-200
+                                    ${isAnyChildActive ? 'text-emerald-600' : 'text-gray-400 group-hover:text-gray-600'}
+                                `}>
+                                    {item.icon}
+                                </span>
+                                {(!isCollapsed || isMobile) && (
+                                    <span className="font-medium">{item.name}</span>
+                                )}
+                            </div>
+                            {(!isCollapsed || isMobile) && (
+                                <svg
+                                    className={`w-4 h-4 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}
+                                    fill="none"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                >
+                                    <path d="M19 9l-7 7-7-7" />
+                                </svg>
+                            )}
+                        </button>
+                    </Tooltip>
+
+                    {/* Dropdown children with animation */}
+                    {isOpen && (!isCollapsed || isMobile) && (
+                        <div className="mt-1 ml-4 pl-4 border-l-2 border-gray-100 space-y-1">
                             {(item.children ?? [])
                                 .filter((child) => child.roles.includes(user.role as UserRole))
-                                .map((child) => renderMenuItem(child, true))}
+                                .map((child, childIndex) => renderMenuItem(child, true, childIndex))}
                         </div>
                     )}
                 </div>
@@ -279,20 +341,36 @@ export default function Sidebar() {
         // Regular menu item (with link)
         if (item.href) {
             return (
-                <Link
-                    key={item.name}
-                    href={item.href}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isChild ? 'text-sm' : ''
-                        } ${isActive
-                            ? 'bg-green-50 text-green-700 font-medium'
-                            : 'text-gray-700 hover:bg-gray-50'
-                        }`}
-                >
-                    <span className={isActive ? 'text-green-600' : 'text-gray-500'}>
-                        {item.icon}
-                    </span>
-                    <span>{item.name}</span>
-                </Link>
+                <div key={item.name} className="menu-item">
+                    <Tooltip label={item.name} show={showTooltip}>
+                        <Link
+                            href={item.href}
+                            onClick={handleLinkClick}
+                            onMouseEnter={() => setHoveredItem(item.name)}
+                            onMouseLeave={() => setHoveredItem(null)}
+                            className={`
+                                flex items-center rounded-xl transition-all duration-200
+                                ${isCollapsed && !isMobile && !isChild ? 'justify-center px-3 py-3' : 'px-4 py-3 gap-3'}
+                                ${isChild ? 'text-sm' : ''}
+                                ${isActive
+                                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/25'
+                                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                }
+                                ${hoveredItem === item.name && !isActive ? 'scale-[1.02]' : ''}
+                            `}
+                        >
+                            <span className={`
+                                flex-shrink-0 transition-colors duration-200
+                                ${isActive ? 'text-white' : 'text-gray-400'}
+                            `}>
+                                {item.icon}
+                            </span>
+                            {(!isCollapsed || isMobile || isChild) && (
+                                <span className="font-medium">{item.name}</span>
+                            )}
+                        </Link>
+                    </Tooltip>
+                </div>
             );
         }
 
@@ -300,10 +378,73 @@ export default function Sidebar() {
     };
 
     return (
-        <aside className="w-64 bg-white border-r border-gray-200 min-h-screen">
-            <nav className="p-4 space-y-1">
-                {visibleMenuItems.map((item) => renderMenuItem(item))}
-            </nav>
-        </aside>
+        <>
+            {/* Mobile Overlay Backdrop */}
+            {isMobile && isMobileOpen && (
+                <div
+                    className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity duration-300"
+                    onClick={closeMobileMenu}
+                />
+            )}
+
+            {/* Sidebar */}
+            <aside
+                className={`
+                    fixed top-[72px] bottom-0 left-0 z-40
+                    bg-white/95 backdrop-blur-xl
+                    border-r border-gray-200/80
+                    transition-all duration-300 ease-in-out
+                    flex flex-col
+                    ${isCollapsed && !isMobile ? 'w-20' : 'w-64'}
+                    ${isMobile ? (isMobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full') : 'translate-x-0'}
+                `}
+            >
+                {/* Collapse Toggle Button (Desktop only) */}
+                {!isMobile && (
+                    <button
+                        onClick={toggleSidebar}
+                        className="absolute -right-3 top-6 w-6 h-6 bg-white border border-gray-200 rounded-full shadow-md flex items-center justify-center hover:bg-gray-50 hover:scale-110 transition-all duration-200 z-10"
+                    >
+                        <svg
+                            className={`w-4 h-4 text-gray-600 transition-transform duration-300 ${isCollapsed ? 'rotate-180' : ''}`}
+                            fill="none"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path d="M15 19l-7-7 7-7" />
+                        </svg>
+                    </button>
+                )}
+
+                {/* Navigation */}
+                <nav ref={navRef} className="flex-1 p-4 space-y-1.5 overflow-y-auto scrollbar-thin">
+                    {visibleMenuItems.map((item, index) => renderMenuItem(item, false, index))}
+                </nav>
+
+                {/* Footer */}
+                <div className={`
+                    p-4 border-t border-gray-100
+                    ${isCollapsed && !isMobile ? 'px-2' : ''}
+                `}>
+                    <div className={`
+                        flex items-center gap-3 px-3 py-2 rounded-xl bg-gray-50
+                        ${isCollapsed && !isMobile ? 'justify-center' : ''}
+                    `}>
+                        <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-semibold text-sm shadow-lg shadow-emerald-500/25">
+                            {user.name.charAt(0).toUpperCase()}
+                        </div>
+                        {(!isCollapsed || isMobile) && (
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
+                                <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </aside>
+        </>
     );
 }

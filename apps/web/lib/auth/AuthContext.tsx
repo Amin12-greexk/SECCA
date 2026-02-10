@@ -8,7 +8,7 @@ import type { User, UserRole } from '@/lib/types/auth';
 interface AuthContextType {
     user: User | null;
     loading: boolean;
-    login: (email: string, password: string) => Promise<void>;
+    login: (email: string, password: string, remember?: boolean) => Promise<void>;
     logout: () => void;
     isAuthenticated: boolean;
     hasRole: (roles: UserRole | UserRole[]) => boolean;
@@ -25,8 +25,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const loadUser = async () => {
             try {
-                const token = localStorage.getItem('token');
-                const savedUser = localStorage.getItem('user');
+                const token = localStorage.getItem('token') ?? sessionStorage.getItem('token');
+                const savedUser = localStorage.getItem('user') ?? sessionStorage.getItem('user');
 
                 if (token && savedUser) {
                     // Try to verify token with backend
@@ -38,6 +38,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         console.error('Token validation failed:', error);
                         localStorage.removeItem('token');
                         localStorage.removeItem('user');
+                        sessionStorage.removeItem('token');
+                        sessionStorage.removeItem('user');
                         setUser(null);
                     }
                 }
@@ -51,13 +53,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loadUser();
     }, []);
 
-    const login = useCallback(async (email: string, password: string) => {
+    const login = useCallback(async (email: string, password: string, remember = true) => {
         try {
             const response = await apiLogin({ email, password });
 
-            // Save to localStorage
-            localStorage.setItem('token', response.token);
-            localStorage.setItem('user', JSON.stringify(response.user));
+            // Save session
+            if (remember) {
+                sessionStorage.removeItem('token');
+                sessionStorage.removeItem('user');
+                localStorage.setItem('token', response.token);
+                localStorage.setItem('user', JSON.stringify(response.user));
+            } else {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                sessionStorage.setItem('token', response.token);
+                sessionStorage.setItem('user', JSON.stringify(response.user));
+            }
 
             setUser(response.user as User);
 
@@ -80,6 +91,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Clear local session
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('user');
         setUser(null);
 
         // Redirect to login

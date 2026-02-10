@@ -255,7 +255,7 @@ function AdminRulesContent() {
     ];
 
     return (
-        <div ref={containerRef} className="min-h-[calc(100vh-72px)] bg-gradient-to-br from-slate-50 via-white to-blue-50 py-10 px-4">
+        <div ref={containerRef} className="min-h-[calc(100vh-72px)] bg-slate-50 py-10 px-4">
             <div className="mx-auto max-w-6xl space-y-8">
                 <div className="flex flex-col gap-3">
                     <h1 className="text-3xl font-semibold text-gray-900">

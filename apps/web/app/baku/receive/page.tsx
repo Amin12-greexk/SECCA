@@ -120,7 +120,7 @@ function TerimaBakuContent() {
     }
 
     return (
-        <div className="min-h-[calc(100vh-72px)] bg-gradient-to-br from-amber-50 via-white to-green-50 py-10 px-4">
+        <div className="min-h-[calc(100vh-72px)] bg-green-50 py-10 px-4">
             <div className="mx-auto max-w-5xl">
                 <div className="mb-8 flex flex-col gap-3">
                     <div className="flex items-center gap-4">

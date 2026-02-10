@@ -152,19 +152,33 @@ export class LotsService {
       }
 
       const totalWeight = dto.presetWeightGram * dto.count;
+      const remainingAfterSplit =
+        gradedStock.remainingWetWeightGram - totalWeight;
+      if (remainingAfterSplit < 0) {
+        return conflict("Insufficient remaining weight", {
+          gradedStockId: gradedStock.id,
+          remaining: gradedStock.remainingWetWeightGram,
+          requested: totalWeight,
+        });
+      }
+
+      const totalDecrement =
+        remainingAfterSplit > 0
+          ? totalWeight + remainingAfterSplit
+          : totalWeight;
       const updated = await tx.rawBatchGradeStock.updateMany({
         where: {
           id: gradedStock.id,
-          remainingWetWeightGram: { gte: totalWeight },
+          remainingWetWeightGram: { gte: totalDecrement },
         },
-        data: { remainingWetWeightGram: { decrement: totalWeight } },
+        data: { remainingWetWeightGram: { decrement: totalDecrement } },
       });
 
       if (updated.count === 0) {
         return conflict("Insufficient remaining weight", {
           gradedStockId: gradedStock.id,
           remaining: gradedStock.remainingWetWeightGram,
-          requested: totalWeight,
+          requested: totalDecrement,
         });
       }
 
@@ -227,11 +241,57 @@ export class LotsService {
         });
       }
 
+      if (remainingAfterSplit > 0) {
+        const { lotNumber } = await this.numberingService.nextLotNumber(
+          tx,
+          new Date(),
+        );
+        const remainderDryWeight = roundDryWeight(
+          remainingAfterSplit,
+          moistureBps,
+        );
+
+        const remainderLot = await tx.productionLot.create({
+          data: {
+            lotNumber,
+            gradeId: gradedStock.gradeId,
+            wetWeightGram: remainingAfterSplit,
+            dryWeightGramLocked: remainderDryWeight,
+            moistureBps,
+            status: LotStatus.AVAILABLE,
+            locationId: location.id,
+          },
+        });
+
+        await tx.lotSource.create({
+          data: {
+            lotId: remainderLot.id,
+            gradedStockId: gradedStock.id,
+            wetWeightGram: remainingAfterSplit,
+          },
+        });
+
+        await this.movementService.record(tx, {
+          lotId: remainderLot.id,
+          fromLocationId: null,
+          toLocationId: location.id,
+          movementType: MovementType.IN,
+          note: "Auto split remainder",
+        });
+
+        lots.push({
+          lotId: remainderLot.id,
+          lotNumber: remainderLot.lotNumber,
+          wetWeightGram: remainderLot.wetWeightGram,
+          dryWeightGramLocked: remainderLot.dryWeightGramLocked,
+        });
+      }
+
       return {
         created: lots.length,
         lots,
         remainingWetWeightGram:
-          gradedStock.remainingWetWeightGram - totalWeight,
+          gradedStock.remainingWetWeightGram - totalDecrement,
       };
     });
   }

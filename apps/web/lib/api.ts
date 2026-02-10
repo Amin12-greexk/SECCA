@@ -53,6 +53,7 @@ export interface ProductionLot {
     moistureBps: number;
     status: string;
     locationId: string;
+    printedAt?: string | null;
     grade?: Grade;
     featherGrade?: Grade | null;
     colorGrade?: Grade | null;
@@ -66,6 +67,16 @@ export interface PecahBonRequest {
     featherGradeId: string;
     colorGradeId: string;
     pecahBonDate: string;
+    featherCondition: string;
+    pieceCount: number;
+    initialWeightGram: number;
+    moisturePercent: number;
+}
+
+export interface PecahBonUpdateRequest {
+    gradeId: string;
+    featherGradeId: string;
+    colorGradeId: string;
     featherCondition: string;
     pieceCount: number;
     initialWeightGram: number;
@@ -524,7 +535,34 @@ export async function createPecahBon(rawBatchId: string, data: PecahBonRequest):
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || `Failed to create pecah bon: ${response.statusText}`);
+            const rawMessages = Array.isArray(errorData.message)
+                ? errorData.message
+                : errorData.message
+                    ? [errorData.message]
+                    : [];
+
+            const friendlyMessages = rawMessages.map((message: string) => {
+                if (message.includes('gradeId')) return 'Bentuk wajib dipilih.';
+                if (message.includes('featherGradeId')) return 'Grade bulu wajib dipilih.';
+                if (message.includes('colorGradeId')) return 'Grade warna wajib dipilih.';
+                if (message.includes('pieceCount')) return 'Jumlah keping wajib diisi (minimal 1).';
+                if (message.includes('initialWeightGram')) return 'Berat wajib diisi (lebih dari 0).';
+                if (message.includes('moisturePercent')) return 'Kadar air wajib diisi (0 - 100).';
+                if (message.includes('featherCondition')) return 'Kondisi baku wajib diisi.';
+                if (message.includes('pecahBonDate')) return 'Tanggal pecah bon tidak valid.';
+                if (message.includes('Sisa batch berada di rentang')) return message;
+                if (message.includes('Berat lot harus')) return message;
+                return message;
+            });
+
+            const normalized =
+                friendlyMessages.length > 0
+                    ? Array.from(new Set(friendlyMessages)).join(' ')
+                    : typeof errorData.message === 'string'
+                        ? errorData.message
+                        : `Gagal menyimpan pecah bon: ${response.statusText}`;
+
+            throw new Error(normalized);
         }
 
         const json = await response.json();
@@ -533,6 +571,66 @@ export async function createPecahBon(rawBatchId: string, data: PecahBonRequest):
         console.error('Error creating pecah bon:', error);
         throw error;
     }
+}
+
+export async function updatePecahBonEntry(entryId: string, data: PecahBonUpdateRequest): Promise<PecahBonEntry> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/baku/pecah-bon-entry/${entryId}`, {
+            method: 'PATCH',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const rawMessages = Array.isArray(errorData.message)
+                ? errorData.message
+                : errorData.message
+                    ? [errorData.message]
+                    : [];
+
+            const friendlyMessages = rawMessages.map((message: string) => {
+                if (message.includes('gradeId')) return 'Bentuk wajib dipilih.';
+                if (message.includes('featherGradeId')) return 'Grade bulu wajib dipilih.';
+                if (message.includes('colorGradeId')) return 'Grade warna wajib dipilih.';
+                if (message.includes('pieceCount')) return 'Jumlah keping wajib diisi (minimal 1).';
+                if (message.includes('initialWeightGram')) return 'Berat wajib diisi (lebih dari 0).';
+                if (message.includes('moisturePercent')) return 'Kadar air wajib diisi (0 - 100).';
+                if (message.includes('featherCondition')) return 'Kondisi baku wajib diisi.';
+                return message;
+            });
+
+            const normalized =
+                friendlyMessages.length > 0
+                    ? Array.from(new Set(friendlyMessages)).join(' ')
+                    : typeof errorData.message === 'string'
+                        ? errorData.message
+                        : `Gagal mengubah pecah bon: ${response.statusText}`;
+
+            throw new Error(normalized);
+        }
+
+        const json = await response.json();
+        return unwrap<PecahBonEntry>(json);
+    } catch (error) {
+        console.error('Error updating pecah bon:', error);
+        throw error;
+    }
+}
+
+export async function markPecahBonPrinted(entryId: string): Promise<ProductionLot> {
+    const response = await fetch(`${API_BASE_URL}/api/baku/pecah-bon-entry/${entryId}/printed`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Gagal menandai pecah bon tercetak.');
+    }
+
+    const json = await response.json();
+    return unwrap<ProductionLot>(json);
 }
 
 export async function getPecahBonEntries(rawBatchId: string): Promise<PecahBonEntry[]> {

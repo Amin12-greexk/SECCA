@@ -19,7 +19,7 @@ export default function UnauthorizedPage() {
     }, []);
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-white px-4">
+        <div className="min-h-screen flex items-center justify-center bg-red-50 px-4">
             <div ref={containerRef} className="text-center max-w-md">
                 {/* Icon */}
                 <div className="mb-8">

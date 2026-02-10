@@ -4,6 +4,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { badRequest, conflict, notFound } from "../../common/errors";
 import { ReceiveRawBatchDto } from "./dto/receive-raw-batch.dto";
 import { CreatePecahBonDto } from "./dto/create-pecah-bon.dto";
+import { UpdatePecahBonDto } from "./dto/update-pecah-bon.dto";
 import { NumberingService } from "../../common/numbering/numbering.service";
 import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
 import { LOCATION_CODES } from "../../common/constants";
@@ -225,6 +226,18 @@ export class BakuService {
         initialWeightGram: dto.initialWeightGram,
       });
     }
+    const remainingRounded = Math.round(rawBatch.wetWeightGram);
+    if (remainingRounded >= 35 && remainingRounded <= 50) {
+      if (lotWetWeightGram !== remainingRounded) {
+        return badRequest(
+          "Sisa batch berada di rentang 35–50 gr, harus dihabiskan sekaligus.",
+          {
+            requested: lotWetWeightGram,
+            remaining: remainingRounded,
+          },
+        );
+      }
+    }
     const moistureBps = Math.round(dto.moisturePercent * 100);
 
     const pecahBonEntry = await this.prisma.$transaction(async (tx) => {
@@ -346,6 +359,249 @@ export class BakuService {
     return pecahBonEntry;
   }
 
+  async updatePecahBonEntry(entryId: string, dto: UpdatePecahBonDto) {
+    const entry = await this.prisma.pecahBonEntry.findUnique({
+      where: { id: entryId },
+      include: { rawBatch: true },
+    });
+
+    if (!entry) {
+      return notFound("Pecah Bon not found", { entryId });
+    }
+
+    const rawBatch = entry.rawBatch;
+
+    const grade = await this.prisma.grade.findUnique({
+      where: { id: dto.gradeId },
+    });
+
+    if (!grade) {
+      return notFound("Grade not found", { gradeId: dto.gradeId });
+    }
+
+    if (grade.type !== GradeType.BENTUK) {
+      return badRequest("Grade bentuk tidak sesuai", {
+        gradeId: dto.gradeId,
+        expected: GradeType.BENTUK,
+        actual: grade.type,
+      });
+    }
+
+    const featherGrade = await this.prisma.grade.findUnique({
+      where: { id: dto.featherGradeId },
+    });
+
+    if (!featherGrade) {
+      return notFound("Grade bulu tidak ditemukan", {
+        gradeId: dto.featherGradeId,
+      });
+    }
+
+    if (featherGrade.type !== GradeType.BULU) {
+      return badRequest("Grade bulu tidak sesuai", {
+        gradeId: dto.featherGradeId,
+        expected: GradeType.BULU,
+        actual: featherGrade.type,
+      });
+    }
+
+    const colorGrade = await this.prisma.grade.findUnique({
+      where: { id: dto.colorGradeId },
+    });
+
+    if (!colorGrade) {
+      return notFound("Grade warna tidak ditemukan", {
+        gradeId: dto.colorGradeId,
+      });
+    }
+
+    if (colorGrade.type !== GradeType.WARNA) {
+      return badRequest("Grade warna tidak sesuai", {
+        gradeId: dto.colorGradeId,
+        expected: GradeType.WARNA,
+        actual: colorGrade.type,
+      });
+    }
+
+    const newInitialWeight = this.roundToTwoDecimals(dto.initialWeightGram);
+    const oldInitialWeight = this.roundToTwoDecimals(entry.initialWeightGram);
+    const deltaWeight = this.roundToTwoDecimals(newInitialWeight - oldInitialWeight);
+
+    if (deltaWeight > 0 && rawBatch.wetWeightGram < deltaWeight) {
+      return badRequest("Berat awal melebihi sisa berat batch", {
+        available: rawBatch.wetWeightGram,
+        requested: deltaWeight,
+      });
+    }
+
+    const newRemaining = this.roundToTwoDecimals(
+      rawBatch.wetWeightGram - deltaWeight,
+    );
+    const remainingRounded = Math.round(newRemaining);
+    if (remainingRounded >= 35 && remainingRounded <= 50) {
+      return badRequest(
+        "Sisa batch berada di rentang 35-50 gr, harus dihabiskan sekaligus.",
+        { remaining: remainingRounded },
+      );
+    }
+
+    const newMoisturePercent = this.roundToTwoDecimals(dto.moisturePercent);
+    const dryWeightGram = this.roundToTwoDecimals(
+      newInitialWeight * (1 - newMoisturePercent / 100),
+    );
+    const newLotWeight = Math.round(newInitialWeight);
+    if (newLotWeight <= 0) {
+      return badRequest("Berat lot terlalu kecil", {
+        initialWeightGram: dto.initialWeightGram,
+      });
+    }
+    const oldLotWeight = Math.round(oldInitialWeight);
+    const deltaLotWeight = newLotWeight - oldLotWeight;
+    const moistureBps = Math.round(newMoisturePercent * 100);
+
+    return this.prisma.$transaction(async (tx) => {
+      const lot = entry.pecahBonId
+        ? await tx.productionLot.findFirst({
+          where: { externalId: entry.pecahBonId },
+          include: { workItem: true, sources: true },
+        })
+        : null;
+
+      if (lot && (lot.status !== LotStatus.AVAILABLE || lot.workItem)) {
+        return conflict("LP sudah diproses, tidak bisa diedit", {
+          lotId: lot.id,
+          status: lot.status,
+        });
+      }
+
+      if (entry.gradeId !== dto.gradeId) {
+        const oldStockUpdate = await tx.rawBatchGradeStock.updateMany({
+          where: {
+            rawBatchId: entry.rawBatchId,
+            gradeId: entry.gradeId,
+            wetWeightGram: { gte: oldLotWeight },
+          },
+          data: { wetWeightGram: { decrement: oldLotWeight } },
+        });
+
+        if (oldStockUpdate.count === 0) {
+          return conflict("Graded stock tidak mencukupi untuk diubah", {
+            gradeId: entry.gradeId,
+            requested: oldLotWeight,
+          });
+        }
+
+        const newStock = await tx.rawBatchGradeStock.upsert({
+          where: {
+            rawBatchId_gradeId: {
+              rawBatchId: entry.rawBatchId,
+              gradeId: dto.gradeId,
+            },
+          },
+          update: {
+            wetWeightGram: { increment: newLotWeight },
+            remainingWetWeightGram: { increment: newLotWeight },
+          },
+          create: {
+            rawBatchId: entry.rawBatchId,
+            gradeId: dto.gradeId,
+            wetWeightGram: newLotWeight,
+            remainingWetWeightGram: newLotWeight,
+          },
+        });
+
+        await tx.rawBatchGradeStock.updateMany({
+          where: {
+            id: newStock.id,
+            remainingWetWeightGram: { gte: newLotWeight },
+          },
+          data: { remainingWetWeightGram: { decrement: newLotWeight } },
+        });
+
+        if (lot && lot.sources.length > 0) {
+          await tx.lotSource.update({
+            where: { id: lot.sources[0].id },
+            data: {
+              gradedStockId: newStock.id,
+              wetWeightGram: newLotWeight,
+            },
+          });
+        }
+      } else if (deltaLotWeight !== 0) {
+        if (deltaLotWeight < 0) {
+          const updateStock = await tx.rawBatchGradeStock.updateMany({
+            where: {
+              rawBatchId: entry.rawBatchId,
+              gradeId: entry.gradeId,
+              wetWeightGram: { gte: Math.abs(deltaLotWeight) },
+            },
+            data: { wetWeightGram: { increment: deltaLotWeight } },
+          });
+
+          if (updateStock.count === 0) {
+            return conflict("Graded stock tidak mencukupi untuk diubah", {
+              gradeId: entry.gradeId,
+              requested: Math.abs(deltaLotWeight),
+            });
+          }
+        } else {
+          await tx.rawBatchGradeStock.updateMany({
+            where: { rawBatchId: entry.rawBatchId, gradeId: entry.gradeId },
+            data: { wetWeightGram: { increment: deltaLotWeight } },
+          });
+        }
+
+        if (lot && lot.sources.length > 0) {
+          await tx.lotSource.update({
+            where: { id: lot.sources[0].id },
+            data: { wetWeightGram: newLotWeight },
+          });
+        }
+      }
+
+      if (lot) {
+        await tx.productionLot.update({
+          where: { id: lot.id },
+          data: {
+            gradeId: dto.gradeId,
+            featherGradeId: dto.featherGradeId,
+            colorGradeId: dto.colorGradeId,
+            wetWeightGram: newLotWeight,
+            dryWeightGramLocked: roundDryWeight(newLotWeight, moistureBps),
+            moistureBps,
+          },
+        });
+      }
+
+      await tx.rawBatch.update({
+        where: { id: entry.rawBatchId },
+        data: { wetWeightGram: newRemaining },
+      });
+
+      const updatedEntry = await tx.pecahBonEntry.update({
+        where: { id: entryId },
+        data: {
+          gradeId: dto.gradeId,
+          featherGradeId: dto.featherGradeId,
+          colorGradeId: dto.colorGradeId,
+          featherCondition: dto.featherCondition,
+          pieceCount: dto.pieceCount,
+          initialWeightGram: newInitialWeight,
+          moisturePercent: newMoisturePercent,
+          dryWeightGram,
+        },
+        include: {
+          rawBatch: true,
+          grade: true,
+          featherGrade: true,
+          colorGrade: true,
+        },
+      });
+
+      return updatedEntry;
+    });
+  }
+
   async getPecahBonEntries(rawBatchId: string) {
     const entries = await this.prisma.pecahBonEntry.findMany({
       where: { rawBatchId },
@@ -376,6 +632,40 @@ export class BakuService {
     }
 
     return entry;
+  }
+
+  async markPecahBonPrinted(entryId: string) {
+    const entry = await this.prisma.pecahBonEntry.findUnique({
+      where: { id: entryId },
+      select: { id: true, pecahBonId: true },
+    });
+
+    if (!entry) {
+      return notFound("Pecah Bon not found", { entryId });
+    }
+
+    if (!entry.pecahBonId) {
+      return badRequest("Pecah Bon ID belum tersedia", { entryId });
+    }
+
+    const lot = await this.prisma.productionLot.findFirst({
+      where: { externalId: entry.pecahBonId },
+    });
+
+    if (!lot) {
+      return notFound("Lot not found for pecah bon", {
+        pecahBonId: entry.pecahBonId,
+      });
+    }
+
+    if (lot.printedAt) {
+      return lot;
+    }
+
+    return this.prisma.productionLot.update({
+      where: { id: lot.id },
+      data: { printedAt: new Date() },
+    });
   }
 
   private async generatePecahBonId(

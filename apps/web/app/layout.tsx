@@ -2,16 +2,84 @@
 
 import { usePathname } from 'next/navigation';
 import { Inter } from "next/font/google";
+import Image from "next/image";
 import "./globals.css";
 import UserMenu from "@/components/UserMenu";
 import Sidebar from "@/components/Sidebar";
 import { ToastProvider } from "@/lib/toast";
 import { AuthProvider, useAuth } from "@/lib/auth/AuthContext";
+import { SidebarProvider, useSidebar } from "@/lib/context/SidebarContext";
 
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
 });
+
+function Header() {
+  const { toggleMobileMenu, isMobile } = useSidebar();
+
+  return (
+    <header className="bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 fixed top-0 left-0 right-0 z-50 h-[72px]">
+      <div className="px-4 h-full flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          {/* Hamburger Menu (Mobile only) */}
+          {isMobile && (
+            <button
+              onClick={toggleMobileMenu}
+              className="p-2 -ml-2 rounded-xl hover:bg-white/10 transition-colors duration-200"
+              aria-label="Toggle menu"
+            >
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          )}
+
+          {/* Logo */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center p-1">
+              <Image
+                src="/Assets/Logo-secca.png"
+                alt="SECCA"
+                width={28}
+                height={28}
+                className="w-7 h-7 object-contain"
+              />
+            </div>
+            <span className="text-xl font-bold tracking-tight">SECCA</span>
+          </div>
+        </div>
+
+        <UserMenu />
+      </div>
+    </header>
+  );
+}
+
+function MainContent({ children }: { children: React.ReactNode }) {
+  const { isCollapsed, isMobile } = useSidebar();
+
+  return (
+    <main
+      className={`
+        mt-[72px] min-h-[calc(100vh-72px)]
+        transition-all duration-300 ease-in-out
+        bg-gray-50/50
+        ${isMobile ? 'ml-0' : (isCollapsed ? 'ml-20' : 'ml-64')}
+      `}
+    >
+      {children}
+    </main>
+  );
+}
 
 function LayoutContent({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -21,36 +89,20 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   const publicPages = ['/login', '/not-found', '/unauthorized'];
   const isPublicPage = publicPages.includes(pathname);
 
-  return (
-    <>
-      {!isPublicPage && isAuthenticated && (
-        <>
-          {/* Topbar */}
-          <header className="bg-green-600 text-white shadow-md fixed top-0 left-0 right-0 z-40">
-            <div className="px-4 py-4 flex items-center justify-between">
-              <div className="text-xl font-semibold">SECCA</div>
-              <UserMenu />
-            </div>
-          </header>
-
-          {/* Sidebar */}
-          <div className="fixed top-[72px] left-0 bottom-0 z-30">
-            <Sidebar />
-          </div>
-        </>
-      )}
-
-      {/* Main Content */}
-      <main
-        className={
-          !isPublicPage && isAuthenticated
-            ? "ml-64 mt-[72px] min-h-[calc(100vh-72px)]"
-            : "min-h-screen"
-        }
-      >
+  if (isPublicPage || !isAuthenticated) {
+    return (
+      <main className="min-h-screen">
         {children}
       </main>
-    </>
+    );
+  }
+
+  return (
+    <SidebarProvider>
+      <Header />
+      <Sidebar />
+      <MainContent>{children}</MainContent>
+    </SidebarProvider>
   );
 }
 
@@ -64,6 +116,7 @@ export default function RootLayout({
       <head>
         <title>SECCA - Sistem Manajemen Baku</title>
         <meta name="description" content="Sistem manajemen operasional SECCA untuk baku, mitra, dan manajemen" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
         <AuthProvider>

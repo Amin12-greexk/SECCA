@@ -246,6 +246,7 @@ model ProductionLot {
   moistureBps        Int
   status             LotStatus
   locationId         String
+  printedAt          DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

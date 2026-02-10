@@ -31,11 +31,14 @@ import {
     createPecahBon,
     getPecahBonEntries,
     getPecahBonById,
+    updatePecahBonEntry,
+    markPecahBonPrinted,
     type RawBatch,
     type Grade,
     type PecahBonEntry,
 } from '@/lib/api';
 import PecahBonCard from '@/components/print/PecahBonCard';
+import { gsap } from 'gsap';
 
 const pecahBonSchema = z.object({
     gradeId: z.string().min(1, 'Grade bentuk wajib dipilih'),
@@ -65,26 +68,29 @@ interface MultiEntryRow {
     gradeId: string;
     featherGradeId: string;
     colorGradeId: string;
-    pieceCount: number;
-    initialWeightGram: number;
-    moisturePercent: number;
+    pieceCount: number | '';
+    initialWeightGram: number | '';
+    moisturePercent: number | '';
 }
 
 // Generate simple unique ID
 const generateId = () => Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
 
-const createEmptyRow = (moisturePercent: number = 0): MultiEntryRow => ({
+const createEmptyRow = (
+    overrides: Partial<Omit<MultiEntryRow, 'id'>> = {}
+): MultiEntryRow => ({
     id: generateId(),
     gradeId: '',
     featherGradeId: '',
     colorGradeId: '',
-    pieceCount: 1,
-    initialWeightGram: 0,
-    moisturePercent,
+    pieceCount: '',
+    initialWeightGram: '',
+    moisturePercent: '',
+    ...overrides,
 });
 
 
-function PecahBonContent() {
+export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     const toast = useToast();
     const preferDocumentPrint = false;
     const preferDocumentPrintSetoran = false;
@@ -103,6 +109,19 @@ function PecahBonContent() {
         entry: PecahBonEntry;
     } | null>(null);
     const [setoranOpen, setSetoranOpen] = useState(false);
+    const [selectedEntryIds, setSelectedEntryIds] = useState<Record<string, string[]>>({});
+    const [editEntry, setEditEntry] = useState<PecahBonEntry | null>(null);
+    const [editOpen, setEditOpen] = useState(false);
+    const [editSaving, setEditSaving] = useState(false);
+    const [editValues, setEditValues] = useState({
+        gradeId: '',
+        featherGradeId: '',
+        colorGradeId: '',
+        pieceCount: '',
+        initialWeightGram: '',
+        moisturePercent: '',
+        featherCondition: '',
+    });
     const [, setScanLoading] = useState(false);
     const scanBufferRef = useRef('');
     const scanLastAtRef = useRef(0);
@@ -125,9 +144,8 @@ function PecahBonContent() {
 
     // Multi-entry handlers
     const addEntry = () => {
-        const defaultMoisture = selectedBatch?.moisturePercent ?? 0;
         setMultiEntries((prev) => {
-            const newRow = createEmptyRow(defaultMoisture);
+            const newRow = createEmptyRow();
             const firstRow = prev[0];
             if (firstRow) {
                 if (syncFields.gradeId) newRow.gradeId = firstRow.gradeId;
@@ -140,6 +158,7 @@ function PecahBonContent() {
             return [...prev, newRow];
         });
     };
+
 
     const removeEntry = (id: string) => {
         setMultiEntries(prev => prev.filter(row => row.id !== id));
@@ -182,6 +201,17 @@ function PecahBonContent() {
             if (!firstRow) return prev;
             return prev.map((row, idx) => (idx === 0 ? row : { ...row, [field]: firstRow[field as keyof MultiEntryRow] }));
         });
+    };
+
+    const flashRow = (rowId: string) => {
+        if (typeof window === 'undefined') return;
+        const row = document.getElementById(`pecah-row-${rowId}`);
+        if (!row) return;
+        gsap.fromTo(
+            row,
+            { backgroundColor: '#ecfdf3' },
+            { backgroundColor: 'transparent', duration: 0.6, ease: 'power2.out' }
+        );
     };
 
     const buildPrintOptions = () => {
@@ -437,6 +467,9 @@ function PecahBonContent() {
                     margins: { marginType: 'none' },
                     preferCSSPageSize: true,
                 });
+                await markPecahBonPrinted(printContext.entry.id).catch((err) => {
+                    console.error('Failed to mark printed:', err);
+                });
                 toast.success('Berhasil mencetak kartu!');
                 return;
             } catch (error) {
@@ -456,6 +489,9 @@ function PecahBonContent() {
                 const options = buildPrintOptions();
                 const data = buildPecahBonPrintData(printContext.batch, printContext.entry);
                 await window.securePOSPrinter.print(data, options);
+                await markPecahBonPrinted(printContext.entry.id).catch((err) => {
+                    console.error('Failed to mark printed:', err);
+                });
                 toast.success('Berhasil mencetak kartu!');
                 return;
             } catch (error) {
@@ -477,6 +513,9 @@ function PecahBonContent() {
                     printBackground: true,
                     margins: { marginType: 'none' },
                     preferCSSPageSize: true,
+                });
+                await markPecahBonPrinted(printContext.entry.id).catch((err) => {
+                    console.error('Failed to mark printed:', err);
                 });
                 toast.success('Berhasil mencetak kartu!');
                 return;
@@ -551,16 +590,6 @@ function PecahBonContent() {
             moisturePercent: 0,
         },
     });
-
-    const moisturePercent = form.watch('moisturePercent');
-    const initialWeightGram = form.watch('initialWeightGram');
-
-    const dryWeightGram = useMemo(() => {
-        if (initialWeightGram > 0 && moisturePercent >= 0 && moisturePercent <= 100) {
-            return initialWeightGram * (1 - moisturePercent / 100);
-        }
-        return 0;
-    }, [initialWeightGram, moisturePercent]);
 
     const loadData = async () => {
         setLoading(true);
@@ -654,7 +683,11 @@ function PecahBonContent() {
 
     const openPecahBonDialog = (batch: BatchWithEntries) => {
         setSelectedBatch(batch);
-        setMultiEntries([createEmptyRow(batch.moisturePercent)]);
+        setMultiEntries([
+            createEmptyRow({
+                moisturePercent: batch.moisturePercent,
+            }),
+        ]);
         form.reset({
             gradeId: '',
             featherGradeId: '',
@@ -672,9 +705,185 @@ function PecahBonContent() {
         setPrintOpen(true);
     };
 
+    const openEditDialog = (entry: PecahBonEntry) => {
+        setEditEntry(entry);
+        setEditValues({
+            gradeId: entry.gradeId,
+            featherGradeId: entry.featherGradeId ?? '',
+            colorGradeId: entry.colorGradeId ?? '',
+            pieceCount: String(entry.pieceCount ?? ''),
+            initialWeightGram: String(entry.initialWeightGram ?? ''),
+            moisturePercent: String(entry.moisturePercent ?? ''),
+            featherCondition: entry.featherCondition ?? '',
+        });
+        setEditOpen(true);
+    };
+
+    const handleEditSave = async () => {
+        if (!editEntry) return;
+        const parsedPiece = parseInt(editValues.pieceCount, 10);
+        const parsedWeight = parseFloat(editValues.initialWeightGram);
+        const parsedMoisture = parseFloat(editValues.moisturePercent);
+
+        if (!editValues.gradeId) {
+            toast.error('Grade bentuk wajib dipilih.');
+            return;
+        }
+        if (!editValues.featherGradeId) {
+            toast.error('Grade bulu wajib dipilih.');
+            return;
+        }
+        if (!editValues.colorGradeId) {
+            toast.error('Grade warna wajib dipilih.');
+            return;
+        }
+        if (!editValues.featherCondition.trim()) {
+            toast.error('Kondisi baku wajib diisi.');
+            return;
+        }
+        if (Number.isNaN(parsedPiece) || parsedPiece < 1) {
+            toast.error('Jumlah keping wajib diisi (minimal 1).');
+            return;
+        }
+        if (Number.isNaN(parsedWeight) || parsedWeight <= 0) {
+            toast.error('Berat wajib diisi (lebih dari 0).');
+            return;
+        }
+        if (Number.isNaN(parsedMoisture) || parsedMoisture < 0 || parsedMoisture > 100) {
+            toast.error('Kadar air wajib diisi (0 - 100).');
+            return;
+        }
+
+        setEditSaving(true);
+        try {
+            const updated = await updatePecahBonEntry(editEntry.id, {
+                gradeId: editValues.gradeId,
+                featherGradeId: editValues.featherGradeId,
+                colorGradeId: editValues.colorGradeId,
+                featherCondition: editValues.featherCondition.trim(),
+                pieceCount: parsedPiece,
+                initialWeightGram: parsedWeight,
+                moisturePercent: parsedMoisture,
+            });
+
+            setRawBatches((prev) =>
+                prev.map((batch) => {
+                    if (batch.id !== updated.rawBatchId) return batch;
+                    const updatedEntries = batch.pecahBonEntries?.map((entry) =>
+                        entry.id === updated.id ? { ...entry, ...updated } : entry
+                    );
+                    return {
+                        ...batch,
+                        wetWeightGram: updated.rawBatch?.wetWeightGram ?? batch.wetWeightGram,
+                        pecahBonEntries: updatedEntries,
+                    };
+                })
+            );
+
+            toast.success('Pecah bon berhasil diperbarui.');
+            setEditOpen(false);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Gagal mengubah pecah bon.';
+            toast.error(message);
+        } finally {
+            setEditSaving(false);
+        }
+    };
+
     const openSetoranDialog = (batch: BatchWithEntries, entry: PecahBonEntry) => {
         setSetoranContext({ batch, entry });
         setSetoranOpen(true);
+    };
+
+    const toggleEntrySelection = (batchId: string, entryId: string, checked: boolean) => {
+        setSelectedEntryIds((prev) => {
+            const current = new Set(prev[batchId] ?? []);
+            if (checked) {
+                current.add(entryId);
+            } else {
+                current.delete(entryId);
+            }
+            return { ...prev, [batchId]: Array.from(current) };
+        });
+    };
+
+    const togglePageSelection = (batchId: string, entryIds: string[], checked: boolean) => {
+        setSelectedEntryIds((prev) => {
+            const current = new Set(prev[batchId] ?? []);
+            if (checked) {
+                entryIds.forEach((id) => current.add(id));
+            } else {
+                entryIds.forEach((id) => current.delete(id));
+            }
+            return { ...prev, [batchId]: Array.from(current) };
+        });
+    };
+
+    const clearSelection = (batchId: string) => {
+        setSelectedEntryIds((prev) => ({ ...prev, [batchId]: [] }));
+    };
+
+    const handlePrintSelected = async (batch: BatchWithEntries, entryIds: string[]) => {
+        if (entryIds.length === 0) return;
+        const entries = (batch.pecahBonEntries ?? []).filter((entry) => entryIds.includes(entry.id));
+        if (entries.length === 0) return;
+
+        if (typeof window !== 'undefined' && window.securePOSPrinter?.print) {
+            try {
+                const options = buildPrintOptions();
+                for (const entry of entries) {
+                    const data = buildPecahBonPrintData(batch, entry);
+                    await window.securePOSPrinter.print(data, options);
+                    await markPecahBonPrinted(entry.id).catch((err) => {
+                        console.error('Failed to mark printed:', err);
+                    });
+                }
+                toast.success(`Berhasil mencetak ${entries.length} kartu.`);
+                clearSelection(batch.id);
+                return;
+            } catch (error) {
+                console.error('[SECCA] multi print failed:', error);
+                await window.seccaDesktop?.log?.({
+                    scope: 'pecah-bon',
+                    message: 'multi print failed',
+                    error: error instanceof Error ? error.message : String(error),
+                });
+                toast.error('Gagal cetak multiple.');
+                return;
+            }
+        }
+
+        toast.error('Cetak multiple hanya tersedia di aplikasi desktop.');
+    };
+
+    const handlePrintSetoranSelected = async (batch: BatchWithEntries, entryIds: string[]) => {
+        if (entryIds.length === 0) return;
+        const entries = (batch.pecahBonEntries ?? []).filter((entry) => entryIds.includes(entry.id));
+        if (entries.length === 0) return;
+
+        if (typeof window !== 'undefined' && window.securePOSPrinter?.print) {
+            try {
+                const options = buildPrintOptions();
+                for (const entry of entries) {
+                    const data = buildSetoranPrintData(batch, entry);
+                    await window.securePOSPrinter.print(data, options);
+                }
+                toast.success(`Berhasil mencetak ${entries.length} setoran.`);
+                clearSelection(batch.id);
+                return;
+            } catch (error) {
+                console.error('[SECCA] multi setoran print failed:', error);
+                await window.seccaDesktop?.log?.({
+                    scope: 'setoran',
+                    message: 'multi setoran print failed',
+                    error: error instanceof Error ? error.message : String(error),
+                });
+                toast.error('Gagal cetak setoran multiple.');
+                return;
+            }
+        }
+
+        toast.error('Cetak multiple hanya tersedia di aplikasi desktop.');
     };
 
     const openFromScan = async (entry: PecahBonEntry) => {
@@ -814,6 +1023,13 @@ function PecahBonContent() {
     const onSubmit = async (values: PecahBonFormValues) => {
         if (!selectedBatch) return;
 
+        if (values.initialWeightGram > selectedBatch.wetWeightGram) {
+            toast.error(
+                `Berat awal (${formatNumber(values.initialWeightGram)}) melebihi sisa berat batch (${formatNumber(selectedBatch.wetWeightGram)}).`
+            );
+            return;
+        }
+
         try {
             const today = new Date().toISOString();
             await createPecahBon(selectedBatch.id, {
@@ -835,16 +1051,32 @@ function PecahBonContent() {
 
         const featherCondition = selectedBatch.featherCondition;
 
-        const validEntries = multiEntries.filter(entry =>
-            entry.gradeId &&
-            entry.featherGradeId &&
-            entry.colorGradeId &&
-            entry.pieceCount >= 1 &&
-            entry.initialWeightGram > 0
+        const validEntries = multiEntries.filter(
+            (entry) =>
+                entry.gradeId &&
+                entry.featherGradeId &&
+                entry.colorGradeId &&
+                typeof entry.pieceCount === 'number' &&
+                entry.pieceCount >= 1 &&
+                typeof entry.initialWeightGram === 'number' &&
+                entry.initialWeightGram > 0 &&
+                typeof entry.moisturePercent === 'number' &&
+                entry.moisturePercent >= 0
         );
 
         if (validEntries.length === 0) {
             toast.error('Tidak ada entry yang valid. Pastikan semua field terisi dengan benar.');
+            return;
+        }
+
+        const totalInitialWeight = validEntries.reduce(
+            (sum, entry) => sum + (typeof entry.initialWeightGram === 'number' ? entry.initialWeightGram : 0),
+            0
+        );
+        if (totalInitialWeight > selectedBatch.wetWeightGram) {
+            toast.error(
+                `Total berat (${formatNumber(totalInitialWeight)}) melebihi sisa berat batch (${formatNumber(selectedBatch.wetWeightGram)}).`
+            );
             return;
         }
 
@@ -860,9 +1092,9 @@ function PecahBonContent() {
                     featherGradeId: entry.featherGradeId,
                     colorGradeId: entry.colorGradeId,
                     featherCondition,
-                    pieceCount: entry.pieceCount,
-                    initialWeightGram: entry.initialWeightGram,
-                    moisturePercent: entry.moisturePercent,
+                    pieceCount: Number(entry.pieceCount),
+                    initialWeightGram: Number(entry.initialWeightGram),
+                    moisturePercent: Number(entry.moisturePercent),
                     pecahBonDate: today,
                 });
                 successCount++;
@@ -911,13 +1143,22 @@ function PecahBonContent() {
     }).format(new Date());
 
     // Calculate validation stats
-    const validEntriesCount = multiEntries.filter(e => 
-        e.gradeId && e.featherGradeId && e.colorGradeId && e.pieceCount >= 1 && e.initialWeightGram > 0
+    const validEntriesCount = multiEntries.filter(
+        (entry) =>
+            entry.gradeId &&
+            entry.featherGradeId &&
+            entry.colorGradeId &&
+            typeof entry.pieceCount === 'number' &&
+            entry.pieceCount >= 1 &&
+            typeof entry.initialWeightGram === 'number' &&
+            entry.initialWeightGram > 0 &&
+            typeof entry.moisturePercent === 'number' &&
+            entry.moisturePercent >= 0
     ).length;
 
     if (loading) {
         return (
-            <div className="min-h-[calc(100vh-72px)] flex items-center justify-center">
+            <div className={`${embedded ? 'py-10' : 'min-h-[calc(100vh-72px)]'} flex items-center justify-center`}>
                 <div className="flex items-center gap-3 text-gray-600">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     <span>Memuat data...</span>
@@ -927,8 +1168,8 @@ function PecahBonContent() {
     }
 
     return (
-        <div className="min-h-[calc(100vh-72px)] bg-gradient-to-br from-amber-50 via-white to-green-50 py-10 px-4">
-            <div className="mx-auto max-w-6xl">
+        <div className={embedded ? 'py-6' : 'min-h-[calc(100vh-72px)] bg-green-50 py-10 px-4'}>
+            <div className={embedded ? 'w-full' : 'mx-auto max-w-6xl'}>
                 <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-4">
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-green-600/10">
@@ -1030,6 +1271,10 @@ function PecahBonContent() {
                                                             const startIdx = currentPage * ENTRIES_PER_PAGE;
                                                             const endIdx = Math.min(startIdx + ENTRIES_PER_PAGE, totalEntries);
                                                             const paginatedEntries = batch.pecahBonEntries.slice(startIdx, endIdx);
+                                                            const selectedIds = selectedEntryIds[batch.id] ?? [];
+                                                            const pageEntryIds = paginatedEntries.map((entry) => entry.id);
+                                                            const selectedOnPage = pageEntryIds.filter((id) => selectedIds.includes(id));
+                                                            const allPageSelected = pageEntryIds.length > 0 && selectedOnPage.length === pageEntryIds.length;
 
                                                             const goToPage = (page: number) => {
                                                                 setRawBatches((prev) =>
@@ -1045,43 +1290,95 @@ function PecahBonContent() {
                                                                         <span className="text-sm text-green-800">
                                                                             Menampilkan <strong>{startIdx + 1}</strong> - <strong>{endIdx}</strong> dari <strong>{totalEntries}</strong> entries
                                                                         </span>
-                                                                        {totalPages > 1 && (
-                                                                            <div className="flex items-center gap-2">
-                                                                                <Button
-                                                                                    size="sm"
-                                                                                    variant="ghost"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        goToPage(currentPage - 1);
-                                                                                    }}
-                                                                                    disabled={currentPage === 0}
-                                                                                    className="h-7 px-2"
-                                                                                >
-                                                                                    <ChevronLeft className="h-4 w-4" />
-                                                                                    Sebelumnya
-                                                                                </Button>
-                                                                                <span className="text-sm text-green-700 tabular-nums">
-                                                                                    {currentPage + 1} / {totalPages}
-                                                                                </span>
-                                                                                <Button
-                                                                                    size="sm"
-                                                                                    variant="ghost"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        goToPage(currentPage + 1);
-                                                                                    }}
-                                                                                    disabled={currentPage >= totalPages - 1}
-                                                                                    className="h-7 px-2"
-                                                                                >
-                                                                                    Selanjutnya
-                                                                                    <ChevronRight className="h-4 w-4" />
-                                                                                </Button>
-                                                                            </div>
-                                                                        )}
+                                                                        <div className="flex flex-wrap items-center justify-end gap-2">
+                                                                            <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-green-700 border border-green-200">
+                                                                                Terpilih {selectedIds.length}
+                                                                            </span>
+                                                                            <Button
+                                                                                size="sm"
+                                                                                variant="outline"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    clearSelection(batch.id);
+                                                                                }}
+                                                                                disabled={selectedIds.length === 0}
+                                                                                className="h-7 px-2"
+                                                                            >
+                                                                                Reset
+                                                                            </Button>
+                                                                            <Button
+                                                                                size="sm"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handlePrintSelected(batch, selectedIds);
+                                                                                }}
+                                                                                disabled={selectedIds.length === 0}
+                                                                                className="h-7 px-3"
+                                                                            >
+                                                                                <Printer className="h-3 w-3" />
+                                                                                Cetak Kartu
+                                                                            </Button>
+                                                                            <Button
+                                                                                size="sm"
+                                                                                variant="outline"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handlePrintSetoranSelected(batch, selectedIds);
+                                                                                }}
+                                                                                disabled={selectedIds.length === 0}
+                                                                                className="h-7 px-3"
+                                                                            >
+                                                                                <Printer className="h-3 w-3" />
+                                                                                Cetak Setoran
+                                                                            </Button>
+                                                                            {totalPages > 1 && (
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <Button
+                                                                                        size="sm"
+                                                                                        variant="ghost"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            goToPage(currentPage - 1);
+                                                                                        }}
+                                                                                        disabled={currentPage === 0}
+                                                                                        className="h-7 px-2"
+                                                                                    >
+                                                                                        <ChevronLeft className="h-4 w-4" />
+                                                                                        Sebelumnya
+                                                                                    </Button>
+                                                                                    <span className="text-sm text-green-700 tabular-nums">
+                                                                                        {currentPage + 1} / {totalPages}
+                                                                                    </span>
+                                                                                    <Button
+                                                                                        size="sm"
+                                                                                        variant="ghost"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            goToPage(currentPage + 1);
+                                                                                        }}
+                                                                                        disabled={currentPage >= totalPages - 1}
+                                                                                        className="h-7 px-2"
+                                                                                    >
+                                                                                        Selanjutnya
+                                                                                        <ChevronRight className="h-4 w-4" />
+                                                                                    </Button>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                     <table className="w-full text-sm">
                                                                         <thead>
                                                                             <tr className="bg-gray-50 border-b border-gray-200">
+                                                                                <th className="px-3 py-2 text-center text-xs font-medium text-green-700 w-10">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        aria-label="Pilih semua di halaman"
+                                                                                        checked={allPageSelected}
+                                                                                        onChange={(e) =>
+                                                                                            togglePageSelection(batch.id, pageEntryIds, e.target.checked)
+                                                                                        }
+                                                                                    />
+                                                                                </th>
                                                                                 <th className="px-3 py-2 text-left text-xs font-medium text-green-700">ID Pecah Bon</th>
                                                                                 <th className="px-3 py-2 text-left text-xs font-medium text-green-700">Tanggal Pecah</th>
                                                                                 <th className="px-3 py-2 text-left text-xs font-medium text-green-700">Grade (Bentuk / Bulu / Warna)</th>
@@ -1095,7 +1392,17 @@ function PecahBonContent() {
                                                                         </thead>
                                                                         <tbody className="divide-y divide-gray-100">
                                                                             {paginatedEntries.map((entry) => (
-                                                                                <tr key={entry.id} className="hover:bg-gray-50">
+                                                <tr id={`pecah-row-${entry.id}`} key={entry.id} className="hover:bg-gray-50">
+                                                                                    <td className="px-3 py-2 text-center">
+                                                                                        <input
+                                                                                            type="checkbox"
+                                                                                            aria-label={`Pilih ${entry.pecahBonId ?? 'LP'}`}
+                                                                                            checked={selectedIds.includes(entry.id)}
+                                                                                            onChange={(e) =>
+                                                                                                toggleEntrySelection(batch.id, entry.id, e.target.checked)
+                                                                                            }
+                                                                                        />
+                                                                                    </td>
                                                                                     <td className="px-3 py-2 font-mono text-gray-700">{entry.pecahBonId ?? '-'}</td>
                                                                                     <td className="px-3 py-2 text-gray-600">{formatDate(entry.pecahBonDate)}</td>
                                                                                     <td className="px-3 py-2 font-medium text-gray-900">
@@ -1113,16 +1420,24 @@ function PecahBonContent() {
                                                                                                 variant="outline"
                                                                                                 onClick={() => openPrintDialog(batch, entry)}
                                                                                                 disabled={!entry.pecahBonId}
-                                                                                                className="h-8 px-2"
+                                                                                                className="h-8 px-2 border-emerald-500 text-emerald-700 hover:bg-emerald-50"
                                                                                             >
                                                                                                 <Printer className="h-3 w-3" />
                                                                                             </Button>
                                                                                             <Button
                                                                                                 size="sm"
                                                                                                 variant="outline"
+                                                                                                onClick={() => openEditDialog(entry)}
+                                                                                                className="h-8 px-2 border-amber-500 text-amber-700 hover:bg-amber-50"
+                                                                                            >
+                                                                                                Edit
+                                                                                            </Button>
+                                                                                            <Button
+                                                                                                size="sm"
+                                                                                                variant="outline"
                                                                                                 onClick={() => openSetoranDialog(batch, entry)}
                                                                                                 disabled={!entry.pecahBonId}
-                                                                                                className="h-8 px-2"
+                                                                                                className="h-8 px-2 border-sky-500 text-sky-700 hover:bg-sky-50"
                                                                                             >
                                                                                                 Setoran
                                                                                             </Button>
@@ -1212,28 +1527,6 @@ function PecahBonContent() {
                                         disabled
                                     />
                                 </div>
-                                <div className="space-y-1">
-                                    <Label className="text-xs text-gray-600">Kadar Air Default (%)</Label>
-                                    <Input
-                                        type="number"
-                                        className="h-9 text-sm"
-                                        step="0.1"
-                                        {...form.register('moisturePercent', { valueAsNumber: true })}
-                                        onChange={(e) => {
-                                            const value = parseFloat(e.target.value) || 0;
-                                            form.setValue('moisturePercent', value);
-                                            setMultiEntries((prev) => prev.map((entry, idx) => {
-                                                if (idx === 0) {
-                                                    return { ...entry, moisturePercent: value };
-                                                }
-                                                if (syncFields.moisturePercent) {
-                                                    return { ...entry, moisturePercent: value };
-                                                }
-                                                return entry;
-                                            }));
-                                        }}
-                                    />
-                                </div>
                             </div>
                         </div>
 
@@ -1243,14 +1536,14 @@ function PecahBonContent() {
                                 <h3 className="text-sm font-semibold text-green-800">Daftar LP yang Akan Dibuat</h3>
                                 <Button
                                     type="button"
-                                        size="sm"
-                                        onClick={addEntry}
-                                        disabled={isSubmitting}
-                                        className="h-8"
-                                    >
-                                        <Plus className="h-4 w-4 mr-1" />
-                                        Tambah LP
-                                    </Button>
+                                    size="sm"
+                                    onClick={addEntry}
+                                    disabled={isSubmitting}
+                                    className="h-8"
+                                >
+                                    <Plus className="h-4 w-4 mr-1" />
+                                    Tambah LP
+                                </Button>
                                 </div>
                                 
                                 <div className="flex-1 overflow-auto">
@@ -1262,14 +1555,24 @@ function PecahBonContent() {
                                                 <th className="px-3 py-2 text-left w-32 text-xs font-semibold text-gray-700">Bentuk</th>
                                                 <th className="px-3 py-2 text-left w-32 text-xs font-semibold text-gray-700">Bulu</th>
                                                 <th className="px-3 py-2 text-left w-32 text-xs font-semibold text-gray-700">Warna</th>
-                                                <th className="px-3 py-2 text-left w-20 text-xs font-semibold text-gray-700">Keping</th>
+                                                <th className="px-3 py-2 text-right w-20 text-xs font-semibold text-gray-700">Keping</th>
+                                                <th className="px-3 py-2 text-right w-28 text-xs font-semibold text-gray-700">Berat</th>
+                                                <th className="px-3 py-2 text-right w-24 text-xs font-semibold text-gray-700">Kadar %</th>
 
-                                                <th className="px-3 py-2 text-left w-24 text-xs font-semibold text-gray-700">Kadar %</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
                                             {multiEntries.map((entry, index) => {
-                                                const isValid = entry.gradeId && entry.featherGradeId && entry.colorGradeId && entry.pieceCount >= 1 && entry.initialWeightGram > 0;
+                                                const isValid =
+                                                    entry.gradeId &&
+                                                    entry.featherGradeId &&
+                                                    entry.colorGradeId &&
+                                                    typeof entry.pieceCount === 'number' &&
+                                                    entry.pieceCount >= 1 &&
+                                                    typeof entry.initialWeightGram === 'number' &&
+                                                    entry.initialWeightGram > 0 &&
+                                                    typeof entry.moisturePercent === 'number' &&
+                                                    entry.moisturePercent >= 0;
                                                 return (
                                                     <tr key={entry.id} className={`hover:bg-gray-50 ${!isValid ? 'bg-red-50/30' : ''}`}>
                                                         <td className="px-3 py-2">
@@ -1306,7 +1609,10 @@ function PecahBonContent() {
                                                         <td className="px-3 py-2">
                                                             <Select
                                                                 value={entry.gradeId}
-                                                                onValueChange={(value) => updateEntry(entry.id, 'gradeId', value)}
+                                                                onValueChange={(value) => {
+                                                                    updateEntry(entry.id, 'gradeId', value);
+                                                                    flashRow(entry.id);
+                                                                }}
                                                             >
                                                                 <SelectTrigger className="h-9 text-xs">
                                                                     <SelectValue placeholder="Pilih..." />
@@ -1323,7 +1629,10 @@ function PecahBonContent() {
                                                         <td className="px-3 py-2">
                                                             <Select
                                                                 value={entry.featherGradeId}
-                                                                onValueChange={(value) => updateEntry(entry.id, 'featherGradeId', value)}
+                                                                onValueChange={(value) => {
+                                                                    updateEntry(entry.id, 'featherGradeId', value);
+                                                                    flashRow(entry.id);
+                                                                }}
                                                             >
                                                                 <SelectTrigger className="h-9 text-xs">
                                                                     <SelectValue placeholder="Pilih..." />
@@ -1340,7 +1649,10 @@ function PecahBonContent() {
                                                         <td className="px-3 py-2">
                                                             <Select
                                                                 value={entry.colorGradeId}
-                                                                onValueChange={(value) => updateEntry(entry.id, 'colorGradeId', value)}
+                                                                onValueChange={(value) => {
+                                                                    updateEntry(entry.id, 'colorGradeId', value);
+                                                                    flashRow(entry.id);
+                                                                }}
                                                             >
                                                                 <SelectTrigger className="h-9 text-xs">
                                                                     <SelectValue placeholder="Pilih..." />
@@ -1360,8 +1672,16 @@ function PecahBonContent() {
                                                                 min={1}
                                                                 step={1}
                                                                 value={entry.pieceCount}
-                                                                onChange={(e) => updateEntry(entry.id, 'pieceCount', parseInt(e.target.value) || 1)}
-                                                                className="h-9 text-xs w-full"
+                                                                onChange={(e) => {
+                                                                    const value = e.target.value;
+                                                                    const parsed = parseInt(value, 10);
+                                                                    updateEntry(
+                                                                        entry.id,
+                                                                        'pieceCount',
+                                                                        value === '' || Number.isNaN(parsed) ? '' : parsed
+                                                                    );
+                                                                }}
+                                                                className="h-9 text-xs w-full text-right"
                                                             />
                                                         </td>
                                                         <td className="px-3 py-2">
@@ -1369,9 +1689,17 @@ function PecahBonContent() {
                                                                 type="number"
                                                                 min={0.1}
                                                                 step="0.01"
-                                                                value={entry.initialWeightGram || ''}
-                                                                onChange={(e) => updateEntry(entry.id, 'initialWeightGram', parseFloat(e.target.value) || 0)}
-                                                                className="h-9 text-xs w-full"
+                                                                value={entry.initialWeightGram}
+                                                                onChange={(e) => {
+                                                                    const value = e.target.value;
+                                                                    const parsed = parseFloat(value);
+                                                                    updateEntry(
+                                                                        entry.id,
+                                                                        'initialWeightGram',
+                                                                        value === '' || Number.isNaN(parsed) ? '' : parsed
+                                                                    );
+                                                                }}
+                                                                className="h-9 text-xs w-full text-right"
                                                             />
                                                         </td>
                                                         <td className="px-3 py-2">
@@ -1381,8 +1709,16 @@ function PecahBonContent() {
                                                                 max={100}
                                                                 step="0.1"
                                                                 value={entry.moisturePercent}
-                                                                onChange={(e) => updateEntry(entry.id, 'moisturePercent', parseFloat(e.target.value) || 0)}
-                                                                className="h-9 text-xs w-full"
+                                                                onChange={(e) => {
+                                                                    const value = e.target.value;
+                                                                    const parsed = parseFloat(value);
+                                                                    updateEntry(
+                                                                        entry.id,
+                                                                        'moisturePercent',
+                                                                        value === '' || Number.isNaN(parsed) ? '' : parsed
+                                                                    );
+                                                                }}
+                                                                className="h-9 text-xs w-full text-right"
                                                             />
                                                         </td>
                                                     </tr>
@@ -1416,6 +1752,147 @@ function PecahBonContent() {
                             )}
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Pecah Bon Dialog */}
+            <Dialog open={editOpen} onOpenChange={setEditOpen}>
+                <DialogContent className="max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>Edit Pecah Bon</DialogTitle>
+                        <DialogDescription>
+                            Perbarui data LP dan berat. Jika berat dikurangi, sisa baku akan bertambah.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {editEntry && (
+                        <div className="space-y-4">
+                            <div className="grid gap-4 md:grid-cols-3">
+                                <div className="space-y-2">
+                                    <Label>Grade Bentuk</Label>
+                                    <Select
+                                        value={editValues.gradeId}
+                                        onValueChange={(value) => setEditValues((prev) => ({ ...prev, gradeId: value }))}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Pilih grade" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {shapeGrades.map((grade) => (
+                                                <SelectItem key={grade.id} value={grade.id}>
+                                                    {grade.code}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Grade Bulu</Label>
+                                    <Select
+                                        value={editValues.featherGradeId}
+                                        onValueChange={(value) =>
+                                            setEditValues((prev) => ({ ...prev, featherGradeId: value }))
+                                        }
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Pilih grade" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {featherGrades.map((grade) => (
+                                                <SelectItem key={grade.id} value={grade.id}>
+                                                    {grade.code}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Grade Warna</Label>
+                                    <Select
+                                        value={editValues.colorGradeId}
+                                        onValueChange={(value) =>
+                                            setEditValues((prev) => ({ ...prev, colorGradeId: value }))
+                                        }
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Pilih grade" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {colorGrades.map((grade) => (
+                                                <SelectItem key={grade.id} value={grade.id}>
+                                                    {grade.code}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-3">
+                                <div className="space-y-2">
+                                    <Label>Keping</Label>
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        step={1}
+                                        value={editValues.pieceCount}
+                                        onChange={(e) =>
+                                            setEditValues((prev) => ({ ...prev, pieceCount: e.target.value }))
+                                        }
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Berat (Gr)</Label>
+                                    <Input
+                                        type="number"
+                                        min={0.1}
+                                        step="0.01"
+                                        value={editValues.initialWeightGram}
+                                        onChange={(e) =>
+                                            setEditValues((prev) => ({ ...prev, initialWeightGram: e.target.value }))
+                                        }
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Kadar Air (%)</Label>
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        max={100}
+                                        step="0.1"
+                                        value={editValues.moisturePercent}
+                                        onChange={(e) =>
+                                            setEditValues((prev) => ({ ...prev, moisturePercent: e.target.value }))
+                                        }
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Kondisi Bulu</Label>
+                                <Input
+                                    value={editValues.featherCondition}
+                                    onChange={(e) =>
+                                        setEditValues((prev) => ({ ...prev, featherCondition: e.target.value }))
+                                    }
+                                />
+                            </div>
+
+                            <DialogFooter>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setEditOpen(false)}
+                                    disabled={editSaving}
+                                >
+                                    Batal
+                                </Button>
+                                <Button type="button" onClick={handleEditSave} disabled={editSaving}>
+                                    {editSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
+                                </Button>
+                            </DialogFooter>
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
 

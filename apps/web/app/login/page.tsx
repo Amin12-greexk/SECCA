@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { gsap } from 'gsap';
 import { useAuth } from '@/lib/auth/AuthContext';
 import LoadingCircle from '@/components/LoadingCircle';
@@ -11,6 +12,7 @@ export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [rememberMe, setRememberMe] = useState(true);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -49,7 +51,7 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            await login(email, password);
+            await login(email, password, rememberMe);
             // Redirect handled by AuthContext
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Login gagal';
@@ -60,18 +62,31 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-white px-4">
-            <div ref={formRef} className="w-full max-w-md">
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 relative overflow-hidden">
+            {/* Background decorations */}
+            <div className="absolute top-[-20%] right-[-10%] w-[400px] h-[400px] rounded-full bg-emerald-100/50 blur-3xl" />
+            <div className="absolute bottom-[-15%] left-[-10%] w-[400px] h-[400px] rounded-full bg-teal-100/40 blur-3xl" />
+
+            <div ref={formRef} className="relative z-10 w-full max-w-md">
+                {/* Logo */}
                 <div className="flex justify-center mb-8">
-                    <div className="text-2xl font-semibold text-green-600">SECCA</div>
+                    <div className="w-20 h-20 bg-white rounded-2xl shadow-lg shadow-emerald-500/10 flex items-center justify-center p-3 ring-1 ring-gray-100">
+                        <Image
+                            src="/Assets/Logo-secca.png"
+                            alt="Logo SECCA"
+                            width={64}
+                            height={64}
+                            className="w-full h-full object-contain"
+                        />
+                    </div>
                 </div>
 
                 {/* Login Card */}
-                <div className="bg-white rounded-xl shadow-lg p-8">
-                    <h1 className="text-2xl font-bold text-gray-900 mb-2 text-center">
+                <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/50 p-8 ring-1 ring-gray-100">
+                    <h1 className="text-2xl font-bold text-gray-900 mb-1 text-center">
                         Selamat Datang
                     </h1>
-                    <p className="text-gray-600 mb-6 text-center">
+                    <p className="text-gray-500 mb-6 text-center text-sm">
                         Silakan login untuk melanjutkan
                     </p>
 
@@ -86,7 +101,7 @@ export default function LoginPage() {
                                 id="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition"
+                                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition bg-gray-50/50"
                                 required
                                 disabled={loading}
                             />
@@ -103,14 +118,14 @@ export default function LoginPage() {
                                     id="password"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition pr-12"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition pr-12 bg-gray-50/50"
                                     required
                                     disabled={loading}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                                     disabled={loading}
                                 >
                                     {showPassword ? (
@@ -127,6 +142,22 @@ export default function LoginPage() {
                             </div>
                         </div>
 
+                        <div className="flex items-center justify-between text-sm text-gray-600">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={rememberMe}
+                                    onChange={(e) => setRememberMe(e.target.checked)}
+                                    disabled={loading}
+                                    className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                />
+                                Ingat saya
+                            </label>
+                            <a href="#" className="text-emerald-600 hover:text-emerald-700 font-medium">
+                                Lupa Password?
+                            </a>
+                        </div>
+
                         {/* Error Alert */}
                         {error && (
                             <Alert variant="error" dismissible onDismiss={() => setError(null)}>
@@ -138,7 +169,7 @@ export default function LoginPage() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-green-600 text-white font-medium py-3 px-6 rounded-lg hover:bg-green-700 focus:ring-4 focus:ring-green-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            className="w-full bg-emerald-600 text-white font-semibold py-3 px-6 rounded-xl hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
                         >
                             {loading ? (
                                 <>
@@ -150,17 +181,8 @@ export default function LoginPage() {
                             )}
                         </button>
                     </form>
-
-                    {/* Forgot Password Link */}
-                    <div className="mt-4 text-center">
-                        <a href="#" className="text-sm text-green-600 hover:text-green-700">
-                            Lupa Password?
-                        </a>
-                    </div>
                 </div>
             </div>
         </div>
     );
 }
-
-
