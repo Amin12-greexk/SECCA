@@ -134,9 +134,6 @@ export default function Home() {
 
           <div className="animate-content flex items-center gap-4 text-sm text-gray-500 bg-white/60 backdrop-blur-md p-4 rounded-xl border border-gray-100 inline-flex">
             <div className="flex -space-x-2">
-              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600 border-2 border-white">B</div>
-              <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-xs font-bold text-purple-600 border-2 border-white">M</div>
-              <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-xs font-bold text-orange-600 border-2 border-white">K</div>
             </div>
             <p>Akses untuk Baku, Manager, Mitra & Koreksi</p>
           </div>
