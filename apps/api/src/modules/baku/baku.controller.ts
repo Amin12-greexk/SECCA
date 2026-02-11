@@ -4,6 +4,7 @@ import { Roles } from "../../auth/roles.decorator";
 import { ReceiveRawBatchDto } from "./dto/receive-raw-batch.dto";
 import { CreatePecahBonDto } from "./dto/create-pecah-bon.dto";
 import { UpdatePecahBonDto } from "./dto/update-pecah-bon.dto";
+import { UpdateRawBatchDto } from "./dto/update-raw-batch.dto";
 import { BakuService } from "./baku.service";
 
 @ApiTags("Baku")
@@ -45,6 +46,12 @@ export class BakuController {
   @ApiParam({ name: "id" })
   updatePecahBonEntry(@Param("id") id: string, @Body() dto: UpdatePecahBonDto) {
     return this.bakuService.updatePecahBonEntry(id, dto);
+  }
+
+  @Patch("raw-batch/:id")
+  @ApiParam({ name: "id" })
+  updateRawBatch(@Param("id") id: string, @Body() dto: UpdateRawBatchDto) {
+    return this.bakuService.updateRawBatch(id, dto);
   }
 
   @Post("pecah-bon-entry/:id/printed")

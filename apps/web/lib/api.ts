@@ -34,6 +34,16 @@ export interface RawBatch {
     updatedAt: string;
 }
 
+export interface RawBatchUpdateRequest {
+    batchNumber?: string;
+    supplierId?: string;
+    featherCondition?: string;
+    invoiceWeightGram?: number;
+    wetWeightGram?: number;
+    moisturePercent?: number;
+    notes?: string;
+}
+
 export interface RackLocation {
     id: string;
     code: string;
@@ -521,6 +531,32 @@ export async function getRawBatchByCardId(cardId: string): Promise<RawBatch> {
         return unwrap<RawBatch>(json);
     } catch (error) {
         console.error('Error fetching raw batch:', error);
+        throw error;
+    }
+}
+
+export async function updateRawBatch(rawBatchId: string, data: RawBatchUpdateRequest): Promise<RawBatch> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/baku/raw-batch/${rawBatchId}`, {
+            method: 'PATCH',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const rawMessage = typeof errorData.message === 'string'
+                ? errorData.message
+                : Array.isArray(errorData.message)
+                    ? errorData.message.join(' ')
+                    : '';
+            throw new Error(rawMessage || `Gagal memperbarui batch: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<RawBatch>(json);
+    } catch (error) {
+        console.error('Error updating raw batch:', error);
         throw error;
     }
 }

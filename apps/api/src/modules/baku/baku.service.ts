@@ -5,6 +5,7 @@ import { badRequest, conflict, notFound } from "../../common/errors";
 import { ReceiveRawBatchDto } from "./dto/receive-raw-batch.dto";
 import { CreatePecahBonDto } from "./dto/create-pecah-bon.dto";
 import { UpdatePecahBonDto } from "./dto/update-pecah-bon.dto";
+import { UpdateRawBatchDto } from "./dto/update-raw-batch.dto";
 import { NumberingService } from "../../common/numbering/numbering.service";
 import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
 import { LOCATION_CODES } from "../../common/constants";
@@ -599,6 +600,83 @@ export class BakuService {
       });
 
       return updatedEntry;
+    });
+  }
+
+  async updateRawBatch(rawBatchId: string, dto: UpdateRawBatchDto) {
+    const rawBatch = await this.prisma.rawBatch.findUnique({
+      where: { id: rawBatchId },
+    });
+
+    if (!rawBatch) {
+      return notFound("Raw batch not found", { rawBatchId });
+    }
+
+    if (dto.supplierId) {
+      const supplier = await this.prisma.supplier.findUnique({
+        where: { id: dto.supplierId },
+      });
+      if (!supplier) {
+        return notFound("Supplier not found", { supplierId: dto.supplierId });
+      }
+    }
+
+    if (dto.batchNumber && dto.batchNumber !== rawBatch.batchNumber) {
+      const existing = await this.prisma.rawBatch.findUnique({
+        where: { batchNumber: dto.batchNumber },
+        select: { id: true },
+      });
+      if (existing) {
+        return conflict("Batch number already exists", {
+          batchNumber: dto.batchNumber,
+        });
+      }
+    }
+
+    const wantsWeightChange =
+      dto.invoiceWeightGram !== undefined ||
+      dto.wetWeightGram !== undefined ||
+      dto.moisturePercent !== undefined;
+
+    if (wantsWeightChange) {
+      const [pecahBonCount, gradeStockCount] = await Promise.all([
+        this.prisma.pecahBonEntry.count({ where: { rawBatchId } }),
+        this.prisma.rawBatchGradeStock.count({ where: { rawBatchId } }),
+      ]);
+
+      if (pecahBonCount > 0 || gradeStockCount > 0) {
+        return badRequest(
+          "Berat atau kadar air tidak bisa diubah karena batch sudah dipakai.",
+          { rawBatchId, pecahBonCount, gradeStockCount },
+        );
+      }
+    }
+
+    const data: Prisma.RawBatchUpdateInput = {};
+    if (dto.batchNumber !== undefined) data.batchNumber = dto.batchNumber;
+    if (dto.supplierId !== undefined) {
+      data.supplier = { connect: { id: dto.supplierId } };
+    }
+    if (dto.featherCondition !== undefined)
+      data.featherCondition = dto.featherCondition;
+    if (dto.invoiceWeightGram !== undefined) {
+      data.invoiceWeightGram = this.roundToTwoDecimals(dto.invoiceWeightGram);
+    }
+    if (dto.wetWeightGram !== undefined) {
+      data.wetWeightGram = this.roundToTwoDecimals(dto.wetWeightGram);
+    }
+    if (dto.moisturePercent !== undefined) {
+      data.moisturePercent = this.roundToTwoDecimals(dto.moisturePercent);
+    }
+    if (dto.notes !== undefined) {
+      const trimmed = dto.notes.trim();
+      data.notes = trimmed === "" ? null : trimmed;
+    }
+
+    return this.prisma.rawBatch.update({
+      where: { id: rawBatchId },
+      data,
+      include: { supplier: true },
     });
   }
 

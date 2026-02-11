@@ -19,6 +19,7 @@ const roles_decorator_1 = require("../../auth/roles.decorator");
 const receive_raw_batch_dto_1 = require("./dto/receive-raw-batch.dto");
 const create_pecah_bon_dto_1 = require("./dto/create-pecah-bon.dto");
 const update_pecah_bon_dto_1 = require("./dto/update-pecah-bon.dto");
+const update_raw_batch_dto_1 = require("./dto/update-raw-batch.dto");
 const baku_service_1 = require("./baku.service");
 let BakuController = class BakuController {
     bakuService;
@@ -42,6 +43,9 @@ let BakuController = class BakuController {
     }
     updatePecahBonEntry(id, dto) {
         return this.bakuService.updatePecahBonEntry(id, dto);
+    }
+    updateRawBatch(id, dto) {
+        return this.bakuService.updateRawBatch(id, dto);
     }
     markPecahBonPrinted(id) {
         return this.bakuService.markPecahBonPrinted(id);
@@ -98,6 +102,15 @@ __decorate([
     __metadata("design:paramtypes", [String, update_pecah_bon_dto_1.UpdatePecahBonDto]),
     __metadata("design:returntype", void 0)
 ], BakuController.prototype, "updatePecahBonEntry", null);
+__decorate([
+    (0, common_1.Patch)("raw-batch/:id"),
+    (0, swagger_1.ApiParam)({ name: "id" }),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, update_raw_batch_dto_1.UpdateRawBatchDto]),
+    __metadata("design:returntype", void 0)
+], BakuController.prototype, "updateRawBatch", null);
 __decorate([
     (0, common_1.Post)("pecah-bon-entry/:id/printed"),
     (0, swagger_1.ApiParam)({ name: "id" }),

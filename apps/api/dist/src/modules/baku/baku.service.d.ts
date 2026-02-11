@@ -2,6 +2,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { ReceiveRawBatchDto } from "./dto/receive-raw-batch.dto";
 import { CreatePecahBonDto } from "./dto/create-pecah-bon.dto";
 import { UpdatePecahBonDto } from "./dto/update-pecah-bon.dto";
+import { UpdateRawBatchDto } from "./dto/update-raw-batch.dto";
 import { NumberingService } from "../../common/numbering/numbering.service";
 import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
 export declare class BakuService {
@@ -175,6 +176,28 @@ export declare class BakuService {
         pecahBonId: string | null;
         rawBatchId: string;
         dryWeightGram: number;
+    }>;
+    updateRawBatch(rawBatchId: string, dto: UpdateRawBatchDto): Promise<{
+        supplier: {
+            id: string;
+            name: string;
+            createdAt: Date;
+            updatedAt: Date;
+            code: string | null;
+            phone: string | null;
+        };
+    } & {
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        supplierId: string;
+        featherCondition: string;
+        invoiceWeightGram: number;
+        wetWeightGram: number;
+        moisturePercent: number;
+        notes: string | null;
+        batchNumber: string;
+        cardId: string;
     }>;
     getPecahBonEntries(rawBatchId: string): Promise<({
         grade: {

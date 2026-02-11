@@ -223,7 +223,7 @@ function TerimaBakuContent() {
 
                             <div className="space-y-4">
                                 <div className="space-y-2">
-                                    <Label>Berat Kedatangan (gram)</Label>
+                                    <Label>Berat Timbang Ulang</Label>
                                     <Input
                                         type="number"
                                         min={0.1}

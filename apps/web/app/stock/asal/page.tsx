@@ -1,9 +1,19 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Package, Printer, RefreshCw } from 'lucide-react';
+import { Loader2, Package, Pencil, Printer, RefreshCw } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import {
     Dialog,
     DialogContent,
@@ -13,15 +23,29 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/lib/toast';
-import { getRawBatchByCardId, getRawBatches, type RawBatch } from '@/lib/api';
+import { getRawBatchByCardId, getRawBatches, getSuppliers, updateRawBatch, type RawBatch, type Supplier } from '@/lib/api';
 import BatchCard from '@/components/print/BatchCard';
 
 export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
     const toast = useToast();
     const [rawBatches, setRawBatches] = useState<RawBatch[]>([]);
+    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+    const [supplierLoadError, setSupplierLoadError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [printBatch, setPrintBatch] = useState<RawBatch | null>(null);
     const [printOpen, setPrintOpen] = useState(false);
+    const [editBatch, setEditBatch] = useState<RawBatch | null>(null);
+    const [editOpen, setEditOpen] = useState(false);
+    const [editSaving, setEditSaving] = useState(false);
+    const [editValues, setEditValues] = useState({
+        batchNumber: '',
+        supplierId: '',
+        featherCondition: '',
+        invoiceWeightGram: '',
+        wetWeightGram: '',
+        moisturePercent: '',
+        notes: '',
+    });
     const [scanLoading, setScanLoading] = useState(false);
     const scanBufferRef = useRef('');
     const scanLastAtRef = useRef(0);
@@ -94,16 +118,7 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
             },
             {
                 type: 'qrCode',
-                value: JSON.stringify({
-                    type: 'RAW_BATCH',
-                    batchNumber: batch.batchNumber,
-                    cardId: batch.cardId ?? null,
-                    supplier: batch.supplier ?? null,
-                    wetWeightGram: displayWeightGram,
-                    remainingWetWeightGram: batch.wetWeightGram,
-                    moisturePercent: batch.moisturePercent,
-                    notes: batch.notes ?? null,
-                }),
+                value: batch.cardId ?? batch.batchNumber,
                 width: 80,
                 height: 80,
                 sectionStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1mm 0' },
@@ -219,9 +234,116 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    useEffect(() => {
+        async function loadSuppliers() {
+            try {
+                const supplierData = await getSuppliers();
+                setSuppliers(supplierData);
+            } catch (error) {
+                console.error('Failed to load suppliers:', error);
+                setSupplierLoadError('Gagal memuat daftar supplier.');
+            }
+        }
+
+        loadSuppliers();
+    }, []);
+
     const openPrintDialog = (batch: RawBatch) => {
         setPrintBatch(batch);
         setPrintOpen(true);
+    };
+
+    const openEditDialog = (batch: RawBatch) => {
+        setEditBatch(batch);
+        setEditValues({
+            batchNumber: batch.batchNumber ?? '',
+            supplierId: batch.supplier?.id ?? batch.supplierId ?? '',
+            featherCondition: batch.featherCondition ?? '',
+            invoiceWeightGram: batch.invoiceWeightGram?.toString() ?? '',
+            wetWeightGram: batch.wetWeightGram?.toString() ?? '',
+            moisturePercent: batch.moisturePercent?.toString() ?? '',
+            notes: batch.notes ?? '',
+        });
+        setEditOpen(true);
+    };
+
+    const handleEditSave = async () => {
+        if (!editBatch) return;
+
+        const trimmedBatch = editValues.batchNumber.trim();
+        const trimmedCondition = editValues.featherCondition.trim();
+        const trimmedNotes = editValues.notes.trim();
+
+        const originalWeight = editBatch.originalWetWeightGram ?? editBatch.wetWeightGram;
+        const usedWeight = originalWeight - editBatch.wetWeightGram;
+        const weightLocked = usedWeight > 0.0001;
+
+        const payload: {
+            batchNumber?: string;
+            supplierId?: string;
+            featherCondition?: string;
+            invoiceWeightGram?: number;
+            wetWeightGram?: number;
+            moisturePercent?: number;
+            notes?: string;
+        } = {};
+
+        if (trimmedBatch && trimmedBatch !== editBatch.batchNumber) {
+            payload.batchNumber = trimmedBatch;
+        }
+
+        if (editValues.supplierId && editValues.supplierId !== editBatch.supplierId) {
+            payload.supplierId = editValues.supplierId;
+        }
+
+        if (trimmedCondition && trimmedCondition !== editBatch.featherCondition) {
+            payload.featherCondition = trimmedCondition;
+        }
+
+        if (!weightLocked) {
+            const invoice = Number(editValues.invoiceWeightGram);
+            const wet = Number(editValues.wetWeightGram);
+            const moisture = Number(editValues.moisturePercent);
+
+            if (!Number.isFinite(invoice) || invoice <= 0) {
+                toast.error('Berat nota wajib diisi (lebih dari 0).');
+                return;
+            }
+            if (!Number.isFinite(wet) || wet <= 0) {
+                toast.error('Berat kedatangan wajib diisi (lebih dari 0).');
+                return;
+            }
+            if (!Number.isFinite(moisture) || moisture < 0 || moisture > 100) {
+                toast.error('Kadar air wajib diisi (0 - 100).');
+                return;
+            }
+
+            if (invoice !== editBatch.invoiceWeightGram) payload.invoiceWeightGram = invoice;
+            if (wet !== editBatch.wetWeightGram) payload.wetWeightGram = wet;
+            if (moisture !== editBatch.moisturePercent) payload.moisturePercent = moisture;
+        }
+
+        if (trimmedNotes !== (editBatch.notes ?? '')) {
+            payload.notes = trimmedNotes;
+        }
+
+        if (Object.keys(payload).length === 0) {
+            setEditOpen(false);
+            return;
+        }
+
+        setEditSaving(true);
+        try {
+            await updateRawBatch(editBatch.id, payload);
+            toast.success('Data batch berhasil diperbarui.');
+            setEditOpen(false);
+            await loadData();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Gagal memperbarui batch.';
+            toast.error(message);
+        } finally {
+            setEditSaving(false);
+        }
     };
 
     const handleScanOpen = async (value: string) => {
@@ -312,6 +434,12 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
 
     const getDisplayWeight = (batch: RawBatch) =>
         batch.originalWetWeightGram ?? batch.wetWeightGram;
+
+    const editOriginalWeight = editBatch
+        ? editBatch.originalWetWeightGram ?? editBatch.wetWeightGram
+        : 0;
+    const editUsedWeight = editBatch ? editOriginalWeight - editBatch.wetWeightGram : 0;
+    const editWeightLocked = editBatch ? editUsedWeight > 0.0001 : false;
 
     if (loading) {
         return (
@@ -413,14 +541,24 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
                                                 {formatDate(batch.createdAt)}
                                             </td>
                                             <td className="px-4 py-3 text-center">
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => openPrintDialog(batch)}
-                                                >
-                                                    <Printer className="h-4 w-4" />
-                                                    Cetak
-                                                </Button>
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => openPrintDialog(batch)}
+                                                    >
+                                                        <Printer className="h-4 w-4" />
+                                                        Cetak
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => openEditDialog(batch)}
+                                                    >
+                                                        <Pencil className="h-4 w-4" />
+                                                        Edit
+                                                    </Button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -488,6 +626,144 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
                                     </Button>
                                 </DialogFooter>
                             </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Dialog */}
+            <Dialog open={editOpen} onOpenChange={setEditOpen}>
+                <DialogContent className="max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>Edit Stock Asal</DialogTitle>
+                        <DialogDescription>
+                            Perbaiki data batch jika ada kesalahan input.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {editBatch && (
+                        <div className="space-y-4">
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label>Batch Number</Label>
+                                    <Input
+                                        value={editValues.batchNumber}
+                                        onChange={(e) =>
+                                            setEditValues((prev) => ({ ...prev, batchNumber: e.target.value }))
+                                        }
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Supplier</Label>
+                                    {supplierLoadError ? (
+                                        <Input
+                                            value={editValues.supplierId}
+                                            onChange={(e) =>
+                                                setEditValues((prev) => ({ ...prev, supplierId: e.target.value }))
+                                            }
+                                        />
+                                    ) : (
+                                        <Select
+                                            value={editValues.supplierId}
+                                            onValueChange={(value) =>
+                                                setEditValues((prev) => ({ ...prev, supplierId: value }))
+                                            }
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Pilih supplier" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {suppliers.map((supplier) => (
+                                                    <SelectItem key={supplier.id} value={supplier.id}>
+                                                        {supplier.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                    {supplierLoadError && (
+                                        <p className="text-xs text-amber-600">{supplierLoadError}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Kondisi Baku</Label>
+                                <Input
+                                    value={editValues.featherCondition}
+                                    onChange={(e) =>
+                                        setEditValues((prev) => ({ ...prev, featherCondition: e.target.value }))
+                                    }
+                                />
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-3">
+                                <div className="space-y-2">
+                                    <Label>Berat Nota (gr)</Label>
+                                    <Input
+                                        type="number"
+                                        min={0.1}
+                                        step="0.01"
+                                        value={editValues.invoiceWeightGram}
+                                        onChange={(e) =>
+                                            setEditValues((prev) => ({ ...prev, invoiceWeightGram: e.target.value }))
+                                        }
+                                        disabled={editWeightLocked}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Berat Kedatangan (gr)</Label>
+                                    <Input
+                                        type="number"
+                                        min={0.1}
+                                        step="0.01"
+                                        value={editValues.wetWeightGram}
+                                        onChange={(e) =>
+                                            setEditValues((prev) => ({ ...prev, wetWeightGram: e.target.value }))
+                                        }
+                                        disabled={editWeightLocked}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Kadar Air (%)</Label>
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        max={100}
+                                        step="0.1"
+                                        value={editValues.moisturePercent}
+                                        onChange={(e) =>
+                                            setEditValues((prev) => ({ ...prev, moisturePercent: e.target.value }))
+                                        }
+                                        disabled={editWeightLocked}
+                                    />
+                                </div>
+                            </div>
+
+                            {editWeightLocked && (
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                                    Berat/kadar air tidak bisa diubah karena batch sudah dipakai untuk pecah bon.
+                                </div>
+                            )}
+
+                            <div className="space-y-2">
+                                <Label>Catatan</Label>
+                                <Textarea
+                                    value={editValues.notes}
+                                    onChange={(e) =>
+                                        setEditValues((prev) => ({ ...prev, notes: e.target.value }))
+                                    }
+                                />
+                            </div>
+
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving}>
+                                    Batal
+                                </Button>
+                                <Button onClick={handleEditSave} disabled={editSaving}>
+                                    {editSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
+                                </Button>
+                            </DialogFooter>
                         </div>
                     )}
                 </DialogContent>

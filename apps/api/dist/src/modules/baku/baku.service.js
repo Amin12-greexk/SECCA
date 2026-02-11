@@ -516,6 +516,71 @@ let BakuService = BakuService_1 = class BakuService {
             return updatedEntry;
         });
     }
+    async updateRawBatch(rawBatchId, dto) {
+        const rawBatch = await this.prisma.rawBatch.findUnique({
+            where: { id: rawBatchId },
+        });
+        if (!rawBatch) {
+            return (0, errors_1.notFound)("Raw batch not found", { rawBatchId });
+        }
+        if (dto.supplierId) {
+            const supplier = await this.prisma.supplier.findUnique({
+                where: { id: dto.supplierId },
+            });
+            if (!supplier) {
+                return (0, errors_1.notFound)("Supplier not found", { supplierId: dto.supplierId });
+            }
+        }
+        if (dto.batchNumber && dto.batchNumber !== rawBatch.batchNumber) {
+            const existing = await this.prisma.rawBatch.findUnique({
+                where: { batchNumber: dto.batchNumber },
+                select: { id: true },
+            });
+            if (existing) {
+                return (0, errors_1.conflict)("Batch number already exists", {
+                    batchNumber: dto.batchNumber,
+                });
+            }
+        }
+        const wantsWeightChange = dto.invoiceWeightGram !== undefined ||
+            dto.wetWeightGram !== undefined ||
+            dto.moisturePercent !== undefined;
+        if (wantsWeightChange) {
+            const [pecahBonCount, gradeStockCount] = await Promise.all([
+                this.prisma.pecahBonEntry.count({ where: { rawBatchId } }),
+                this.prisma.rawBatchGradeStock.count({ where: { rawBatchId } }),
+            ]);
+            if (pecahBonCount > 0 || gradeStockCount > 0) {
+                return (0, errors_1.badRequest)("Berat atau kadar air tidak bisa diubah karena batch sudah dipakai.", { rawBatchId, pecahBonCount, gradeStockCount });
+            }
+        }
+        const data = {};
+        if (dto.batchNumber !== undefined)
+            data.batchNumber = dto.batchNumber;
+        if (dto.supplierId !== undefined) {
+            data.supplier = { connect: { id: dto.supplierId } };
+        }
+        if (dto.featherCondition !== undefined)
+            data.featherCondition = dto.featherCondition;
+        if (dto.invoiceWeightGram !== undefined) {
+            data.invoiceWeightGram = this.roundToTwoDecimals(dto.invoiceWeightGram);
+        }
+        if (dto.wetWeightGram !== undefined) {
+            data.wetWeightGram = this.roundToTwoDecimals(dto.wetWeightGram);
+        }
+        if (dto.moisturePercent !== undefined) {
+            data.moisturePercent = this.roundToTwoDecimals(dto.moisturePercent);
+        }
+        if (dto.notes !== undefined) {
+            const trimmed = dto.notes.trim();
+            data.notes = trimmed === "" ? null : trimmed;
+        }
+        return this.prisma.rawBatch.update({
+            where: { id: rawBatchId },
+            data,
+            include: { supplier: true },
+        });
+    }
     async getPecahBonEntries(rawBatchId) {
         const entries = await this.prisma.pecahBonEntry.findMany({
             where: { rawBatchId },

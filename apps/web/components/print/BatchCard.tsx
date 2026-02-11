@@ -38,24 +38,9 @@ const formatNumber = (value: number, fractionDigits = 2) =>
     maximumFractionDigits: fractionDigits,
   }).format(value);
 
-const toIsoString = (value?: string | Date) => {
-  if (!value) return null;
-  return typeof value === "string" ? value : value.toISOString();
-};
-
 const BatchCard = React.forwardRef<HTMLDivElement, BatchCardProps>(({ batch }, ref) => {
   const displayWeightGram = batch.originalWetWeightGram ?? batch.wetWeightGram;
-  const qrPayload = JSON.stringify({
-    type: "RAW_BATCH",
-    batchNumber: batch.batchNumber,
-    cardId: batch.cardId ?? null,
-    supplier: batch.supplier ?? null,
-    wetWeightGram: displayWeightGram,
-    remainingWetWeightGram: batch.wetWeightGram,
-    moisturePercent: batch.moisturePercent,
-    notes: batch.notes ?? null,
-    updatedAt: toIsoString(batch.updatedAt),
-  });
+  const qrPayload = batch.cardId ?? batch.batchNumber;
 
   return (
       <>

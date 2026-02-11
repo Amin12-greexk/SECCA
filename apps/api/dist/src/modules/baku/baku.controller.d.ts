@@ -1,6 +1,7 @@
 import { ReceiveRawBatchDto } from "./dto/receive-raw-batch.dto";
 import { CreatePecahBonDto } from "./dto/create-pecah-bon.dto";
 import { UpdatePecahBonDto } from "./dto/update-pecah-bon.dto";
+import { UpdateRawBatchDto } from "./dto/update-raw-batch.dto";
 import { BakuService } from "./baku.service";
 export declare class BakuController {
     private readonly bakuService;
@@ -224,6 +225,28 @@ export declare class BakuController {
         pecahBonId: string | null;
         rawBatchId: string;
         dryWeightGram: number;
+    }>;
+    updateRawBatch(id: string, dto: UpdateRawBatchDto): Promise<{
+        supplier: {
+            id: string;
+            name: string;
+            createdAt: Date;
+            updatedAt: Date;
+            code: string | null;
+            phone: string | null;
+        };
+    } & {
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        supplierId: string;
+        featherCondition: string;
+        invoiceWeightGram: number;
+        wetWeightGram: number;
+        moisturePercent: number;
+        notes: string | null;
+        batchNumber: string;
+        cardId: string;
     }>;
     markPecahBonPrinted(id: string): Promise<{
         id: string;
