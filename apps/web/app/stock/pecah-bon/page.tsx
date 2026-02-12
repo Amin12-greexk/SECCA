@@ -269,6 +269,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
 
     const buildPecahBonPrintData = (batch: BatchWithEntries, entry: PecahBonEntry) => {
         const dateStr = formatDate(entry.pecahBonDate);
+        const gradeDisplay = `${entry.grade?.code ?? '-'} / ${entry.featherGrade?.code ?? '-'} / ${entry.colorGrade?.code ?? '-'}`;
         return [
             {
                 type: 'text',
@@ -296,6 +297,9 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                         <div style="display:flex;justify-content:space-between;">
                             <span style="font-weight:bold;">Tgl Pecah</span><span>${dateStr}</span>
                         </div>
+                        <div style="display:flex;justify-content:space-between;margin-top:0.5mm;">
+                            <span style="font-weight:bold;">Grade</span><span>${gradeDisplay}</span>
+                        </div>
                     </div>
                 `,
             },
@@ -319,7 +323,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
 
     const buildSetoranPrintData = (batch: BatchWithEntries, entry: PecahBonEntry) => {
         const dateStr = formatDate(entry.pecahBonDate);
-        const gradeCode = entry.grade?.code ?? '-';
+        const gradeCode = `${entry.grade?.code ?? '-'} / ${entry.featherGrade?.code ?? '-'} / ${entry.colorGrade?.code ?? '-'}`;
         const pieceCount = entry.pieceCount;
         const wetWeight = formatNumber(entry.initialWeightGram, 2);
         const moisture = formatNumber(entry.moisturePercent, 1);
@@ -372,7 +376,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                             <tr>
                                 <td style="border:1px solid #000;padding:0.2mm;font-size:8pt;">BERAT KERING</td>
                                 <td style="border:1px solid #000;padding:0.2mm;text-align:center;">${pieceCount}</td>
-                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;">100</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;">&nbsp;</td>
                             </tr>
                         </table>
                     </div>
@@ -1914,7 +1918,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                         pecahBonId: printContext.entry.pecahBonId ?? '-',
                                         batchNumber: printContext.batch.batchNumber,
                                         pecahBonDate: printContext.entry.pecahBonDate,
-                                        gradeCode: printContext.entry.grade?.code,
+                                        gradeCode: `${printContext.entry.grade?.code ?? '-'} / ${printContext.entry.featherGrade?.code ?? '-'} / ${printContext.entry.colorGrade?.code ?? '-'}`,
                                         featherCondition: printContext.entry.featherCondition,
                                         pieceCount: printContext.entry.pieceCount,
                                         initialWeightGram: printContext.entry.initialWeightGram,
@@ -1938,7 +1942,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                     <div className="mt-2 flex items-center justify-between">
                                         <span className="text-gray-500">Grade</span>
                                         <span className="font-semibold">
-                                            {printContext.entry.grade?.code ?? '-'}
+                                            {`${printContext.entry.grade?.code ?? '-'} / ${printContext.entry.featherGrade?.code ?? '-'} / ${printContext.entry.colorGrade?.code ?? '-'}`}
                                         </span>
                                     </div>
                                     <div className="mt-2 flex items-center justify-between">
@@ -2013,7 +2017,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                     <div className="mt-2 flex items-center justify-between">
                                         <span className="text-gray-500">Grade</span>
                                         <span className="font-semibold">
-                                            {setoranContext.entry.grade?.code ?? '-'}
+                                            {`${setoranContext.entry.grade?.code ?? '-'} / ${setoranContext.entry.featherGrade?.code ?? '-'} / ${setoranContext.entry.colorGrade?.code ?? '-'}`}
                                         </span>
                                     </div>
                                     <div className="mt-2 flex items-center justify-between">
