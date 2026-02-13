@@ -26,7 +26,7 @@ function DashboardContent() {
             case 'mitra':
                 return 'Kelola data mitra dan supplier';
             case 'koreksi':
-                return 'Lakukan koreksi data dengan akurat';
+                return 'Data koreksi sementara hanya menampilkan detail lp (ttd AMIN)';
             case 'manager':
                 return 'Pantau seluruh operasional sistem';
             default:

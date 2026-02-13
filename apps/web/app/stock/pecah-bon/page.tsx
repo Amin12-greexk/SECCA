@@ -368,15 +368,14 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                     <div style="margin:0.5mm auto;width:100%;max-width:72mm;">
                         <table style="width:100%;border-collapse:collapse;font-size:7pt;font-weight:600;border:1px solid #000;">
                             <tr style="background:#ddd;">
-                                <td style="border:1px solid #000;padding:0.2mm;width:45%;"></td>
+                                <td style="border:1px solid #000;padding:0.2mm;width:50%;"></td>
                                 <td style="border:1px solid #000;padding:0.2mm;text-align:center;width:15%;">BIJI</td>
-                                
-                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;width:15%;">%</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;width:35%;">GRAM</td>
                             </tr>
                             <tr>
                                 <td style="border:1px solid #000;padding:0.2mm;font-size:8pt;">BERAT KERING</td>
                                 <td style="border:1px solid #000;padding:0.2mm;text-align:center;">${pieceCount}</td>
-                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;">&nbsp;</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;">${dryWeight}</td>
                             </tr>
                         </table>
                     </div>
@@ -1390,7 +1389,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                                                                 <th className="px-3 py-2 text-center text-xs font-medium text-green-700">Keping</th>
                                                                                 <th className="px-3 py-2 text-right text-xs font-medium text-green-700">Berat Awal</th>
                                                                                 <th className="px-3 py-2 text-right text-xs font-medium text-green-700">Kadar Air</th>
-                                                                                
+                                                                                <th className="px-3 py-2 text-right text-xs font-medium text-green-700">Berat Kering</th>
                                                                                 <th className="px-3 py-2 text-center text-xs font-medium text-green-700">Aksi</th>
                                                                             </tr>
                                                                         </thead>
@@ -1416,7 +1415,10 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                                                                     <td className="px-3 py-2 text-center font-mono">{entry.pieceCount}</td>
                                                                                     <td className="px-3 py-2 text-right font-mono text-gray-900">{formatNumber(entry.initialWeightGram)}</td>
                                                                                     <td className="px-3 py-2 text-right font-mono text-gray-900">{formatNumber(entry.moisturePercent, 1)}%</td>
-                            
+                                                                                    <td className="px-3 py-2 text-right font-mono font-semibold text-green-700">
+                                                                                        {formatNumber(entry.dryWeightGram)}
+                                                                                    </td>
+
                                                                                     <td className="px-3 py-2 text-center">
                                                                                         <div className="flex items-center justify-center gap-1">
                                                                                             <Button

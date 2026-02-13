@@ -183,6 +183,13 @@ export interface CreateUserRequest {
     role: string;
 }
 
+export interface UpdateUserRequest {
+    name?: string;
+    email?: string;
+    role?: string;
+    password?: string;
+}
+
 type ApiResponse<T> = {
     data: T;
     meta?: { timestamp: string };
@@ -305,6 +312,27 @@ export async function createUser(data: CreateUserRequest): Promise<User> {
         return unwrap<User>(json);
     } catch (error) {
         console.error('Error creating user:', error);
+        throw error;
+    }
+}
+
+export async function updateUser(userId: string, data: UpdateUserRequest): Promise<User> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
+            method: 'PATCH',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to update user: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<User>(json);
+    } catch (error) {
+        console.error('Error updating user:', error);
         throw error;
     }
 }
@@ -689,12 +717,17 @@ export async function getPecahBonEntries(rawBatchId: string): Promise<PecahBonEn
 
 export async function getPecahBonById(pecahBonId: string): Promise<PecahBonEntry> {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/baku/pecah-bon/${encodeURIComponent(pecahBonId)}`, {
+        const safeId = encodeURIComponent(pecahBonId.trim());
+        const response = await fetch(`${API_BASE_URL}/api/baku/pecah-bon/${safeId}`, {
             headers: getAuthHeaders({ json: false }),
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to fetch pecah bon: ${response.statusText}`);
+            if (response.status === 404) {
+                throw new Error('LP tidak ditemukan.');
+            }
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Gagal memuat pecah bon: ${response.statusText}`);
         }
 
         const json = await response.json();

@@ -45,13 +45,14 @@ function Header() {
 
           {/* Logo */}
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center p-1">
+            <div className="w-9 h-9 flex items-center justify-center">
               <Image
                 src="/Assets/Logo-secca.png"
                 alt="SECCA"
-                width={28}
-                height={28}
-                className="w-7 h-7 object-contain"
+                width={36}
+                height={36}
+                className="h-9 w-9 object-contain"
+                priority
               />
             </div>
             <span className="text-xl font-bold tracking-tight">SECCA</span>

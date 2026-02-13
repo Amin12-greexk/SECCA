@@ -3,11 +3,19 @@
 import { useEffect, useState } from 'react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/lib/toast';
-import { createUser, getUsers, type User } from '@/lib/api';
+import { createUser, getUsers, updateUser, type User } from '@/lib/api';
 
 type RoleOption = 'baku' | 'mitra' | 'koreksi' | 'manager';
 
@@ -16,7 +24,16 @@ function UsersContent() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editUser, setEditUser] = useState<User | null>(null);
   const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: '' as RoleOption | '',
+  });
+  const [editForm, setEditForm] = useState({
     name: '',
     email: '',
     password: '',
@@ -61,6 +78,44 @@ function UsersContent() {
       toast.error(error instanceof Error ? error.message : 'Gagal membuat akun.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openEdit = (user: User) => {
+    setEditUser(user);
+    setEditForm({
+      name: user.name ?? '',
+      email: user.email ?? '',
+      password: '',
+      role: (user.role as RoleOption) ?? '',
+    });
+    setEditOpen(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!editUser) return;
+
+    if (!editForm.name.trim() || !editForm.email.trim() || !editForm.role) {
+      toast.error('Lengkapi nama, email, dan role.');
+      return;
+    }
+
+    setEditSaving(true);
+    try {
+      await updateUser(editUser.id, {
+        name: editForm.name.trim(),
+        email: editForm.email.trim(),
+        role: editForm.role,
+        password: editForm.password ? editForm.password : undefined,
+      });
+      toast.success('Akun berhasil diperbarui.');
+      setEditOpen(false);
+      setEditUser(null);
+      await loadUsers();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Gagal memperbarui akun.');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -138,18 +193,19 @@ function UsersContent() {
                     <th className="py-2">Nama</th>
                     <th className="py-2">Email</th>
                     <th className="py-2">Role</th>
+                    <th className="py-2 text-right">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {loading ? (
                     <tr>
-                      <td colSpan={3} className="py-6 text-center text-gray-500">
+                      <td colSpan={4} className="py-6 text-center text-gray-500">
                         Memuat data...
                       </td>
                     </tr>
                   ) : users.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="py-6 text-center text-gray-500">
+                      <td colSpan={4} className="py-6 text-center text-gray-500">
                         Belum ada akun.
                       </td>
                     </tr>
@@ -159,6 +215,11 @@ function UsersContent() {
                         <td className="py-2 font-medium">{user.name}</td>
                         <td className="py-2">{user.email}</td>
                         <td className="py-2 capitalize">{user.role}</td>
+                        <td className="py-2 text-right">
+                          <Button variant="outline" size="sm" onClick={() => openEdit(user)}>
+                            Edit
+                          </Button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -168,6 +229,65 @@ function UsersContent() {
           </div>
         </div>
       </div>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Akun</DialogTitle>
+            <DialogDescription>Perbarui data akun dan role pengguna.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Nama</Label>
+              <Input
+                value={editForm.name}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, name: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={editForm.email}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, email: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Password (opsional)</Label>
+              <Input
+                type="password"
+                value={editForm.password}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, password: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select
+                value={editForm.role}
+                onValueChange={(value) => setEditForm((prev) => ({ ...prev, role: value as RoleOption }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="baku">Baku</SelectItem>
+                  <SelectItem value="mitra">Mitra</SelectItem>
+                  <SelectItem value="koreksi">Koreksi</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>
+              Batal
+            </Button>
+            <Button onClick={handleEditSave} disabled={editSaving}>
+              {editSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
