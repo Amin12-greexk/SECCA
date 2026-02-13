@@ -1,12 +1,12 @@
-import { Body, Controller, Post } from "@nestjs/common";
-import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
+import { ApiBearerAuth, ApiParam, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../auth/roles.decorator";
 import { CreateWorkOrderDto } from "./dto/create-work-order.dto";
 import { WorkOrdersService } from "./work-orders.service";
 
 @ApiTags("work-orders")
 @ApiBearerAuth()
-@Roles("manager", "baku", "mitra", "koreksi")
+@Roles("manager", "baku", "mitra", "koreksi", "trainer")
 @Controller("work-orders")
 export class WorkOrdersController {
   constructor(private readonly workOrdersService: WorkOrdersService) {}
@@ -14,5 +14,17 @@ export class WorkOrdersController {
   @Post()
   create(@Body() dto: CreateWorkOrderDto) {
     return this.workOrdersService.create(dto);
+  }
+
+  @Get("board")
+  board(@Query("workerId") workerId: string) {
+    return this.workOrdersService.board(workerId);
+  }
+
+  @Post(":id/close")
+  @ApiParam({ name: "id" })
+  @Roles("manager", "baku", "koreksi")
+  close(@Param("id") id: string) {
+    return this.workOrdersService.close(id);
   }
 }

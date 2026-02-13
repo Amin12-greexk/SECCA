@@ -24,6 +24,7 @@ const rules_module_1 = require("./modules/rules/rules.module");
 const suppliers_module_1 = require("./modules/suppliers/suppliers.module");
 const traceability_module_1 = require("./modules/traceability/traceability.module");
 const work_orders_module_1 = require("./modules/work-orders/work-orders.module");
+const work_items_module_1 = require("./modules/work-items/work-items.module");
 const workers_module_1 = require("./modules/workers/workers.module");
 const users_module_1 = require("./modules/users/users.module");
 let AppModule = class AppModule {
@@ -44,6 +45,7 @@ exports.AppModule = AppModule = __decorate([
             grading_module_1.GradingModule,
             lots_module_1.LotsModule,
             work_orders_module_1.WorkOrdersModule,
+            work_items_module_1.WorkItemsModule,
             finish_module_1.FinishModule,
             traceability_module_1.TraceabilityModule,
             payroll_module_1.PayrollModule,

@@ -15,6 +15,8 @@ const class_validator_1 = require("class-validator");
 class CreateWorkerDto {
     name;
     code;
+    capacityGram;
+    trainerId;
 }
 exports.CreateWorkerDto = CreateWorkerDto;
 __decorate([
@@ -29,4 +31,17 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateWorkerDto.prototype, "code", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)(),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], CreateWorkerDto.prototype, "capacityGram", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)(),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], CreateWorkerDto.prototype, "trainerId", void 0);
 //# sourceMappingURL=create-worker.dto.js.map

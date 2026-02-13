@@ -15,14 +15,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/lib/toast';
-import { createUser, getUsers, updateUser, type User } from '@/lib/api';
+import {
+  createUser,
+  createWorker,
+  getUsers,
+  getWorkers,
+  updateUser,
+  type User,
+  type Worker,
+} from '@/lib/api';
 
-type RoleOption = 'baku' | 'mitra' | 'koreksi' | 'manager';
+type RoleOption = 'baku' | 'mitra' | 'koreksi' | 'manager' | 'trainer';
 
 function UsersContent() {
   const toast = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [workersLoading, setWorkersLoading] = useState(false);
+  const [workers, setWorkers] = useState<Worker[]>([]);
   const [saving, setSaving] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
@@ -32,12 +42,14 @@ function UsersContent() {
     email: '',
     password: '',
     role: '' as RoleOption | '',
+    workerId: '' as string | '',
   });
   const [editForm, setEditForm] = useState({
     name: '',
     email: '',
     password: '',
     role: '' as RoleOption | '',
+    workerId: '' as string | '',
   });
 
   const loadUsers = async () => {
@@ -52,8 +64,21 @@ function UsersContent() {
     }
   };
 
+  const loadWorkers = async () => {
+    setWorkersLoading(true);
+    try {
+      const data = await getWorkers();
+      setWorkers(data);
+    } catch (error) {
+      toast.error('Gagal memuat daftar mitra.');
+    } finally {
+      setWorkersLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadUsers();
+    loadWorkers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -62,17 +87,22 @@ function UsersContent() {
       toast.error('Lengkapi semua data akun.');
       return;
     }
-
     setSaving(true);
     try {
+      let workerId = form.workerId || undefined;
+      if (form.role === 'mitra' && !workerId) {
+        const worker = await createWorker({ name: form.name.trim() });
+        workerId = worker.id;
+      }
       await createUser({
         name: form.name.trim(),
         email: form.email.trim(),
         password: form.password,
         role: form.role,
+        workerId,
       });
       toast.success('Akun berhasil dibuat.');
-      setForm({ name: '', email: '', password: '', role: '' });
+      setForm({ name: '', email: '', password: '', role: '', workerId: '' });
       await loadUsers();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Gagal membuat akun.');
@@ -88,6 +118,7 @@ function UsersContent() {
       email: user.email ?? '',
       password: '',
       role: (user.role as RoleOption) ?? '',
+      workerId: user.workerId ?? '',
     });
     setEditOpen(true);
   };
@@ -99,14 +130,19 @@ function UsersContent() {
       toast.error('Lengkapi nama, email, dan role.');
       return;
     }
-
     setEditSaving(true);
     try {
+      let workerId = editForm.workerId || null;
+      if (editForm.role === 'mitra' && !workerId) {
+        const worker = await createWorker({ name: editForm.name.trim() });
+        workerId = worker.id;
+      }
       await updateUser(editUser.id, {
         name: editForm.name.trim(),
         email: editForm.email.trim(),
         role: editForm.role,
         password: editForm.password ? editForm.password : undefined,
+        workerId,
       });
       toast.success('Akun berhasil diperbarui.');
       setEditOpen(false);
@@ -170,9 +206,40 @@ function UsersContent() {
                     <SelectItem value="mitra">Mitra</SelectItem>
                     <SelectItem value="koreksi">Koreksi</SelectItem>
                     <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="trainer">Trainer</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              {form.role === 'mitra' && (
+                <div className="space-y-2">
+                  <Label>Pilih Mitra (opsional)</Label>
+                  <Select
+                    value={form.workerId}
+                    onValueChange={(value) => setForm((prev) => ({ ...prev, workerId: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Auto-buat mitra dari nama akun" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {workersLoading ? (
+                        <SelectItem value="loading" disabled>
+                          Memuat mitra...
+                        </SelectItem>
+                      ) : workers.length === 0 ? (
+                        <SelectItem value="empty" disabled>
+                          Belum ada mitra
+                        </SelectItem>
+                      ) : (
+                        workers.map((worker) => (
+                          <SelectItem key={worker.id} value={worker.id}>
+                            {worker.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <Button className="w-full" onClick={handleCreate} disabled={saving}>
                 {saving ? 'Menyimpan...' : 'Simpan Akun'}
               </Button>
@@ -274,9 +341,40 @@ function UsersContent() {
                   <SelectItem value="mitra">Mitra</SelectItem>
                   <SelectItem value="koreksi">Koreksi</SelectItem>
                   <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="trainer">Trainer</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+              {editForm.role === 'mitra' && (
+                <div className="space-y-2">
+                  <Label>Pilih Mitra (opsional)</Label>
+                  <Select
+                    value={editForm.workerId}
+                    onValueChange={(value) => setEditForm((prev) => ({ ...prev, workerId: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Auto-buat mitra dari nama akun" />
+                    </SelectTrigger>
+                  <SelectContent>
+                    {workersLoading ? (
+                      <SelectItem value="loading" disabled>
+                        Memuat mitra...
+                      </SelectItem>
+                    ) : workers.length === 0 ? (
+                      <SelectItem value="empty" disabled>
+                        Belum ada mitra
+                      </SelectItem>
+                    ) : (
+                      workers.map((worker) => (
+                        <SelectItem key={worker.id} value={worker.id}>
+                          {worker.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>

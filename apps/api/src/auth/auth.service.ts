@@ -38,6 +38,7 @@ export class AuthService {
         name: user.name,
         email: user.email,
         role: user.role.toLowerCase(),
+        workerId: user.workerId ?? null,
       },
       token,
     };
@@ -57,6 +58,7 @@ export class AuthService {
       name: user.name,
       email: user.email,
       role: user.role.toLowerCase(),
+      workerId: user.workerId ?? null,
     };
   }
 

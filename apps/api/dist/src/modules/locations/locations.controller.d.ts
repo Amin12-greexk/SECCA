@@ -5,21 +5,21 @@ export declare class LocationsController {
     constructor(locationsService: LocationsService);
     create(dto: CreateLocationDto): Promise<{
         id: string;
+        workerId: string | null;
         name: string;
         createdAt: Date;
         updatedAt: Date;
         code: string;
         type: import("@prisma/client").$Enums.RackType;
-        workerId: string | null;
     } | {
         defaults: {
             id: string;
+            workerId: string | null;
             name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
             type: import("@prisma/client").$Enums.RackType;
-            workerId: string | null;
         }[];
         workerLocations: unknown[];
     }>;
@@ -30,25 +30,27 @@ export declare class LocationsController {
             createdAt: Date;
             updatedAt: Date;
             code: string | null;
+            capacityGram: number | null;
+            trainerId: string | null;
         } | null;
     } & {
         id: string;
+        workerId: string | null;
         name: string;
         createdAt: Date;
         updatedAt: Date;
         code: string;
         type: import("@prisma/client").$Enums.RackType;
-        workerId: string | null;
     })[]>;
     findLotsByCode(code: string): Promise<{
         location: {
             id: string;
+            workerId: string | null;
             name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
             type: import("@prisma/client").$Enums.RackType;
-            workerId: string | null;
         };
         lots: ({
             grade: {
@@ -79,12 +81,12 @@ export declare class LocationsController {
     findLots(id: string): Promise<{
         location: {
             id: string;
+            workerId: string | null;
             name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
             type: import("@prisma/client").$Enums.RackType;
-            workerId: string | null;
         };
         lots: ({
             grade: {

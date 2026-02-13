@@ -122,8 +122,27 @@ POST /api/work-orders
 Authorization: Bearer <jwt>
 {
   "workerId": "<uuid-worker>",
-  "lotNumbers": ["LP000001/26", "LP000002/26"]
+  "lotNumbers": ["LP000001/26", "LP000002/26"],
+  "lane": "NEXT_DAY"
 }
+```
+
+## 6.1) Board & Lane (Work Order)
+Board per worker (hanya item status IN_PROGRESS):
+```
+GET /api/work-orders/board?workerId=<uuid-worker>
+```
+Response: `activeWorkOrder`, daftar item per lane (`NEXT_DAY`, `IN_PROGRESS`, `READY_TO_SUBMIT`).
+
+Pindah lane:
+```
+POST /api/work-items/{id}/start
+POST /api/work-items/{id}/mark-ready
+```
+
+Cancel item (kembali ke rak sementara):
+```
+POST /api/work-items/{id}/cancel
 ```
 
 ## 7) Finish (Hasil produksi & payroll)

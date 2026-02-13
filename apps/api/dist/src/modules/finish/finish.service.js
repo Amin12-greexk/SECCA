@@ -43,6 +43,11 @@ let FinishService = class FinishService {
                     workOrderItemId: workItem.id,
                 });
             }
+            if (workItem.status === client_1.WorkOrderItemStatus.CANCELED) {
+                return (0, errors_1.conflict)("Work order item sudah dibatalkan", {
+                    workOrderItemId: workItem.id,
+                });
+            }
             const returnedAt = new Date(dto.returnedAt);
             const mainOut = dto.mainOutWeightGram;
             const byProduct = dto.byProductWeightGram ?? 0;
@@ -164,6 +169,9 @@ let FinishService = class FinishService {
                 await tx.workOrder.update({
                     where: { id: workItem.workOrderId },
                     data: { status: client_1.WorkOrderStatus.COMPLETED, completedAt: new Date() },
+                });
+                await tx.workerActiveWorkOrder.deleteMany({
+                    where: { workOrderId: workItem.workOrderId },
                 });
             }
             return {

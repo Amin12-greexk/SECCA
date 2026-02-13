@@ -10,6 +10,7 @@ export declare class AuthService {
             name: string;
             email: string;
             role: string;
+            workerId: string | null;
         };
         token: string;
     }>;
@@ -18,6 +19,7 @@ export declare class AuthService {
         name: string;
         email: string;
         role: string;
+        workerId: string | null;
     }>;
     private hashPassword;
 }

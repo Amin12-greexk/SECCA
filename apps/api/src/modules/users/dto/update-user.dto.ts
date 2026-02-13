@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
 import { Transform } from "class-transformer";
-import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from "class-validator";
+import { IsEmail, IsEnum, IsOptional, IsString, IsUUID, MinLength } from "class-validator";
 import { UserRole } from "@prisma/client";
 
 export class UpdateUserDto {
@@ -26,4 +26,9 @@ export class UpdateUserDto {
   @IsString()
   @MinLength(6)
   password?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  workerId?: string | null;
 }

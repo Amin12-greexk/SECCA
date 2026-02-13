@@ -15,6 +15,7 @@ import { RulesModule } from "./modules/rules/rules.module";
 import { SuppliersModule } from "./modules/suppliers/suppliers.module";
 import { TraceabilityModule } from "./modules/traceability/traceability.module";
 import { WorkOrdersModule } from "./modules/work-orders/work-orders.module";
+import { WorkItemsModule } from "./modules/work-items/work-items.module";
 import { WorkersModule } from "./modules/workers/workers.module";
 import { UsersModule } from "./modules/users/users.module";
 
@@ -32,6 +33,7 @@ import { UsersModule } from "./modules/users/users.module";
     GradingModule,
     LotsModule,
     WorkOrdersModule,
+    WorkItemsModule,
     FinishModule,
     TraceabilityModule,
     PayrollModule,

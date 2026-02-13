@@ -20,13 +20,13 @@ export declare class BakuController {
         createdAt: Date;
         updatedAt: Date;
         supplierId: string;
+        batchNumber: string;
+        cardId: string;
         featherCondition: string;
         invoiceWeightGram: number;
         wetWeightGram: number;
         moisturePercent: number;
         notes: string | null;
-        batchNumber: string;
-        cardId: string;
     }>;
     findAll(): Promise<{
         originalWetWeightGram: number;
@@ -60,13 +60,13 @@ export declare class BakuController {
             createdAt: Date;
             updatedAt: Date;
             supplierId: string;
+            batchNumber: string;
+            cardId: string;
             featherCondition: string;
             invoiceWeightGram: number;
             wetWeightGram: number;
             moisturePercent: number;
             notes: string | null;
-            batchNumber: string;
-            cardId: string;
         };
         featherGrade: {
             id: string;
@@ -90,14 +90,14 @@ export declare class BakuController {
         updatedAt: Date;
         featherCondition: string;
         moisturePercent: number;
+        pecahBonId: string | null;
+        rawBatchId: string;
         gradeId: string;
         featherGradeId: string | null;
         colorGradeId: string | null;
         pecahBonDate: Date;
         pieceCount: number;
         initialWeightGram: number;
-        pecahBonId: string | null;
-        rawBatchId: string;
         dryWeightGram: number;
     }>;
     findByCardId(cardId: string): Promise<{
@@ -132,13 +132,13 @@ export declare class BakuController {
             createdAt: Date;
             updatedAt: Date;
             supplierId: string;
+            batchNumber: string;
+            cardId: string;
             featherCondition: string;
             invoiceWeightGram: number;
             wetWeightGram: number;
             moisturePercent: number;
             notes: string | null;
-            batchNumber: string;
-            cardId: string;
         };
         featherGrade: {
             id: string;
@@ -162,14 +162,14 @@ export declare class BakuController {
         updatedAt: Date;
         featherCondition: string;
         moisturePercent: number;
+        pecahBonId: string | null;
+        rawBatchId: string;
         gradeId: string;
         featherGradeId: string | null;
         colorGradeId: string | null;
         pecahBonDate: Date;
         pieceCount: number;
         initialWeightGram: number;
-        pecahBonId: string | null;
-        rawBatchId: string;
         dryWeightGram: number;
     }>;
     updatePecahBonEntry(id: string, dto: UpdatePecahBonDto): Promise<{
@@ -186,13 +186,13 @@ export declare class BakuController {
             createdAt: Date;
             updatedAt: Date;
             supplierId: string;
+            batchNumber: string;
+            cardId: string;
             featherCondition: string;
             invoiceWeightGram: number;
             wetWeightGram: number;
             moisturePercent: number;
             notes: string | null;
-            batchNumber: string;
-            cardId: string;
         };
         featherGrade: {
             id: string;
@@ -216,14 +216,14 @@ export declare class BakuController {
         updatedAt: Date;
         featherCondition: string;
         moisturePercent: number;
+        pecahBonId: string | null;
+        rawBatchId: string;
         gradeId: string;
         featherGradeId: string | null;
         colorGradeId: string | null;
         pecahBonDate: Date;
         pieceCount: number;
         initialWeightGram: number;
-        pecahBonId: string | null;
-        rawBatchId: string;
         dryWeightGram: number;
     }>;
     updateRawBatch(id: string, dto: UpdateRawBatchDto): Promise<{
@@ -240,13 +240,13 @@ export declare class BakuController {
         createdAt: Date;
         updatedAt: Date;
         supplierId: string;
+        batchNumber: string;
+        cardId: string;
         featherCondition: string;
         invoiceWeightGram: number;
         wetWeightGram: number;
         moisturePercent: number;
         notes: string | null;
-        batchNumber: string;
-        cardId: string;
     }>;
     markPecahBonPrinted(id: string): Promise<{
         id: string;
@@ -295,14 +295,14 @@ export declare class BakuController {
         updatedAt: Date;
         featherCondition: string;
         moisturePercent: number;
+        pecahBonId: string | null;
+        rawBatchId: string;
         gradeId: string;
         featherGradeId: string | null;
         colorGradeId: string | null;
         pecahBonDate: Date;
         pieceCount: number;
         initialWeightGram: number;
-        pecahBonId: string | null;
-        rawBatchId: string;
         dryWeightGram: number;
     })[]>;
 }

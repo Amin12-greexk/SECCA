@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { RefreshCw, Truck, TrendingUp, Package } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import { useAuth } from '@/lib/auth/AuthContext';
 import { useToast } from '@/lib/toast';
 import {
     getRackLotsByCode,
@@ -39,6 +40,7 @@ const formatNumber = (value: number, fractionDigits = 2) =>
 
 function RackContent() {
     const toast = useToast();
+    const { user } = useAuth();
     const containerRef = useRef<HTMLDivElement>(null);
     const [loading, setLoading] = useState(true);
     const [moving, setMoving] = useState(false);
@@ -282,8 +284,14 @@ function RackContent() {
         );
     };
 
+    const isLocked = user?.role === 'baku';
+
     return (
-        <div ref={containerRef} className="min-h-[calc(100vh-72px)] bg-slate-50">
+        <div className="relative min-h-[calc(100vh-72px)] bg-slate-50">
+            <div
+                ref={containerRef}
+                className={isLocked ? 'pointer-events-none grayscale opacity-60' : undefined}
+            >
             {/* Main Content */}
             <div className="mx-auto max-w-7xl px-4 py-6">
                 <div className="grid gap-6 lg:grid-cols-2">
@@ -385,6 +393,18 @@ function RackContent() {
                     })}
                 </div>
             </div>
+            </div>
+
+            {isLocked && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-sm">
+                    <div className="rounded-xl border border-gray-200 bg-white px-6 py-4 text-center shadow-lg">
+                        <p className="text-base font-semibold text-gray-900">Rak sedang dikembangkan</p>
+                        <p className="mt-1 text-sm text-gray-600">
+                            Fitur ini sementara dikunci untuk akun baku.
+                        </p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

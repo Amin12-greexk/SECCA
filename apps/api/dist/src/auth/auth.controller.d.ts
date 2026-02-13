@@ -9,6 +9,7 @@ export declare class AuthController {
             name: string;
             email: string;
             role: string;
+            workerId: string | null;
         };
         token: string;
     }>;
@@ -21,6 +22,7 @@ export declare class AuthController {
         name: string;
         email: string;
         role: string;
+        workerId: string | null;
     }>;
     logout(): {
         ok: boolean;

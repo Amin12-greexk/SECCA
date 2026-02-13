@@ -35,12 +35,12 @@ export declare class LotsController {
         };
         location: {
             id: string;
+            workerId: string | null;
             name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
             type: import("@prisma/client").$Enums.RackType;
-            workerId: string | null;
         };
     } & {
         id: string;

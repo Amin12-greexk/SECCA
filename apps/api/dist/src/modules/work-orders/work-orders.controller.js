@@ -26,6 +26,12 @@ let WorkOrdersController = class WorkOrdersController {
     create(dto) {
         return this.workOrdersService.create(dto);
     }
+    board(workerId) {
+        return this.workOrdersService.board(workerId);
+    }
+    close(id) {
+        return this.workOrdersService.close(id);
+    }
 };
 exports.WorkOrdersController = WorkOrdersController;
 __decorate([
@@ -35,10 +41,26 @@ __decorate([
     __metadata("design:paramtypes", [create_work_order_dto_1.CreateWorkOrderDto]),
     __metadata("design:returntype", void 0)
 ], WorkOrdersController.prototype, "create", null);
+__decorate([
+    (0, common_1.Get)("board"),
+    __param(0, (0, common_1.Query)("workerId")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], WorkOrdersController.prototype, "board", null);
+__decorate([
+    (0, common_1.Post)(":id/close"),
+    (0, swagger_1.ApiParam)({ name: "id" }),
+    (0, roles_decorator_1.Roles)("manager", "baku", "koreksi"),
+    __param(0, (0, common_1.Param)("id")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], WorkOrdersController.prototype, "close", null);
 exports.WorkOrdersController = WorkOrdersController = __decorate([
     (0, swagger_1.ApiTags)("work-orders"),
     (0, swagger_1.ApiBearerAuth)(),
-    (0, roles_decorator_1.Roles)("manager", "baku", "mitra", "koreksi"),
+    (0, roles_decorator_1.Roles)("manager", "baku", "mitra", "koreksi", "trainer"),
     (0, common_1.Controller)("work-orders"),
     __metadata("design:paramtypes", [work_orders_service_1.WorkOrdersService])
 ], WorkOrdersController);

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsOptional, IsString, MinLength } from "class-validator";
+import { IsInt, IsOptional, IsString, IsUUID, MinLength, Min } from "class-validator";
 
 export class CreateWorkerDto {
   @ApiProperty()
@@ -11,4 +11,15 @@ export class CreateWorkerDto {
   @IsOptional()
   @IsString()
   code?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  capacityGram?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  trainerId?: string;
 }

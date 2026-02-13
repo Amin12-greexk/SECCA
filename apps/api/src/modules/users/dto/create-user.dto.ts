@@ -1,6 +1,6 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Transform } from "class-transformer";
-import { IsEmail, IsEnum, IsString, MinLength } from "class-validator";
+import { IsEmail, IsEnum, IsOptional, IsString, IsUUID, MinLength } from "class-validator";
 import { UserRole } from "@prisma/client";
 
 export class CreateUserDto {
@@ -22,4 +22,9 @@ export class CreateUserDto {
   @Transform(({ value }) => String(value).toUpperCase())
   @IsEnum(UserRole)
   role: UserRole;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  workerId?: string;
 }

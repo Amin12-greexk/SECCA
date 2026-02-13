@@ -42,6 +42,12 @@ export class FinishService {
         });
       }
 
+      if (workItem.status === WorkOrderItemStatus.CANCELED) {
+        return conflict("Work order item sudah dibatalkan", {
+          workOrderItemId: workItem.id,
+        });
+      }
+
       const returnedAt = new Date(dto.returnedAt);
       const mainOut = dto.mainOutWeightGram;
       const byProduct = dto.byProductWeightGram ?? 0;
@@ -177,6 +183,10 @@ export class FinishService {
         await tx.workOrder.update({
           where: { id: workItem.workOrderId },
           data: { status: WorkOrderStatus.COMPLETED, completedAt: new Date() },
+        });
+
+        await tx.workerActiveWorkOrder.deleteMany({
+          where: { workOrderId: workItem.workOrderId },
         });
       }
 

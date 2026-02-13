@@ -165,6 +165,7 @@ export interface LoginResponse {
         name: string;
         email: string;
         role: string;
+        workerId?: string | null;
     };
     token: string;
 }
@@ -174,6 +175,7 @@ export interface User {
     name: string;
     email: string;
     role: string;
+    workerId?: string | null;
 }
 
 export interface CreateUserRequest {
@@ -181,6 +183,7 @@ export interface CreateUserRequest {
     email: string;
     password: string;
     role: string;
+    workerId?: string | null;
 }
 
 export interface UpdateUserRequest {
@@ -188,6 +191,61 @@ export interface UpdateUserRequest {
     email?: string;
     role?: string;
     password?: string;
+    workerId?: string | null;
+}
+
+export interface Worker {
+    id: string;
+    name: string;
+    code?: string | null;
+    capacityGram?: number | null;
+    trainerId?: string | null;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface WorkerWeeklyStat {
+    weekStart: string;
+    weekEnd: string;
+    totalDryInGram: number;
+    totalMainOutGram: number;
+    totalByProductGram: number;
+    totalAmountRp: number;
+    items: number;
+}
+
+export interface WorkerWeeklyStatsResponse {
+    worker: Worker;
+    weeks: WorkerWeeklyStat[];
+}
+
+export type WorkLane = 'NEXT_DAY' | 'IN_PROGRESS' | 'READY_TO_SUBMIT';
+
+export interface WorkOrderBoardItem {
+    id: string;
+    lotNumber: string;
+    lane: WorkLane;
+    status: string;
+    grade?: {
+        shape?: string | null;
+        feather?: string | null;
+        color?: string | null;
+    };
+}
+
+export interface WorkOrderBoard {
+    workerId: string;
+    activeWorkOrder: { id: string; status: string } | null;
+    lanes: {
+        NEXT_DAY: WorkOrderBoardItem[];
+        IN_PROGRESS: WorkOrderBoardItem[];
+        READY_TO_SUBMIT: WorkOrderBoardItem[];
+    };
+    counts: {
+        NEXT_DAY: number;
+        IN_PROGRESS: number;
+        READY_TO_SUBMIT: number;
+    };
 }
 
 type ApiResponse<T> = {
@@ -333,6 +391,204 @@ export async function updateUser(userId: string, data: UpdateUserRequest): Promi
         return unwrap<User>(json);
     } catch (error) {
         console.error('Error updating user:', error);
+        throw error;
+    }
+}
+
+export async function getWorkers(): Promise<Worker[]> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/workers`, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch workers: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<Worker[]>(json);
+    } catch (error) {
+        console.error('Error fetching workers:', error);
+        throw error;
+    }
+}
+
+export async function createWorker(data: {
+    name: string;
+    code?: string;
+    capacityGram?: number | null;
+    trainerId?: string | null;
+}): Promise<Worker> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/workers`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to create worker: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<Worker>(json);
+    } catch (error) {
+        console.error('Error creating worker:', error);
+        throw error;
+    }
+}
+
+export async function updateWorker(workerId: string, data: {
+    name?: string;
+    code?: string | null;
+    capacityGram?: number | null;
+    trainerId?: string | null;
+}): Promise<Worker> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/workers/${workerId}`, {
+            method: 'PATCH',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to update worker: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<Worker>(json);
+    } catch (error) {
+        console.error('Error updating worker:', error);
+        throw error;
+    }
+}
+
+export async function getWorkerWeeklyStats(workerId: string, weeks = 6): Promise<WorkerWeeklyStatsResponse> {
+    try {
+        const url = new URL(`${API_BASE_URL}/api/workers/${workerId}/weekly-stats`);
+        if (weeks) {
+            url.searchParams.set('weeks', String(weeks));
+        }
+        const response = await fetch(url.toString(), {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to fetch stats: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<WorkerWeeklyStatsResponse>(json);
+    } catch (error) {
+        console.error('Error fetching weekly stats:', error);
+        throw error;
+    }
+}
+
+export async function createWorkOrder(data: {
+    workerId: string;
+    lotNumbers: string[];
+    lane?: WorkLane;
+}): Promise<{
+    workOrderId: string;
+    status: string;
+    lane?: WorkLane;
+    items: Array<{ workOrderItemId: string; lotNumber: string; lane: WorkLane }>;
+}> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/work-orders`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to create work order: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap(json);
+    } catch (error) {
+        console.error('Error creating work order:', error);
+        throw error;
+    }
+}
+
+export async function getWorkOrderBoard(workerId: string): Promise<WorkOrderBoard> {
+    try {
+        const url = new URL(`${API_BASE_URL}/api/work-orders/board`);
+        url.searchParams.set('workerId', workerId);
+        const response = await fetch(url.toString(), {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to fetch board: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<WorkOrderBoard>(json);
+    } catch (error) {
+        console.error('Error fetching work order board:', error);
+        throw error;
+    }
+}
+
+export async function startWorkItem(itemId: string) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/work-items/${itemId}/start`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to start item: ${response.statusText}`);
+        }
+        const json = await response.json();
+        return unwrap(json);
+    } catch (error) {
+        console.error('Error starting work item:', error);
+        throw error;
+    }
+}
+
+export async function markWorkItemReady(itemId: string) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/work-items/${itemId}/mark-ready`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to mark ready: ${response.statusText}`);
+        }
+        const json = await response.json();
+        return unwrap(json);
+    } catch (error) {
+        console.error('Error marking work item ready:', error);
+        throw error;
+    }
+}
+
+export async function cancelWorkItem(itemId: string) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/work-items/${itemId}/cancel`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to cancel item: ${response.statusText}`);
+        }
+        const json = await response.json();
+        return unwrap(json);
+    } catch (error) {
+        console.error('Error canceling work item:', error);
         throw error;
     }
 }

@@ -1,10 +1,11 @@
-export type UserRole = 'baku' | 'mitra' | 'koreksi' | 'manager';
+export type UserRole = 'baku' | 'mitra' | 'koreksi' | 'manager' | 'trainer';
 
 export interface User {
     id: string;
     name: string;
     email: string;
     role: UserRole;
+    workerId?: string | null;
 }
 
 export interface LoginRequest {

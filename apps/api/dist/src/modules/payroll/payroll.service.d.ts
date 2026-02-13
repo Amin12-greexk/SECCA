@@ -3,6 +3,15 @@ export declare class PayrollService {
     private readonly prisma;
     constructor(prisma: PrismaService);
     findAll(): import("@prisma/client").Prisma.PrismaPromise<({
+        worker: {
+            id: string;
+            name: string;
+            createdAt: Date;
+            updatedAt: Date;
+            code: string | null;
+            capacityGram: number | null;
+            trainerId: string | null;
+        };
         grade: {
             id: string;
             name: string;
@@ -11,13 +20,6 @@ export declare class PayrollService {
             code: string;
             type: import("@prisma/client").$Enums.GradeType;
         };
-        worker: {
-            id: string;
-            name: string;
-            createdAt: Date;
-            updatedAt: Date;
-            code: string | null;
-        };
         workOrderItem: {
             id: string;
             createdAt: Date;
@@ -25,13 +27,17 @@ export declare class PayrollService {
             lotId: string;
             status: import("@prisma/client").$Enums.WorkOrderItemStatus;
             workOrderId: string;
+            lane: import("@prisma/client").$Enums.WorkLane;
+            startedAt: Date | null;
+            readyAt: Date | null;
+            canceledAt: Date | null;
         };
     } & {
         id: string;
+        workerId: string;
         createdAt: Date;
         updatedAt: Date;
         gradeId: string;
-        workerId: string;
         workOrderItemId: string;
         rateRpPerGram: number;
         amountRp: number;

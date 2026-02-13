@@ -6,33 +6,33 @@ export declare class LocationsService {
     constructor(prisma: PrismaService);
     create(dto: CreateLocationDto): Promise<{
         id: string;
+        workerId: string | null;
         name: string;
         createdAt: Date;
         updatedAt: Date;
         code: string;
         type: import("@prisma/client").$Enums.RackType;
-        workerId: string | null;
     } | {
         defaults: {
             id: string;
+            workerId: string | null;
             name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
             type: import("@prisma/client").$Enums.RackType;
-            workerId: string | null;
         }[];
         workerLocations: unknown[];
     }>;
     createDefaults(): Promise<{
         defaults: {
             id: string;
+            workerId: string | null;
             name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
             type: import("@prisma/client").$Enums.RackType;
-            workerId: string | null;
         }[];
         workerLocations: unknown[];
     }>;
@@ -43,25 +43,27 @@ export declare class LocationsService {
             createdAt: Date;
             updatedAt: Date;
             code: string | null;
+            capacityGram: number | null;
+            trainerId: string | null;
         } | null;
     } & {
         id: string;
+        workerId: string | null;
         name: string;
         createdAt: Date;
         updatedAt: Date;
         code: string;
         type: import("@prisma/client").$Enums.RackType;
-        workerId: string | null;
     })[]>;
     findLots(locationId: string): Promise<{
         location: {
             id: string;
+            workerId: string | null;
             name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
             type: import("@prisma/client").$Enums.RackType;
-            workerId: string | null;
         };
         lots: ({
             grade: {
@@ -92,12 +94,12 @@ export declare class LocationsService {
     findLotsByCode(code: string): Promise<{
         location: {
             id: string;
+            workerId: string | null;
             name: string;
             createdAt: Date;
             updatedAt: Date;
             code: string;
             type: import("@prisma/client").$Enums.RackType;
-            workerId: string | null;
         };
         lots: ({
             grade: {

@@ -20,6 +20,13 @@ enum WorkOrderStatus {
 enum WorkOrderItemStatus {
   IN_PROGRESS
   COMPLETED
+  CANCELED
+}
+
+enum WorkLane {
+  NEXT_DAY
+  IN_PROGRESS
+  READY_TO_SUBMIT
 }
 
 enum RackType {
@@ -40,6 +47,7 @@ enum UserRole {
   MITRA
   KOREKSI
   MANAGER
+  TRAINER
 }
 
 enum GradeType {
@@ -54,8 +62,12 @@ model AppUser {
   email        String   @unique
   passwordHash String
   role         UserRole
+  workerId     String?  @unique
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  worker            Worker? @relation("UserWorker", fields: [workerId], references: [id])
+  supervisedWorkers Worker[] @relation("WorkerTrainer")
 
   @@index([role])
 }
@@ -158,12 +170,19 @@ model Worker {
   id        String   @id @default(uuid())
   name      String
   code      String?  @unique
+  capacityGram Int?
+  trainerId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  user         AppUser? @relation("UserWorker")
   rackLocation  RackLocation?
   workOrders    WorkOrder[]
   payrolls      PayrollEntry[]
+  activeWorkOrder WorkerActiveWorkOrder?
+  trainer      AppUser? @relation("WorkerTrainer", fields: [trainerId], references: [id])
+
+  @@index([trainerId])
 }
 
 model NumberSequence {
@@ -282,6 +301,7 @@ model WorkOrder {
 
   worker Worker          @relation(fields: [workerId], references: [id])
   items  WorkOrderItem[]
+  activeRecord WorkerActiveWorkOrder?
 }
 
 model WorkOrderItem {
@@ -289,6 +309,10 @@ model WorkOrderItem {
   workOrderId String
   lotId       String               @unique
   status      WorkOrderItemStatus  @default(IN_PROGRESS)
+  lane        WorkLane             @default(IN_PROGRESS)
+  startedAt   DateTime?
+  readyAt     DateTime?
+  canceledAt  DateTime?
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
 
@@ -296,6 +320,16 @@ model WorkOrderItem {
   lot           ProductionLot @relation(fields: [lotId], references: [id])
   finishReceipt FinishReceipt?
   payrollEntry  PayrollEntry?
+}
+
+model WorkerActiveWorkOrder {
+  id          String   @id @default(uuid())
+  workerId    String   @unique
+  workOrderId String   @unique
+  createdAt   DateTime @default(now())
+
+  worker    Worker    @relation(fields: [workerId], references: [id])
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id])
 }
 
 model FinishReceipt {
