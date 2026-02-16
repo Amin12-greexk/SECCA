@@ -25,13 +25,13 @@ export declare class BakuService {
         createdAt: Date;
         updatedAt: Date;
         supplierId: string;
-        batchNumber: string;
-        cardId: string;
         featherCondition: string;
         invoiceWeightGram: number;
         wetWeightGram: number;
         moisturePercent: number;
         notes: string | null;
+        batchNumber: string;
+        cardId: string;
     }>;
     findAll(): Promise<{
         originalWetWeightGram: number;
@@ -83,13 +83,13 @@ export declare class BakuService {
             createdAt: Date;
             updatedAt: Date;
             supplierId: string;
-            batchNumber: string;
-            cardId: string;
             featherCondition: string;
             invoiceWeightGram: number;
             wetWeightGram: number;
             moisturePercent: number;
             notes: string | null;
+            batchNumber: string;
+            cardId: string;
         };
         featherGrade: {
             id: string;
@@ -113,14 +113,14 @@ export declare class BakuService {
         updatedAt: Date;
         featherCondition: string;
         moisturePercent: number;
-        pecahBonId: string | null;
-        rawBatchId: string;
         gradeId: string;
         featherGradeId: string | null;
         colorGradeId: string | null;
         pecahBonDate: Date;
         pieceCount: number;
         initialWeightGram: number;
+        pecahBonId: string | null;
+        rawBatchId: string;
         dryWeightGram: number;
     }>;
     updatePecahBonEntry(entryId: string, dto: UpdatePecahBonDto): Promise<{
@@ -137,13 +137,13 @@ export declare class BakuService {
             createdAt: Date;
             updatedAt: Date;
             supplierId: string;
-            batchNumber: string;
-            cardId: string;
             featherCondition: string;
             invoiceWeightGram: number;
             wetWeightGram: number;
             moisturePercent: number;
             notes: string | null;
+            batchNumber: string;
+            cardId: string;
         };
         featherGrade: {
             id: string;
@@ -167,14 +167,14 @@ export declare class BakuService {
         updatedAt: Date;
         featherCondition: string;
         moisturePercent: number;
-        pecahBonId: string | null;
-        rawBatchId: string;
         gradeId: string;
         featherGradeId: string | null;
         colorGradeId: string | null;
         pecahBonDate: Date;
         pieceCount: number;
         initialWeightGram: number;
+        pecahBonId: string | null;
+        rawBatchId: string;
         dryWeightGram: number;
     }>;
     updateRawBatch(rawBatchId: string, dto: UpdateRawBatchDto): Promise<{
@@ -191,13 +191,13 @@ export declare class BakuService {
         createdAt: Date;
         updatedAt: Date;
         supplierId: string;
-        batchNumber: string;
-        cardId: string;
         featherCondition: string;
         invoiceWeightGram: number;
         wetWeightGram: number;
         moisturePercent: number;
         notes: string | null;
+        batchNumber: string;
+        cardId: string;
     }>;
     getPecahBonEntries(rawBatchId: string): Promise<({
         grade: {
@@ -230,14 +230,14 @@ export declare class BakuService {
         updatedAt: Date;
         featherCondition: string;
         moisturePercent: number;
-        pecahBonId: string | null;
-        rawBatchId: string;
         gradeId: string;
         featherGradeId: string | null;
         colorGradeId: string | null;
         pecahBonDate: Date;
         pieceCount: number;
         initialWeightGram: number;
+        pecahBonId: string | null;
+        rawBatchId: string;
         dryWeightGram: number;
     })[]>;
     findPecahBonById(pecahBonId: string): Promise<{
@@ -254,13 +254,13 @@ export declare class BakuService {
             createdAt: Date;
             updatedAt: Date;
             supplierId: string;
-            batchNumber: string;
-            cardId: string;
             featherCondition: string;
             invoiceWeightGram: number;
             wetWeightGram: number;
             moisturePercent: number;
             notes: string | null;
+            batchNumber: string;
+            cardId: string;
         };
         featherGrade: {
             id: string;
@@ -284,14 +284,14 @@ export declare class BakuService {
         updatedAt: Date;
         featherCondition: string;
         moisturePercent: number;
-        pecahBonId: string | null;
-        rawBatchId: string;
         gradeId: string;
         featherGradeId: string | null;
         colorGradeId: string | null;
         pecahBonDate: Date;
         pieceCount: number;
         initialWeightGram: number;
+        pecahBonId: string | null;
+        rawBatchId: string;
         dryWeightGram: number;
     }>;
     markPecahBonPrinted(entryId: string): Promise<{

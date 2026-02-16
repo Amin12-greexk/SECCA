@@ -16,28 +16,28 @@ export declare class WorkersService {
     create(dto: CreateWorkerDto): import("@prisma/client").Prisma.Prisma__WorkerClient<{
         id: string;
         name: string;
-        code: string | null;
-        capacityGram: number | null;
         createdAt: Date;
         updatedAt: Date;
+        code: string | null;
+        capacityGram: number | null;
         trainerId: string | null;
     }, never, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
     update(id: string, dto: UpdateWorkerDto): Promise<{
         id: string;
         name: string;
-        code: string | null;
-        capacityGram: number | null;
         createdAt: Date;
         updatedAt: Date;
+        code: string | null;
+        capacityGram: number | null;
         trainerId: string | null;
     }>;
     findAll(): import("@prisma/client").Prisma.PrismaPromise<{
         id: string;
         name: string;
-        code: string | null;
-        capacityGram: number | null;
         createdAt: Date;
         updatedAt: Date;
+        code: string | null;
+        capacityGram: number | null;
         trainerId: string | null;
     }[]>;
     getWeeklyStats(workerId: string, weeks?: number): Promise<{
