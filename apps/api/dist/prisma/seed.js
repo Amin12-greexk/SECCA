@@ -14,7 +14,8 @@ const prisma = new client_1.PrismaClient({
     adapter: new adapter_pg_1.PrismaPg(pool),
 });
 const hashPassword = (password) => (0, crypto_1.createHash)("sha256").update(password).digest("hex");
-async function main() {
+async function resetAllData() {
+    await prisma.workerActiveWorkOrder.deleteMany();
     await prisma.inventoryMovement.deleteMany();
     await prisma.payrollEntry.deleteMany();
     await prisma.finishReceipt.deleteMany();
@@ -34,6 +35,16 @@ async function main() {
     await prisma.worker.deleteMany();
     await prisma.numberSequence.deleteMany();
     await prisma.appUser.deleteMany();
+}
+async function main() {
+    const shouldReset = String(process.env.SEED_RESET ?? "").toLowerCase() === "true";
+    if (shouldReset) {
+        console.log("[seed] SEED_RESET=true -> reset all transactional/master data");
+        await resetAllData();
+    }
+    else {
+        console.log("[seed] Non-destructive mode -> keep existing data");
+    }
     const passwordHash = hashPassword("password");
     await prisma.appUser.upsert({
         where: { email: "manager@secca.com" },

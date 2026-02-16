@@ -3,7 +3,6 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, UserRole } from "@prisma/client";
 import { createHash } from "crypto";
 import { Pool } from "pg";
-import { LOCATION_CODES } from "../src/common/constants";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -18,7 +17,8 @@ const prisma = new PrismaClient({
 const hashPassword = (password: string) =>
   createHash("sha256").update(password).digest("hex");
 
-async function main() {
+async function resetAllData() {
+  await prisma.workerActiveWorkOrder.deleteMany();
   await prisma.inventoryMovement.deleteMany();
   await prisma.payrollEntry.deleteMany();
   await prisma.finishReceipt.deleteMany();
@@ -37,8 +37,17 @@ async function main() {
   await prisma.rackLocation.deleteMany();
   await prisma.worker.deleteMany();
   await prisma.numberSequence.deleteMany();
-
   await prisma.appUser.deleteMany();
+}
+
+async function main() {
+  const shouldReset = String(process.env.SEED_RESET ?? "").toLowerCase() === "true";
+  if (shouldReset) {
+    console.log("[seed] SEED_RESET=true -> reset all transactional/master data");
+    await resetAllData();
+  } else {
+    console.log("[seed] Non-destructive mode -> keep existing data");
+  }
 
   const passwordHash = hashPassword("password");
   await prisma.appUser.upsert({
