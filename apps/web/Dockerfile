@@ -38,4 +38,4 @@ COPY --from=build /app/apps/web /app/apps/web
 
 EXPOSE 3000
 
-CMD ["pnpm", "start", "--", "--hostname", "0.0.0.0", "--port", "3000"]
+CMD ["sh", "-c", "pnpm start -H 0.0.0.0 -p 3000"]

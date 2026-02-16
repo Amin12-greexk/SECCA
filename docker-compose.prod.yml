@@ -31,7 +31,7 @@ services:
       APP_PORT: 3001
       APP_CODE: ${APP_CODE:-SECCA}
       APP_JWT_SECRET: ${APP_JWT_SECRET:-change-me}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-secca_prod}?schema=public
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-secca_prod}?schema=public}
       REDIS_URL: redis://redis:6379
     depends_on:
       db:
