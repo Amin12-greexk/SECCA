@@ -38,4 +38,4 @@ COPY --from=build /app/apps/api /app/apps/api
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && pnpm start:prod"]
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/src/main.js"]
