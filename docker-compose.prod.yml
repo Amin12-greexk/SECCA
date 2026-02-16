@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
       POSTGRES_DB: ${POSTGRES_DB:-secca_prod}
     volumes:
-      - secca_pg:/var/lib/postgresql/data
+      - secca_pg_v17:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-secca_prod}"]
       interval: 5s
@@ -53,5 +53,5 @@ services:
       - api
 
 volumes:
-  secca_pg:
+  secca_pg_v17:
   secca_redis:
