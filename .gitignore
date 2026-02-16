@@ -6,11 +6,14 @@ node_modules/
 out/
 dist/
 apps/desktop/dist/
+apps/desktop/dist-v2/
 apps/desktop/win-unpacked/
 *.log
 *.tmp
 *.temp
 *.exe
+*.dll
+*.pak
 *.msi
 *.dmg
 *.zip

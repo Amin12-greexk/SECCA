@@ -20,7 +20,7 @@
   "build": {
     "appId": "com.secca.desktop",
     "productName": "SECCA",
-    "icon": "assets/logo-secca.png",
+    "icon": "assets/logo-secca.ico",
     "files": [
       "**/*"
     ],
@@ -29,7 +29,7 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "assets/logo-secca.png"
+      "icon": "assets/logo-secca.ico"
     },
     "nsis": {
       "oneClick": false,

@@ -9,7 +9,7 @@ let cachedConfig;
 
 const defaultUrl = process.env.SECCA_DESKTOP_URL || 'http://localhost:3000';
 const defaultPrintConfig = {};
-const iconPath = path.join(__dirname, 'assets', 'logo-secca.png');
+const iconPath = path.join(__dirname, 'assets', 'logo-secca.ico');
 
 const getConfigPath = () => path.join(app.getPath('userData'), 'secca-config.json');
 const getLogPath = () => path.join(app.getPath('userData'), 'secca-log.txt');

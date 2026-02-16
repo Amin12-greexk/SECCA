@@ -118,6 +118,7 @@ export default function RootLayout({
         <title>SECCA - Sistem Manajemen Baku</title>
         <meta name="description" content="Sistem manajemen operasional SECCA untuk baku, mitra, dan manajemen" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/favicon.ico" sizes="any" />
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
         <AuthProvider>
