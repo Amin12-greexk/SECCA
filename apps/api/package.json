@@ -20,6 +20,10 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "db:seed": "tsx prisma/seed.ts",
+    "db:batch:normalize:dry": "node scripts/normalize-batch-numbers.js",
+    "db:batch:normalize": "node scripts/normalize-batch-numbers.js --apply",
+    "db:batch:merge:dry": "node scripts/merge-raw-batches.js",
+    "db:batch:merge": "node scripts/merge-raw-batches.js --apply",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
     "prisma:studio": "prisma studio"

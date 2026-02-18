@@ -125,6 +125,10 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     const [, setScanLoading] = useState(false);
     const scanBufferRef = useRef('');
     const scanLastAtRef = useRef(0);
+    const [lpDigits, setLpDigits] = useState('');
+    const [yearSuffix, setYearSuffix] = useState(String(new Date().getFullYear()).slice(-2));
+    const [searchLoading, setSearchLoading] = useState(false);
+    const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
 
     // Multi-entry state for bulk pecah bon
     const [multiEntries, setMultiEntries] = useState<MultiEntryRow[]>([]);
@@ -141,6 +145,8 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     const shapeGrades = useMemo(() => grades.filter((grade) => grade.type === 'BENTUK'), [grades]);
     const featherGrades = useMemo(() => grades.filter((grade) => grade.type === 'BULU'), [grades]);
     const colorGrades = useMemo(() => grades.filter((grade) => grade.type === 'WARNA'), [grades]);
+    const normalizeLpDigits = (value: string) => value.replace(/\D/g, '').slice(0, 4);
+    const normalizeYearSuffix = (value: string) => value.replace(/\D/g, '').slice(0, 2);
 
     // Multi-entry handlers
     const addEntry = () => {
@@ -889,7 +895,18 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         toast.error('Cetak multiple hanya tersedia di aplikasi desktop.');
     };
 
-    const openFromScan = async (entry: PecahBonEntry) => {
+    const parsePecahBonId = (value: string) => {
+        const match = value.match(/^([A-Z]+)-(\d+)-(\d{2})$/);
+        if (!match) return null;
+        return { digits: match[2], year: match[3] };
+    };
+
+    const openFromScan = async (
+        entry: PecahBonEntry,
+        options?: { openPrint?: boolean; persistHighlight?: boolean }
+    ) => {
+        const openPrint = options?.openPrint ?? true;
+        const persistHighlight = options?.persistHighlight ?? false;
         const batchId = entry.rawBatchId ?? entry.rawBatch?.id;
         if (!batchId) {
             toast.error('Batch tidak ditemukan untuk QR ini.');
@@ -897,6 +914,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         }
 
         let batch = rawBatches.find((b) => b.id === batchId);
+        let sortedEntries: PecahBonEntry[] | undefined = batch?.pecahBonEntries;
         if (!batch) {
             try {
                 const batchData = await getRawBatches();
@@ -911,6 +929,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                 mapped.sort((left, right) => left.batchNumber.localeCompare(right.batchNumber));
                 setRawBatches(mapped);
                 batch = mapped.find((b) => b.id === batchId);
+                sortedEntries = batch?.pecahBonEntries;
             } catch (err) {
                 console.error('Error loading data:', err);
             }
@@ -929,21 +948,22 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
             );
             try {
                 const entries = await getPecahBonEntries(batchId);
+                sortedEntries = [...entries].sort((left, right) => {
+                    const leftId = left.pecahBonId ?? '';
+                    const rightId = right.pecahBonId ?? '';
+                    if (leftId && rightId) {
+                        return leftId.localeCompare(rightId);
+                    }
+                    if (leftId) return -1;
+                    if (rightId) return 1;
+                    return new Date(left.pecahBonDate).getTime() - new Date(right.pecahBonDate).getTime();
+                });
                 setRawBatches((prev) =>
                     prev.map((b) =>
                         b.id === batchId
                             ? {
                                 ...b,
-                                pecahBonEntries: [...entries].sort((left, right) => {
-                                    const leftId = left.pecahBonId ?? '';
-                                    const rightId = right.pecahBonId ?? '';
-                                    if (leftId && rightId) {
-                                        return leftId.localeCompare(rightId);
-                                    }
-                                    if (leftId) return -1;
-                                    if (rightId) return 1;
-                                    return new Date(left.pecahBonDate).getTime() - new Date(right.pecahBonDate).getTime();
-                                }),
+                                pecahBonEntries: sortedEntries,
                                 entriesLoading: false,
                                 expanded: true,
                             }
@@ -960,17 +980,44 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                 );
             }
         } else {
+            sortedEntries = batch.pecahBonEntries;
             setRawBatches((prev) =>
                 prev.map((b) => (b.id === batchId ? { ...b, expanded: true } : b))
             );
         }
 
+        const entriesInBatch = sortedEntries ?? [];
         const entryFromList =
-            batch.pecahBonEntries?.find(
+            entriesInBatch.find(
                 (item) => item.id === entry.id || item.pecahBonId === entry.pecahBonId
             ) ?? entry;
 
-        openPrintDialog(batch, entryFromList);
+        const targetIndex = entriesInBatch.findIndex((item) => item.id === entryFromList.id);
+        const targetPage = targetIndex >= 0 ? Math.floor(targetIndex / ENTRIES_PER_PAGE) : 0;
+
+        setRawBatches((prev) =>
+            prev.map((b) =>
+                b.id === batchId
+                    ? { ...b, expanded: true, entriesPage: targetPage, pecahBonEntries: entriesInBatch }
+                    : b
+            )
+        );
+
+        if (targetIndex >= 0) {
+            setTimeout(() => {
+                const row = document.getElementById(`pecah-row-${entryFromList.id}`);
+                row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                flashRow(entryFromList.id);
+            }, 120);
+        }
+
+        if (persistHighlight) {
+            setHighlightedEntryId(entryFromList.id);
+        }
+
+        if (openPrint) {
+            openPrintDialog({ ...batch, pecahBonEntries: entriesInBatch }, entryFromList);
+        }
     };
 
     const handleScanOpen = async (value: string) => {
@@ -979,12 +1026,41 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         setScanLoading(true);
         try {
             const entry = await getPecahBonById(trimmed);
-            await openFromScan(entry);
+            await openFromScan(entry, { openPrint: true });
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Gagal menemukan QR.';
             toast.error(message);
         } finally {
             setScanLoading(false);
+        }
+    };
+
+    const handleSearchByDigits = async () => {
+        const digits = normalizeLpDigits(lpDigits);
+        if (!digits) {
+            toast.error('Masukkan nomor LP.');
+            return;
+        }
+
+        const fullId = `TEI-${digits.padStart(4, '0')}-${yearSuffix || String(new Date().getFullYear()).slice(-2)}`;
+        setSearchLoading(true);
+        setHighlightedEntryId(null);
+        try {
+            const entry = await getPecahBonById(fullId);
+            if (entry.pecahBonId) {
+                const parsed = parsePecahBonId(entry.pecahBonId);
+                if (parsed) {
+                    setLpDigits(parsed.digits);
+                    setYearSuffix(parsed.year);
+                }
+            }
+            await openFromScan(entry, { openPrint: false, persistHighlight: true });
+            toast.success(`LP ${entry.pecahBonId ?? fullId} ditemukan.`);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'LP tidak ditemukan.';
+            toast.error(message);
+        } finally {
+            setSearchLoading(false);
         }
     };
 
@@ -1185,7 +1261,45 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                             </p>
                         </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-end gap-2">
+                        <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1">
+                            <span className="text-xs font-semibold text-gray-600">TEI-</span>
+                            <Input
+                                value={lpDigits}
+                                onChange={(event) => setLpDigits(normalizeLpDigits(event.target.value))}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Enter') {
+                                        event.preventDefault();
+                                        handleSearchByDigits();
+                                    }
+                                }}
+                                inputMode="numeric"
+                                placeholder="0001"
+                                className="h-7 w-16 border-0 p-0 text-center text-sm font-semibold shadow-none focus-visible:ring-0"
+                            />
+                            <span className="text-xs font-semibold text-gray-600">-</span>
+                            <Input
+                                value={yearSuffix}
+                                onChange={(event) => setYearSuffix(normalizeYearSuffix(event.target.value))}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Enter') {
+                                        event.preventDefault();
+                                        handleSearchByDigits();
+                                    }
+                                }}
+                                inputMode="numeric"
+                                className="h-7 w-10 border-0 p-0 text-center text-sm font-semibold shadow-none focus-visible:ring-0"
+                            />
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleSearchByDigits}
+                                disabled={searchLoading}
+                                className="h-7 px-2"
+                            >
+                                {searchLoading ? 'Cari...' : 'Cari LP'}
+                            </Button>
+                        </div>
                         <Button variant="outline" onClick={loadData} disabled={loading} className="h-9">
                             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                             Refresh
@@ -1395,7 +1509,11 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                                                         </thead>
                                                                         <tbody className="divide-y divide-gray-100">
                                                                             {paginatedEntries.map((entry) => (
-                                                <tr id={`pecah-row-${entry.id}`} key={entry.id} className="hover:bg-gray-50">
+                                                                                <tr
+                                                                                    id={`pecah-row-${entry.id}`}
+                                                                                    key={entry.id}
+                                                                                    className={`transition-colors ${entry.id === highlightedEntryId ? 'bg-emerald-100 hover:bg-emerald-100' : 'hover:bg-gray-50'}`}
+                                                                                >
                                                                                     <td className="px-3 py-2 text-center">
                                                                                         <input
                                                                                             type="checkbox"
