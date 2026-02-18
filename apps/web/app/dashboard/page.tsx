@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useToast } from '@/lib/toast';
 import { getWorkerWeeklyStats, type WorkerWeeklyStatsResponse } from '@/lib/api';
+import ManagerAnalytics from './components/ManagerAnalytics';
 
 function DashboardContent() {
     const { user } = useAuth();
@@ -240,7 +241,7 @@ function DashboardContent() {
                         )}
                     </div>
                 </div>
-            ) : (
+            ) : user.role !== 'manager' && quickActions.length > 0 ? (
                 <div>
                     <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -258,9 +259,13 @@ function DashboardContent() {
                         ))}
                     </div>
                 </div>
+            ) : null}
+
+            {user.role === 'manager' && (
+                <ManagerAnalytics />
             )}
 
-            
+
         </div>
     );
 }
@@ -274,4 +279,3 @@ export default function DashboardPage() {
         </ProtectedRoute>
     );
 }
-

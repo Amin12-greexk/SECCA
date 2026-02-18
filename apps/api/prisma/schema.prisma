@@ -235,6 +235,7 @@ model PecahBonEntry {
   colorGrade   Grade?   @relation("PecahBonColor", fields: [colorGradeId], references: [id])
 
   @@index([rawBatchId, createdAt])
+  @@index([pecahBonDate])
 }
 
 model RawBatchGradeStock {

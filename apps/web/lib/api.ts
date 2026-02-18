@@ -1183,3 +1183,111 @@ export async function deletePecahBonPreset(id: string): Promise<void> {
         throw error;
     }
 }
+
+// ─── Manager Analytics API ────────────────────────────────────────
+
+export interface GradeUsageParams {
+    from: string;
+    to: string;
+    groupBy?: 'combo' | 'shape' | 'feather' | 'color';
+    metric?: 'initial' | 'dry';
+    top?: number;
+}
+
+export interface GradeUsageRow {
+    key: string;
+    gram: number;
+    percentage: number;
+    lpCount: number;
+}
+
+export interface GradeUsageResponse {
+    filters: {
+        from: string;
+        to: string;
+        groupBy: string;
+        metric: string;
+    };
+    totalGram: number;
+    rows: GradeUsageRow[];
+}
+
+export interface CapacityParams {
+    from: string;
+    to: string;
+}
+
+export interface CapacitySummary {
+    totalGram: number;
+    totalLp: number;
+    avgGramPerLp: number;
+}
+
+export interface WeeklySeries {
+    weekStart: string;
+    weekEnd: string;
+    totalGram: number;
+    lpCount: number;
+    avgGramPerLp: number;
+}
+
+export interface BucketRow {
+    label: string;
+    lpCount: number;
+}
+
+export interface CapacityResponse {
+    filters: { from: string; to: string };
+    summary: CapacitySummary;
+    weekly: WeeklySeries[];
+    buckets: BucketRow[];
+}
+
+export async function getManagerGradeUsage(params: GradeUsageParams): Promise<GradeUsageResponse> {
+    try {
+        const url = new URL(`${API_BASE_URL}/api/analytics/manager/grade-usage`);
+        url.searchParams.set('from', params.from);
+        url.searchParams.set('to', params.to);
+        if (params.groupBy) url.searchParams.set('groupBy', params.groupBy);
+        if (params.metric) url.searchParams.set('metric', params.metric);
+        if (params.top) url.searchParams.set('top', String(params.top));
+
+        const response = await fetch(url.toString(), {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to fetch grade usage: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<GradeUsageResponse>(json);
+    } catch (error) {
+        console.error('Error fetching grade usage:', error);
+        throw error;
+    }
+}
+
+export async function getManagerCapacity(params: CapacityParams): Promise<CapacityResponse> {
+    try {
+        const url = new URL(`${API_BASE_URL}/api/analytics/manager/capacity`);
+        url.searchParams.set('from', params.from);
+        url.searchParams.set('to', params.to);
+
+        const response = await fetch(url.toString(), {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to fetch capacity: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<CapacityResponse>(json);
+    } catch (error) {
+        console.error('Error fetching capacity:', error);
+        throw error;
+    }
+}

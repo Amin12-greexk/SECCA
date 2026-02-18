@@ -27,6 +27,7 @@ const work_orders_module_1 = require("./modules/work-orders/work-orders.module")
 const work_items_module_1 = require("./modules/work-items/work-items.module");
 const workers_module_1 = require("./modules/workers/workers.module");
 const users_module_1 = require("./modules/users/users.module");
+const analytics_module_1 = require("./modules/analytics/analytics.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -50,6 +51,7 @@ exports.AppModule = AppModule = __decorate([
             traceability_module_1.TraceabilityModule,
             payroll_module_1.PayrollModule,
             users_module_1.UsersModule,
+            analytics_module_1.AnalyticsModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

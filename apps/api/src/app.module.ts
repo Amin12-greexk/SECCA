@@ -18,6 +18,7 @@ import { WorkOrdersModule } from "./modules/work-orders/work-orders.module";
 import { WorkItemsModule } from "./modules/work-items/work-items.module";
 import { WorkersModule } from "./modules/workers/workers.module";
 import { UsersModule } from "./modules/users/users.module";
+import { AnalyticsModule } from "./modules/analytics/analytics.module";
 
 @Module({
   imports: [
@@ -38,8 +39,9 @@ import { UsersModule } from "./modules/users/users.module";
     TraceabilityModule,
     PayrollModule,
     UsersModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

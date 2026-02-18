@@ -7,9 +7,11 @@ let mainWindow;
 let settingsWindow;
 let cachedConfig;
 
-const defaultUrl = process.env.SECCA_DESKTOP_URL || 'http://localhost:3000';
+const productionUrl = 'https://secca.tunasestaindonesia.com';
+const developmentUrl = process.env.SECCA_DESKTOP_URL || 'http://localhost:3000';
 const defaultPrintConfig = {};
-const iconPath = path.join(__dirname, 'assets', 'logo-secca.ico');
+const iconPath = path.join(__dirname, 'assets', 'logo-secca.png');
+const getRuntimeUrl = () => (app.isPackaged ? productionUrl : developmentUrl);
 
 const getConfigPath = () => path.join(app.getPath('userData'), 'secca-config.json');
 const getLogPath = () => path.join(app.getPath('userData'), 'secca-log.txt');
@@ -33,7 +35,7 @@ const readConfig = () => {
     cachedConfig = JSON.parse(raw);
     return cachedConfig;
   } catch (error) {
-    cachedConfig = { serverUrl: defaultUrl, print: { ...defaultPrintConfig } };
+    cachedConfig = { serverUrl: getRuntimeUrl(), print: { ...defaultPrintConfig } };
     return cachedConfig;
   }
 };
@@ -56,7 +58,8 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadURL(config.serverUrl || defaultUrl);
+  const targetUrl = app.isPackaged ? productionUrl : (config.serverUrl || developmentUrl);
+  mainWindow.loadURL(targetUrl);
 
   // Open DevTools for debugging (remove in production)
   if (!app.isPackaged) {
@@ -184,10 +187,17 @@ ipcMain.handle('secca-get-printers', async (event) => {
 });
 
 ipcMain.handle('secca-get-config', async () => {
-  return readConfig();
+  const config = readConfig();
+  if (app.isPackaged) {
+    return { ...config, serverUrl: productionUrl };
+  }
+  return config;
 });
 
 ipcMain.handle('secca-save-config', async (event, nextConfig) => {
+  if (app.isPackaged) {
+    throw new Error('Server URL dikunci ke production pada build aplikasi.');
+  }
   const serverUrl = typeof nextConfig?.serverUrl === 'string' ? nextConfig.serverUrl.trim() : '';
   if (!serverUrl) {
     throw new Error('Server URL wajib diisi.');

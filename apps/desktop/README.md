@@ -27,3 +27,7 @@ pnpm desktop:build
 ```
 
 Hasil installer ada di `apps/desktop/dist`.
+
+Catatan:
+- Saat aplikasi sudah di-build (packaged), URL server otomatis dikunci ke `https://secca.tunasestaindonesia.com`.
+- Saat mode dev, URL tetap bisa di-override via `SECCA_DESKTOP_URL` atau menu pengaturan.
