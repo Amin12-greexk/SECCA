@@ -216,8 +216,17 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         gsap.fromTo(
             row,
             { backgroundColor: '#ecfdf3' },
-            { backgroundColor: 'transparent', duration: 0.6, ease: 'power2.out' }
+            {
+                backgroundColor: 'transparent',
+                duration: 0.6,
+                ease: 'power2.out',
+                clearProps: 'backgroundColor',
+            }
         );
+    };
+
+    const clearHighlightIfActive = (entryId: string) => {
+        setHighlightedEntryId((current) => (current === entryId ? null : current));
     };
 
     const buildPrintOptions = () => {
@@ -710,11 +719,13 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     };
 
     const openPrintDialog = (batch: BatchWithEntries, entry: PecahBonEntry) => {
+        clearHighlightIfActive(entry.id);
         setPrintContext({ batch, entry });
         setPrintOpen(true);
     };
 
     const openEditDialog = (entry: PecahBonEntry) => {
+        clearHighlightIfActive(entry.id);
         setEditEntry(entry);
         setEditValues({
             gradeId: entry.gradeId,
@@ -800,6 +811,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     };
 
     const openSetoranDialog = (batch: BatchWithEntries, entry: PecahBonEntry) => {
+        clearHighlightIfActive(entry.id);
         setSetoranContext({ batch, entry });
         setSetoranOpen(true);
     };
