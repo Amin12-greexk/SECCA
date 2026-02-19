@@ -50,9 +50,17 @@ export default function Home() {
   return (
     <div
       ref={containerRef}
-      className="relative min-h-[100dvh] overflow-hidden bg-cover bg-center"
-      style={{ backgroundImage: "url('/Assets/Background.png')" }}
+      className="relative min-h-[100dvh] overflow-hidden"
     >
+      <Image
+        src="/Assets/Background.png"
+        alt=""
+        fill
+        priority
+        quality={55}
+        sizes="100vw"
+        className="object-cover"
+      />
       <div className="absolute inset-0 bg-white/85" />
 
       <div
