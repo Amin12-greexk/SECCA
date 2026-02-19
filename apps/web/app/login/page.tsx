@@ -3,8 +3,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { gsap } from 'gsap';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { useLogoReveal, useSequenceReveal } from '@/hooks/useMotion';
+import AmbientBlobs from '@/components/animations/AmbientBlobs';
 import LoadingCircle from '@/components/LoadingCircle';
 import Alert from '@/components/Alert';
 
@@ -16,7 +17,8 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const formRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const logoRef = useRef<HTMLDivElement>(null);
     const { login, isAuthenticated } = useAuth();
     const router = useRouter();
 
@@ -27,16 +29,33 @@ export default function LoginPage() {
         }
     }, [isAuthenticated, router]);
 
-    // GSAP animation on mount
-    useEffect(() => {
-        if (formRef.current) {
-            gsap.fromTo(
-                formRef.current,
-                { opacity: 0, y: 30 },
-                { opacity: 1, y: 0, duration: 0.8, ease: 'power2.out' }
-            );
-        }
-    }, []);
+    // Logo entrance
+    useLogoReveal(logoRef, { delay: 0.1, duration: 0.7 });
+
+    // Card + form stagger
+    useSequenceReveal(
+        containerRef,
+        [
+            {
+                selector: '.reveal-card',
+                from: { opacity: 0, y: 24, scale: 0.98 },
+                to: { opacity: 1, y: 0, scale: 1, duration: 0.65, delay: 0.35, ease: 'power3.out' },
+            },
+            {
+                selector: '.reveal-field',
+                from: { opacity: 0, y: 14 },
+                to: { opacity: 1, y: 0, duration: 0.45, stagger: 0.07 },
+                position: '-=0.25',
+            },
+            {
+                selector: '.reveal-submit',
+                from: { opacity: 0, y: 12, scale: 0.96 },
+                to: { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'back.out(1.2)' },
+                position: '-=0.15',
+            },
+        ],
+        [],
+    );
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -63,14 +82,17 @@ export default function LoginPage() {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 relative overflow-hidden">
-            {/* Background decorations */}
-            <div className="absolute top-[-20%] right-[-10%] w-[400px] h-[400px] rounded-full bg-emerald-100/50 blur-3xl" />
-            <div className="absolute bottom-[-15%] left-[-10%] w-[400px] h-[400px] rounded-full bg-teal-100/40 blur-3xl" />
+            {/* Ambient background */}
+            <AmbientBlobs />
 
-            <div ref={formRef} className="relative z-10 w-full max-w-md">
+            <div ref={containerRef} className="relative z-10 w-full max-w-md">
                 {/* Logo */}
                 <div className="flex justify-center mb-8">
-                    <div className="w-20 h-20 bg-white rounded-2xl shadow-lg shadow-emerald-500/10 flex items-center justify-center p-3 ring-1 ring-gray-100">
+                    <div
+                        ref={logoRef}
+                        className="w-20 h-20 bg-white rounded-2xl shadow-lg shadow-emerald-500/10 flex items-center justify-center p-3 ring-1 ring-gray-100 transition-shadow duration-300 hover:shadow-xl hover:shadow-emerald-500/15"
+                        style={{ opacity: 0 }}
+                    >
                         <Image
                             src="/Assets/Logo-secca.png"
                             alt="Logo SECCA"
@@ -82,7 +104,10 @@ export default function LoginPage() {
                 </div>
 
                 {/* Login Card */}
-                <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/50 p-8 ring-1 ring-gray-100">
+                <div
+                    className="reveal-card bg-white rounded-2xl shadow-xl shadow-gray-200/50 p-8 ring-1 ring-gray-100"
+                    style={{ opacity: 0 }}
+                >
                     <h1 className="text-2xl font-bold text-gray-900 mb-1 text-center">
                         Selamat Datang
                     </h1>
@@ -92,7 +117,7 @@ export default function LoginPage() {
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {/* Email */}
-                        <div>
+                        <div className="reveal-field" style={{ opacity: 0 }}>
                             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                                 Email
                             </label>
@@ -108,7 +133,7 @@ export default function LoginPage() {
                         </div>
 
                         {/* Password */}
-                        <div>
+                        <div className="reveal-field" style={{ opacity: 0 }}>
                             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                                 Password
                             </label>
@@ -142,7 +167,7 @@ export default function LoginPage() {
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-between text-sm text-gray-600">
+                        <div className="reveal-field flex items-center justify-between text-sm text-gray-600" style={{ opacity: 0 }}>
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input
                                     type="checkbox"
@@ -166,20 +191,22 @@ export default function LoginPage() {
                         )}
 
                         {/* Submit Button */}
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full bg-emerald-600 text-white font-semibold py-3 px-6 rounded-xl hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
-                        >
-                            {loading ? (
-                                <>
-                                    <LoadingCircle size="sm" />
-                                    <span>Memproses...</span>
-                                </>
-                            ) : (
-                                <span>Login</span>
-                            )}
-                        </button>
+                        <div className="reveal-submit" style={{ opacity: 0 }}>
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full bg-emerald-600 text-white font-semibold py-3 px-6 rounded-xl hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.97] active:shadow-md"
+                            >
+                                {loading ? (
+                                    <>
+                                        <LoadingCircle size="sm" />
+                                        <span>Memproses...</span>
+                                    </>
+                                ) : (
+                                    <span>Login</span>
+                                )}
+                            </button>
+                        </div>
                     </form>
                 </div>
             </div>
