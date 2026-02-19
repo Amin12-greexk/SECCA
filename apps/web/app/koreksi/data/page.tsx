@@ -13,6 +13,7 @@ import {
 } from '@/lib/api';
 
 const ROWS_PER_PAGE = 20;
+const CSV_DELIMITER = ';';
 
 function KoreksiDataContent() {
   const toast = useToast();
@@ -190,7 +191,7 @@ function KoreksiDataContent() {
   const escapeCsv = (value: string | number) => {
     const text = String(value ?? '');
     const escaped = text.replace(/"/g, '""');
-    return /[",\n]/.test(escaped) ? `"${escaped}"` : escaped;
+    return new RegExp(`["\\n${CSV_DELIMITER}]`).test(escaped) ? `"${escaped}"` : escaped;
   };
 
   const downloadExcel = () => {
@@ -206,7 +207,7 @@ function KoreksiDataContent() {
       'Batch',
       'Grade',
       'Kondisi',
-      'Keping',
+      'Keping (pcs)',
       'Berat Basah (Gr)',
       'Kadar Air (%)',
       'Berat Kering (Gr)',
@@ -219,16 +220,16 @@ function KoreksiDataContent() {
         entry.rawBatch?.batchNumber ?? '-',
         gradeLabelFor(entry),
         entry.featherCondition ?? '-',
-        entry.pieceCount,
+        `${entry.pieceCount} pcs`,
         formatNumber(entry.initialWeightGram, 2),
         formatNumber(entry.moisturePercent, 1),
         formatNumber(entry.dryWeightGram, 2),
       ]
         .map(escapeCsv)
-        .join(',')
+        .join(CSV_DELIMITER)
     );
 
-    const csvContent = `\uFEFF${[headers.join(','), ...csvRows].join('\n')}`;
+    const csvContent = `\uFEFF${[headers.join(CSV_DELIMITER), ...csvRows].join('\r\n')}`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -257,7 +258,7 @@ function KoreksiDataContent() {
       'Batch',
       'Grade',
       'Kondisi',
-      'Keping',
+      'Keping (pcs)',
       'Berat Basah (Gr)',
       'Kadar Air (%)',
       'Berat Kering (Gr)',
@@ -270,7 +271,7 @@ function KoreksiDataContent() {
         entry.rawBatch?.batchNumber ?? '-',
         gradeLabelFor(entry),
         entry.featherCondition ?? '-',
-        entry.pieceCount,
+        `${entry.pieceCount} pcs`,
         formatNumber(entry.initialWeightGram, 2),
         formatNumber(entry.moisturePercent, 1),
         formatNumber(entry.dryWeightGram, 2),
@@ -488,6 +489,7 @@ function KoreksiDataContent() {
                           <th className="px-3 py-2 text-left font-medium text-gray-600">ID LP</th>
                           <th className="px-3 py-2 text-left font-medium text-gray-600">Tanggal</th>
                           <th className="px-3 py-2 text-left font-medium text-gray-600">Grade</th>
+                          <th className="px-3 py-2 text-right font-medium text-gray-600">PCS</th>
                           <th className="px-3 py-2 text-right font-medium text-gray-600">Basah</th>
                           <th className="px-3 py-2 text-right font-medium text-gray-600">K.Air</th>
                           <th className="px-3 py-2 text-right font-medium text-gray-600">Kering</th>
@@ -514,6 +516,9 @@ function KoreksiDataContent() {
                               <td className="px-3 py-2 font-mono text-gray-700">{entry.pecahBonId ?? '-'}</td>
                               <td className="px-3 py-2 text-gray-600">{formatDate(entry.pecahBonDate)}</td>
                               <td className="px-3 py-2 text-gray-700">{gradeLabelFor(entry)}</td>
+                              <td className="px-3 py-2 text-right font-mono text-gray-700">
+                                {entry.pieceCount} pcs
+                              </td>
                               <td className="px-3 py-2 text-right font-mono text-gray-700">
                                 {formatNumber(entry.initialWeightGram, 2)}
                               </td>
