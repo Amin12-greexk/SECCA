@@ -1038,7 +1038,15 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         setScanLoading(true);
         try {
             const entry = await getPecahBonById(trimmed);
-            await openFromScan(entry, { openPrint: true });
+            if (entry.pecahBonId) {
+                const parsed = parsePecahBonId(entry.pecahBonId);
+                if (parsed) {
+                    setLpDigits(parsed.digits);
+                    setYearSuffix(parsed.year);
+                }
+            }
+            await openFromScan(entry, { openPrint: false, persistHighlight: true });
+            toast.success(`LP ${entry.pecahBonId ?? trimmed} ditemukan. Pilih aksi Print/Edit/Setoran pada tabel.`);
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Gagal menemukan QR.';
             toast.error(message);

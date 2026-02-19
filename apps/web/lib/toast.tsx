@@ -67,7 +67,7 @@ function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: 
 
 function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) => void }) {
     const variantStyles = {
-        success: 'bg-green-600 text-white',
+        success: 'bg-[#059833] text-white',
         error: 'bg-red-600 text-white',
         warning: 'bg-yellow-500 text-white',
         info: 'bg-blue-600 text-white',

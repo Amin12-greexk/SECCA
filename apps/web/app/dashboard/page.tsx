@@ -54,7 +54,7 @@ function DashboardContent() {
             case 'trainer':
                 return 'Atur order mitra sesuai kapasitas';
             case 'manager':
-                return 'Pantau seluruh operasional sistem';
+                return 'Monitor Baku, kapasitas mitra dan juga kapasitas mingguan';
             default:
                 return 'Selamat datang di sistem SECCA';
         }

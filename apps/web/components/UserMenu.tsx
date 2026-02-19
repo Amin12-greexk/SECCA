@@ -27,15 +27,13 @@ export default function UserMenu() {
     const getRoleBadgeColor = (role: string) => {
         switch (role) {
             case 'manager':
-                return 'bg-purple-100 text-purple-800';
             case 'baku':
-                return 'bg-green-100 text-green-800';
             case 'mitra':
-                return 'bg-blue-100 text-blue-800';
             case 'koreksi':
-                return 'bg-yellow-100 text-yellow-800';
+            case 'trainer':
+                return 'bg-green-100 text-[#059833]';
             default:
-                return 'bg-gray-100 text-gray-800';
+                return 'bg-green-100 text-[#059833]';
         }
     };
 
@@ -53,17 +51,17 @@ export default function UserMenu() {
             {/* User Button */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-green-700 transition-colors"
+                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#047f2b] transition-colors"
             >
                 {/* Avatar */}
-                <div className="w-8 h-8 bg-white text-green-600 rounded-full flex items-center justify-center font-semibold text-sm">
+                <div className="w-8 h-8 bg-white text-[#059833] rounded-full flex items-center justify-center font-semibold text-sm">
                     {getInitials(user.name)}
                 </div>
 
                 {/* User Info */}
                 <div className="hidden md:block text-left">
                     <p className="text-sm font-medium text-white">{user.name}</p>
-                    <p className="text-xs text-green-100 capitalize">{user.role}</p>
+                    <p className="text-xs text-white/85 capitalize">{user.role}</p>
                 </div>
 
                 {/* Dropdown Icon */}

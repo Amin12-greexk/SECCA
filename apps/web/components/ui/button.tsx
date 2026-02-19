@@ -15,10 +15,10 @@ export interface ButtonProps
 }
 
 const baseStyles =
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#059833] disabled:pointer-events-none disabled:opacity-50";
 
 const variantStyles: Record<ButtonVariant, string> = {
-  default: "bg-green-600 text-white hover:bg-green-700",
+  default: "bg-[#059833] text-white hover:bg-[#059833]",
   secondary: "bg-gray-100 text-gray-900 hover:bg-gray-200",
   outline: "border border-gray-200 bg-white hover:bg-gray-50",
   ghost: "hover:bg-gray-100",

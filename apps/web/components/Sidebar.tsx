@@ -335,7 +335,7 @@ export default function Sidebar() {
                                 flex items-center w-full rounded-xl transition-all duration-200
                                 ${isCollapsed && !isMobile ? 'justify-center px-3 py-3' : 'justify-between px-4 py-3'}
                                 ${isAnyChildActive
-                                    ? 'bg-emerald-50 text-emerald-700 shadow-sm'
+                                    ? 'bg-green-100 text-[#059833] shadow-sm'
                                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                 }
                                 ${hoveredItem === item.name ? 'scale-[1.02]' : ''}
@@ -344,7 +344,7 @@ export default function Sidebar() {
                             <div className={`flex items-center ${isCollapsed && !isMobile ? '' : 'gap-3'}`}>
                                 <span className={`
                                     flex-shrink-0 transition-colors duration-200
-                                    ${isAnyChildActive ? 'text-emerald-600' : 'text-gray-400 group-hover:text-gray-600'}
+                                    ${isAnyChildActive ? 'text-[#059833]' : 'text-gray-400 group-hover:text-gray-600'}
                                 `}>
                                     {item.icon}
                                 </span>
@@ -395,7 +395,7 @@ export default function Sidebar() {
                                 ${isCollapsed && !isMobile && !isChild ? 'justify-center px-3 py-3' : 'px-4 py-3 gap-3'}
                                 ${isChild ? 'text-sm' : ''}
                                 ${isActive
-                                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/25'
+                                    ? 'bg-[#059833] text-white shadow-lg shadow-[rgba(5,152,51,0.25)]'
                                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                 }
                                 ${hoveredItem === item.name && !isActive ? 'scale-[1.02]' : ''}
@@ -475,7 +475,7 @@ export default function Sidebar() {
                         flex items-center gap-3 px-3 py-2 rounded-xl bg-gray-50
                         ${isCollapsed && !isMobile ? 'justify-center' : ''}
                     `}>
-                        <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-semibold text-sm shadow-lg shadow-emerald-500/25">
+                        <div className="w-8 h-8 bg-[#059833] rounded-lg flex items-center justify-center text-white font-semibold text-sm shadow-lg shadow-[rgba(5,152,51,0.25)]">
                             {user.name.charAt(0).toUpperCase()}
                         </div>
                         {(!isCollapsed || isMobile) && (

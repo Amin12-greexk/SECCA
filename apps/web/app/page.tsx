@@ -56,14 +56,16 @@ export default function Home() {
       >
         {/* Logo */}
         <div className="logo-image mb-10">
-          <Image
-            src="/Assets/Logo-secca.png"
-            alt="Logo SECCA"
-            width={200}
-            height={200}
-            className="w-[140px] md:w-[180px] h-auto object-contain drop-shadow-md"
-            priority
-          />
+          <div className="flex h-[156px] w-[156px] items-center justify-center rounded-3xl bg-white p-4 shadow-lg ring-1 ring-gray-100 md:h-[196px] md:w-[196px]">
+            <Image
+              src="/Assets/Logo-secca.png"
+              alt="Logo SECCA"
+              width={200}
+              height={200}
+              className="h-full w-full object-contain"
+              priority
+            />
+          </div>
         </div>
 
         {/* Welcome Text */}

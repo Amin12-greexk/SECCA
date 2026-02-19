@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import {
     getManagerGradeUsage,
     getManagerCapacity,
@@ -217,6 +217,8 @@ function DonutChart({ rows, total, title }: {
     const circumference = 2 * Math.PI * r;
     const animatedTotal = useAnimatedNumber(total, 650);
     const [isAnimated, setIsAnimated] = useState(false);
+    const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+    const [tooltip, setTooltip] = useState<{ x: number; y: number; index: number } | null>(null);
 
     const normalizedRows = useMemo(() => {
         if (rows.length === 0 || total <= 0) return [];
@@ -262,6 +264,22 @@ function DonutChart({ rows, total, title }: {
         return () => window.cancelAnimationFrame(rafId);
     }, [segmentKey, total]);
 
+    const hideTooltip = () => {
+        setHoveredIndex(null);
+        setTooltip(null);
+    };
+
+    const updateTooltip = (index: number, event: ReactMouseEvent<SVGCircleElement>) => {
+        const bounds = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
+        if (!bounds) return;
+        setHoveredIndex(index);
+        setTooltip({
+            index,
+            x: event.clientX - bounds.left,
+            y: event.clientY - bounds.top,
+        });
+    };
+
     return (
         <div className="flex flex-col items-center">
             {title ? <p className="text-sm font-semibold text-gray-700 mb-2">{title}</p> : null}
@@ -271,44 +289,80 @@ function DonutChart({ rows, total, title }: {
                 </div>
             ) : (
                 <>
-                    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-                        <circle
-                            cx={cx}
-                            cy={cy}
-                            r={r}
-                            fill="none"
-                            stroke="#ecfdf5"
-                            strokeWidth={stroke}
-                        />
-                        {segments.map((segment, i) => (
+                    <div className="relative">
+                        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
                             <circle
-                                key={i}
                                 cx={cx}
                                 cy={cy}
                                 r={r}
                                 fill="none"
-                                stroke={segment.color}
+                                stroke="#ecfdf5"
                                 strokeWidth={stroke}
-                                strokeLinecap="butt"
-                                strokeDasharray={isAnimated ? `${segment.dash} ${circumference}` : `0 ${circumference}`}
-                                strokeDashoffset={isAnimated ? segment.offset : 0}
-                                transform={`rotate(-90 ${cx} ${cy})`}
-                                style={{
-                                    transition: `stroke-dasharray 650ms cubic-bezier(0.22, 1, 0.36, 1) ${i * 50}ms, stroke-dashoffset 650ms cubic-bezier(0.22, 1, 0.36, 1) ${i * 50}ms`,
-                                }}
                             />
-                        ))}
-                        {/* Center text */}
-                        <text x={cx} y={cy - 10} textAnchor="middle" fill="#111827" fontSize="16" fontWeight="700">
-                            {fmt(animatedTotal, 0)}
-                        </text>
-                        <text x={cx} y={cy + 8} textAnchor="middle" fill="#6b7280" fontSize="10">
-                            Total periode
-                        </text>
-                        <text x={cx} y={cy + 22} textAnchor="middle" fill="#9ca3af" fontSize="9">
-                            gram
-                        </text>
-                    </svg>
+                            {segments.map((segment, i) => {
+                                const isHovered = hoveredIndex === i;
+                                return (
+                                    <g
+                                        key={i}
+                                        transform={`rotate(-90 ${cx} ${cy})`}
+                                        style={{
+                                            transformOrigin: `${cx}px ${cy}px`,
+                                            transform: isHovered ? 'scale(1.035)' : 'scale(1)',
+                                            filter: isHovered ? 'drop-shadow(0 3px 10px rgba(15, 23, 42, 0.16))' : 'none',
+                                            transition: 'transform 180ms ease, filter 180ms ease',
+                                        }}
+                                    >
+                                        <circle
+                                            cx={cx}
+                                            cy={cy}
+                                            r={r}
+                                            fill="none"
+                                            stroke={segment.color}
+                                            strokeWidth={isHovered ? stroke + 2 : stroke}
+                                            strokeLinecap="butt"
+                                            strokeDasharray={isAnimated ? `${segment.dash} ${circumference}` : `0 ${circumference}`}
+                                            strokeDashoffset={isAnimated ? segment.offset : 0}
+                                            onMouseEnter={(event) => updateTooltip(i, event)}
+                                            onMouseMove={(event) => updateTooltip(i, event)}
+                                            onMouseLeave={hideTooltip}
+                                            style={{
+                                                cursor: 'pointer',
+                                                transition: `stroke-dasharray 650ms cubic-bezier(0.22, 1, 0.36, 1) ${i * 50}ms, stroke-dashoffset 650ms cubic-bezier(0.22, 1, 0.36, 1) ${i * 50}ms, stroke-width 180ms ease`,
+                                            }}
+                                        />
+                                    </g>
+                                );
+                            })}
+                            {/* Center text */}
+                            <text x={cx} y={cy - 10} textAnchor="middle" fill="#111827" fontSize="16" fontWeight="700">
+                                {fmt(animatedTotal, 0)}
+                            </text>
+                            <text x={cx} y={cy + 8} textAnchor="middle" fill="#6b7280" fontSize="10">
+                                Total periode
+                            </text>
+                            <text x={cx} y={cy + 22} textAnchor="middle" fill="#9ca3af" fontSize="9">
+                                gram
+                            </text>
+                        </svg>
+
+                        {tooltip && segments[tooltip.index] ? (
+                            <div
+                                className="pointer-events-none absolute z-20 min-w-[180px] rounded-lg border border-gray-800 bg-gray-900/95 px-3 py-2 text-left text-xs text-white shadow-xl"
+                                style={{
+                                    left: `${Math.min(Math.max(tooltip.x + 12, 8), size - 190)}px`,
+                                    top: `${Math.min(Math.max(tooltip.y - 12, 8), size - 92)}px`,
+                                }}
+                            >
+                                <p className="font-semibold leading-tight">{segments[tooltip.index].key}</p>
+                                <p className="mt-1 text-[11px] text-gray-200">
+                                    {fmt(segments[tooltip.index].gram, 1)} gr · {segments[tooltip.index].lpCount} LP
+                                </p>
+                                <p className="text-[11px] text-emerald-300">
+                                    {segments[tooltip.index].percentage.toFixed(1)}%
+                                </p>
+                            </div>
+                        ) : null}
+                    </div>
 
                     {/* Legend */}
                     <div className="mt-2 w-full max-w-[420px] space-y-2">

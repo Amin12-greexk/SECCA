@@ -1,18 +1,58 @@
 @import "tailwindcss";
 
 :root {
-  /* Primary Colors - Emerald/Teal Theme */
-  --primary: 16 185 129;
-  /* emerald-500 */
-  --primary-hover: 5 150 105;
-  /* emerald-600 */
-  --primary-dark: 4 120 87;
-  /* emerald-700 */
+  /* Primary Colors - SECCA Green */
+  --primary: 5 152 51;
+  --primary-hover: 5 152 51;
+  --primary-dark: 5 152 51;
 
   /* Sidebar */
   --sidebar-width: 256px;
   --sidebar-collapsed-width: 80px;
   --header-height: 72px;
+}
+
+/* Global palette normalization */
+.bg-green-50,
+.bg-emerald-50 {
+  background-color: rgba(5, 152, 51, 0.06) !important;
+}
+
+.bg-green-100,
+.bg-emerald-100 {
+  background-color: rgba(5, 152, 51, 0.12) !important;
+}
+
+.bg-green-500,
+.bg-green-600,
+.bg-green-700,
+.bg-emerald-500,
+.bg-emerald-600,
+.bg-emerald-700 {
+  background-color: rgb(5 152 51) !important;
+}
+
+.text-green-600,
+.text-green-700,
+.text-green-800,
+.text-green-900,
+.text-emerald-600,
+.text-emerald-700,
+.text-emerald-800,
+.text-emerald-900 {
+  color: rgb(5 152 51) !important;
+}
+
+.border-green-100,
+.border-green-200,
+.border-green-500,
+.border-green-600,
+.border-emerald-100,
+.border-emerald-200,
+.border-emerald-400,
+.border-emerald-500,
+.border-emerald-600 {
+  border-color: rgba(5, 152, 51, 0.32) !important;
 }
 
 body {

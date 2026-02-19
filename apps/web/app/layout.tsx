@@ -19,9 +19,9 @@ function Header() {
   const { toggleMobileMenu, isMobile } = useSidebar();
 
   return (
-    <header className="bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 fixed top-0 left-0 right-0 z-50 h-[72px]">
-      <div className="px-4 h-full flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <header className="fixed top-0 left-0 right-0 z-50 h-[72px] bg-[#059833] text-white shadow-lg">
+      <div className="h-full flex items-center justify-between px-5">
+        <div className="flex items-center gap-3 pl-1">
           {/* Hamburger Menu (Mobile only) */}
           {isMobile && (
             <button
@@ -45,13 +45,13 @@ function Header() {
 
           {/* Logo */}
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 flex items-center justify-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white p-1 shadow-sm">
               <Image
                 src="/Assets/Logo-secca.png"
                 alt="SECCA"
                 width={36}
                 height={36}
-                className="h-9 w-9 object-contain"
+                className="h-8 w-8 object-contain"
                 priority
               />
             </div>
@@ -73,7 +73,7 @@ function MainContent({ children }: { children: React.ReactNode }) {
       className={`
         mt-[72px] min-h-[calc(100vh-72px)]
         transition-all duration-300 ease-in-out
-        bg-gray-50/50
+        bg-green-50/40
         ${isMobile ? 'ml-0' : (isCollapsed ? 'ml-20' : 'ml-64')}
       `}
     >
@@ -115,8 +115,8 @@ export default function RootLayout({
   return (
     <html lang="id">
       <head>
-        <title>SECCA - Sistem Manajemen Baku</title>
-        <meta name="description" content="Sistem manajemen operasional SECCA untuk baku, mitra, dan manajemen" />
+        <title>SECCA</title>
+        <meta name="description" content="Sistem manajemen operasional" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" sizes="any" />
       </head>
