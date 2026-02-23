@@ -10,31 +10,31 @@ export declare class GradesService {
         name: string;
         createdAt: Date;
         updatedAt: Date;
-        code: string;
         type: import("@prisma/client").$Enums.GradeType;
+        code: string;
     }>;
     findAll(): Prisma.PrismaPromise<{
         id: string;
         name: string;
         createdAt: Date;
         updatedAt: Date;
-        code: string;
         type: import("@prisma/client").$Enums.GradeType;
+        code: string;
     }[]>;
     update(id: string, dto: UpdateGradeDto): Promise<{
         id: string;
         name: string;
         createdAt: Date;
         updatedAt: Date;
-        code: string;
         type: import("@prisma/client").$Enums.GradeType;
+        code: string;
     }>;
     remove(id: string): Promise<{
         id: string;
         name: string;
         createdAt: Date;
         updatedAt: Date;
-        code: string;
         type: import("@prisma/client").$Enums.GradeType;
+        code: string;
     }>;
 }

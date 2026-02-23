@@ -219,6 +219,25 @@ export interface WorkerWeeklyStatsResponse {
     weeks: WorkerWeeklyStat[];
 }
 
+export interface PaginatedResult<T> {
+    items: T[];
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+}
+
+export interface RawBatchPageQuery {
+    page?: number;
+    limit?: number;
+    activeOnly?: boolean;
+}
+
+export interface PecahBonEntryPageQuery {
+    page?: number;
+    limit?: number;
+}
+
 export type WorkLane = 'NEXT_DAY' | 'IN_PROGRESS' | 'READY_TO_SUBMIT';
 
 export interface WorkOrderBoardItem {
@@ -275,6 +294,16 @@ function getAuthHeaders(options: { json?: boolean } = { json: true }): HeadersIn
     }
 
     return headers;
+}
+
+function buildQueryString(params: Record<string, string | number | boolean | undefined>) {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+        if (value === undefined || value === null) return;
+        searchParams.set(key, String(value));
+    });
+    const query = searchParams.toString();
+    return query ? `?${query}` : '';
 }
 
 // Auth API Functions
@@ -801,6 +830,31 @@ export async function getRawBatches(): Promise<RawBatch[]> {
     }
 }
 
+export async function getRawBatchesPaginated(
+    query: RawBatchPageQuery = {}
+): Promise<PaginatedResult<RawBatch>> {
+    try {
+        const queryString = buildQueryString({
+            page: query.page,
+            limit: query.limit,
+            activeOnly: query.activeOnly,
+        });
+        const response = await fetch(`${API_BASE_URL}/api/baku/paginated${queryString}`, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch paginated raw batches: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<PaginatedResult<RawBatch>>(json);
+    } catch (error) {
+        console.error('Error fetching paginated raw batches:', error);
+        throw error;
+    }
+}
+
 export async function getRawBatchByCardId(cardId: string): Promise<RawBatch> {
     try {
         const response = await fetch(`${API_BASE_URL}/api/baku/${cardId}`, {
@@ -967,6 +1021,31 @@ export async function getPecahBonEntries(rawBatchId: string): Promise<PecahBonEn
         return unwrap<PecahBonEntry[]>(json);
     } catch (error) {
         console.error('Error fetching pecah bon entries:', error);
+        throw error;
+    }
+}
+
+export async function getPecahBonEntriesPaginated(
+    rawBatchId: string,
+    query: PecahBonEntryPageQuery = {}
+): Promise<PaginatedResult<PecahBonEntry>> {
+    try {
+        const queryString = buildQueryString({
+            page: query.page,
+            limit: query.limit,
+        });
+        const response = await fetch(`${API_BASE_URL}/api/baku/${rawBatchId}/pecah-bon/paginated${queryString}`, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch paginated pecah bon entries: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<PaginatedResult<PecahBonEntry>>(json);
+    } catch (error) {
+        console.error('Error fetching paginated pecah bon entries:', error);
         throw error;
     }
 }

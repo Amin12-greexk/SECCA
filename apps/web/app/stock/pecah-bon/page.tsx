@@ -26,10 +26,11 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/lib/toast';
 import {
-    getRawBatches,
+    getRawBatchesPaginated,
     getGrades,
     createPecahBon,
     getPecahBonEntries,
+    getPecahBonEntriesPaginated,
     getPecahBonById,
     updatePecahBonEntry,
     markPecahBonPrinted,
@@ -54,12 +55,15 @@ type PecahBonFormValues = z.infer<typeof pecahBonSchema>;
 
 // Pagination constant for entries display
 const ENTRIES_PER_PAGE = 20;
+const BATCHES_PER_PAGE = 20;
 
 interface BatchWithEntries extends RawBatch {
     pecahBonEntries?: PecahBonEntry[];
     entriesLoading?: boolean;
     expanded?: boolean;
     entriesPage?: number;
+    entriesTotal?: number;
+    entriesTotalPages?: number;
 }
 
 // Multi-entry row for bulk pecah bon
@@ -95,6 +99,9 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     const preferDocumentPrint = false;
     const preferDocumentPrintSetoran = false;
     const [rawBatches, setRawBatches] = useState<BatchWithEntries[]>([]);
+    const [batchPage, setBatchPage] = useState(1);
+    const [batchTotalPages, setBatchTotalPages] = useState(1);
+    const [batchTotal, setBatchTotal] = useState(0);
     const [grades, setGrades] = useState<Grade[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedBatch, setSelectedBatch] = useState<BatchWithEntries | null>(null);
@@ -609,26 +616,42 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         },
     });
 
-    const loadData = async () => {
+    const loadData = async (page = batchPage, options?: { withGrades?: boolean }) => {
         setLoading(true);
         try {
-            const [batchData, gradeData] = await Promise.all([
-                getRawBatches(),
-                getGrades(),
+            const shouldLoadGrades = options?.withGrades ?? grades.length === 0;
+            const [batchResponse, gradeData] = await Promise.all([
+                getRawBatchesPaginated({
+                    page,
+                    limit: BATCHES_PER_PAGE,
+                    activeOnly: true,
+                }),
+                shouldLoadGrades ? getGrades() : Promise.resolve(grades),
             ]);
-            const mapped = batchData.map((item: RawBatch & { rawBatchId?: string }) => ({
+            if (batchResponse.total > 0 && batchResponse.page > batchResponse.totalPages) {
+                await loadData(batchResponse.totalPages, options);
+                return;
+            }
+            const mapped = batchResponse.items.map((item: RawBatch & { rawBatchId?: string }) => ({
                 ...item,
                 id: item.rawBatchId ?? item.id,
                 expanded: false,
                 pecahBonEntries: undefined,
                 entriesLoading: false,
-                entriesPage: 0,
+                entriesPage: 1,
+                entriesTotal: 0,
+                entriesTotalPages: 1,
             }));
             mapped.sort((left, right) =>
                 left.batchNumber.localeCompare(right.batchNumber),
             );
             setRawBatches(mapped);
-            setGrades(gradeData);
+            if (shouldLoadGrades) {
+                setGrades(gradeData);
+            }
+            setBatchPage(batchResponse.page);
+            setBatchTotalPages(batchResponse.totalPages);
+            setBatchTotal(batchResponse.total);
         } catch (err) {
             console.error('Error loading data:', err);
             toast.error('Gagal memuat data.');
@@ -638,9 +661,47 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     };
 
     useEffect(() => {
-        loadData();
+        loadData(1, { withGrades: true });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    const loadEntriesPage = async (batchId: string, page: number) => {
+        setRawBatches((prev) =>
+            prev.map((b) =>
+                b.id === batchId ? { ...b, entriesLoading: true, expanded: true } : b
+            )
+        );
+
+        try {
+            const response = await getPecahBonEntriesPaginated(batchId, {
+                page,
+                limit: ENTRIES_PER_PAGE,
+            });
+            setRawBatches((prev) =>
+                prev.map((b) =>
+                    b.id === batchId
+                        ? {
+                            ...b,
+                            pecahBonEntries: response.items,
+                            entriesLoading: false,
+                            entriesPage: response.page,
+                            entriesTotal: response.total,
+                            entriesTotalPages: response.totalPages,
+                            expanded: true,
+                        }
+                        : b
+                )
+            );
+        } catch (err) {
+            console.error('Error loading pecah bon entries:', err);
+            toast.error('Gagal memuat pecah bon entries.');
+            setRawBatches((prev) =>
+                prev.map((b) =>
+                    b.id === batchId ? { ...b, entriesLoading: false } : b
+                )
+            );
+        }
+    };
 
     const toggleExpand = async (batchId: string) => {
         const batchIndex = rawBatches.findIndex((b) => b.id === batchId);
@@ -654,43 +715,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
             );
         } else {
             if (!batch.pecahBonEntries) {
-                setRawBatches((prev) =>
-                    prev.map((b) =>
-                        b.id === batchId ? { ...b, entriesLoading: true, expanded: true } : b
-                    )
-                );
-
-                try {
-                    const entries = await getPecahBonEntries(batchId);
-                    setRawBatches((prev) =>
-                        prev.map((b) =>
-                            b.id === batchId
-                                ? {
-                                    ...b,
-                                    pecahBonEntries: [...entries].sort((left, right) => {
-                                        const leftId = left.pecahBonId ?? '';
-                                        const rightId = right.pecahBonId ?? '';
-                                        if (leftId && rightId) {
-                                            return leftId.localeCompare(rightId);
-                                        }
-                                        if (leftId) return -1;
-                                        if (rightId) return 1;
-                                        return new Date(left.pecahBonDate).getTime() - new Date(right.pecahBonDate).getTime();
-                                    }),
-                                    entriesLoading: false,
-                                }
-                                : b
-                        )
-                    );
-                } catch (err) {
-                    console.error('Error loading pecah bon entries:', err);
-                    toast.error('Gagal memuat pecah bon entries.');
-                    setRawBatches((prev) =>
-                        prev.map((b) =>
-                            b.id === batchId ? { ...b, entriesLoading: false } : b
-                        )
-                    );
-                }
+                await loadEntriesPage(batchId, 1);
             } else {
                 setRawBatches((prev) =>
                     prev.map((b) => (b.id === batchId ? { ...b, expanded: true } : b))
@@ -846,7 +871,17 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
 
     const handlePrintSelected = async (batch: BatchWithEntries, entryIds: string[]) => {
         if (entryIds.length === 0) return;
-        const entries = (batch.pecahBonEntries ?? []).filter((entry) => entryIds.includes(entry.id));
+        let entries = (batch.pecahBonEntries ?? []).filter((entry) => entryIds.includes(entry.id));
+        if (entries.length !== entryIds.length) {
+            try {
+                const allEntries = await getPecahBonEntries(batch.id);
+                entries = allEntries.filter((entry) => entryIds.includes(entry.id));
+            } catch (err) {
+                const message = err instanceof Error ? err.message : 'Gagal memuat data LP untuk dicetak.';
+                toast.error(message);
+                return;
+            }
+        }
         if (entries.length === 0) return;
 
         if (typeof window !== 'undefined' && window.securePOSPrinter?.print) {
@@ -879,7 +914,17 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
 
     const handlePrintSetoranSelected = async (batch: BatchWithEntries, entryIds: string[]) => {
         if (entryIds.length === 0) return;
-        const entries = (batch.pecahBonEntries ?? []).filter((entry) => entryIds.includes(entry.id));
+        let entries = (batch.pecahBonEntries ?? []).filter((entry) => entryIds.includes(entry.id));
+        if (entries.length !== entryIds.length) {
+            try {
+                const allEntries = await getPecahBonEntries(batch.id);
+                entries = allEntries.filter((entry) => entryIds.includes(entry.id));
+            } catch (err) {
+                const message = err instanceof Error ? err.message : 'Gagal memuat data LP untuk dicetak.';
+                toast.error(message);
+                return;
+            }
+        }
         if (entries.length === 0) return;
 
         if (typeof window !== 'undefined' && window.securePOSPrinter?.print) {
@@ -913,6 +958,16 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         return { digits: match[2], year: match[3] };
     };
 
+    const sortEntriesByPecahBonId = (entries: PecahBonEntry[]) =>
+        [...entries].sort((left, right) => {
+            const leftId = left.pecahBonId ?? '';
+            const rightId = right.pecahBonId ?? '';
+            if (leftId && rightId) return leftId.localeCompare(rightId);
+            if (leftId) return -1;
+            if (rightId) return 1;
+            return new Date(left.pecahBonDate).getTime() - new Date(right.pecahBonDate).getTime();
+        });
+
     const openFromScan = async (
         entry: PecahBonEntry,
         options?: { openPrint?: boolean; persistHighlight?: boolean }
@@ -926,24 +981,24 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         }
 
         let batch = rawBatches.find((b) => b.id === batchId);
-        let sortedEntries: PecahBonEntry[] | undefined = batch?.pecahBonEntries;
         if (!batch) {
-            try {
-                const batchData = await getRawBatches();
-                const mapped = batchData.map((item: RawBatch & { rawBatchId?: string }) => ({
-                    ...item,
-                    id: item.rawBatchId ?? item.id,
+            const rawBatch = entry.rawBatch as (RawBatch & { rawBatchId?: string }) | undefined;
+            if (rawBatch) {
+                const fallbackBatch: BatchWithEntries = {
+                    ...rawBatch,
+                    id: rawBatch.rawBatchId ?? rawBatch.id,
                     expanded: false,
                     pecahBonEntries: undefined,
                     entriesLoading: false,
-                    entriesPage: 0,
-                }));
-                mapped.sort((left, right) => left.batchNumber.localeCompare(right.batchNumber));
-                setRawBatches(mapped);
-                batch = mapped.find((b) => b.id === batchId);
-                sortedEntries = batch?.pecahBonEntries;
-            } catch (err) {
-                console.error('Error loading data:', err);
+                    entriesPage: 1,
+                    entriesTotal: 0,
+                    entriesTotalPages: 1,
+                };
+                batch = fallbackBatch;
+                setRawBatches((prev) => {
+                    if (prev.some((item) => item.id === fallbackBatch.id)) return prev;
+                    return [fallbackBatch, ...prev];
+                });
             }
         }
 
@@ -952,65 +1007,38 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
             return;
         }
 
-        if (!batch.pecahBonEntries) {
-            setRawBatches((prev) =>
-                prev.map((b) =>
-                    b.id === batchId ? { ...b, entriesLoading: true, expanded: true } : b
-                )
-            );
-            try {
-                const entries = await getPecahBonEntries(batchId);
-                sortedEntries = [...entries].sort((left, right) => {
-                    const leftId = left.pecahBonId ?? '';
-                    const rightId = right.pecahBonId ?? '';
-                    if (leftId && rightId) {
-                        return leftId.localeCompare(rightId);
-                    }
-                    if (leftId) return -1;
-                    if (rightId) return 1;
-                    return new Date(left.pecahBonDate).getTime() - new Date(right.pecahBonDate).getTime();
-                });
-                setRawBatches((prev) =>
-                    prev.map((b) =>
-                        b.id === batchId
-                            ? {
-                                ...b,
-                                pecahBonEntries: sortedEntries,
-                                entriesLoading: false,
-                                expanded: true,
-                            }
-                            : b
-                    )
-                );
-            } catch (err) {
-                console.error('Error loading pecah bon entries:', err);
-                toast.error('Gagal memuat pecah bon entries.');
-                setRawBatches((prev) =>
-                    prev.map((b) =>
-                        b.id === batchId ? { ...b, entriesLoading: false } : b
-                    )
-                );
-            }
-        } else {
-            sortedEntries = batch.pecahBonEntries;
-            setRawBatches((prev) =>
-                prev.map((b) => (b.id === batchId ? { ...b, expanded: true } : b))
-            );
+        let entriesInBatch: PecahBonEntry[] = [];
+        try {
+            entriesInBatch = sortEntriesByPecahBonId(await getPecahBonEntries(batchId));
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Gagal memuat pecah bon entries.';
+            toast.error(message);
+            return;
         }
 
-        const entriesInBatch = sortedEntries ?? [];
         const entryFromList =
             entriesInBatch.find(
                 (item) => item.id === entry.id || item.pecahBonId === entry.pecahBonId
             ) ?? entry;
 
         const targetIndex = entriesInBatch.findIndex((item) => item.id === entryFromList.id);
-        const targetPage = targetIndex >= 0 ? Math.floor(targetIndex / ENTRIES_PER_PAGE) : 0;
+        const targetPage = targetIndex >= 0 ? Math.floor(targetIndex / ENTRIES_PER_PAGE) + 1 : 1;
+        const totalEntries = entriesInBatch.length;
+        const totalPages = Math.max(1, Math.ceil(totalEntries / ENTRIES_PER_PAGE));
+        const startIdx = (targetPage - 1) * ENTRIES_PER_PAGE;
+        const pagedEntries = entriesInBatch.slice(startIdx, startIdx + ENTRIES_PER_PAGE);
 
         setRawBatches((prev) =>
             prev.map((b) =>
                 b.id === batchId
-                    ? { ...b, expanded: true, entriesPage: targetPage, pecahBonEntries: entriesInBatch }
+                    ? {
+                        ...b,
+                        expanded: true,
+                        entriesPage: targetPage,
+                        entriesTotal: totalEntries,
+                        entriesTotalPages: totalPages,
+                        pecahBonEntries: pagedEntries,
+                    }
                     : b
             )
         );
@@ -1028,7 +1056,16 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         }
 
         if (openPrint) {
-            openPrintDialog({ ...batch, pecahBonEntries: entriesInBatch }, entryFromList);
+            openPrintDialog(
+                {
+                    ...batch,
+                    pecahBonEntries: pagedEntries,
+                    entriesPage: targetPage,
+                    entriesTotal: totalEntries,
+                    entriesTotalPages: totalPages,
+                },
+                entryFromList
+            );
         }
     };
 
@@ -1320,7 +1357,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                 {searchLoading ? 'Cari...' : 'Cari LP'}
                             </Button>
                         </div>
-                        <Button variant="outline" onClick={loadData} disabled={loading} className="h-9">
+                        <Button variant="outline" onClick={() => loadData(batchPage)} disabled={loading} className="h-9">
                             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                             Refresh
                         </Button>
@@ -1335,8 +1372,9 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                             <p className="text-sm mt-1">Batch baku akan muncul di sini untuk dipecah.</p>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
+                        <>
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-200">
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10"></th>
@@ -1402,30 +1440,27 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                                                 <span>Memuat pecahan...</span>
                                                             </div>
                                                         ) : batch.pecahBonEntries && batch.pecahBonEntries.length > 0 ? (() => {
-                                                            const totalEntries = batch.pecahBonEntries.length;
-                                                            const currentPage = batch.entriesPage ?? 0;
-                                                            const totalPages = Math.ceil(totalEntries / ENTRIES_PER_PAGE);
-                                                            const startIdx = currentPage * ENTRIES_PER_PAGE;
-                                                            const endIdx = Math.min(startIdx + ENTRIES_PER_PAGE, totalEntries);
-                                                            const paginatedEntries = batch.pecahBonEntries.slice(startIdx, endIdx);
+                                                            const totalEntries = batch.entriesTotal ?? batch.pecahBonEntries.length;
+                                                            const currentPage = batch.entriesPage ?? 1;
+                                                            const totalPages = batch.entriesTotalPages ?? Math.max(1, Math.ceil(totalEntries / ENTRIES_PER_PAGE));
+                                                            const startIdx = totalEntries === 0 ? 0 : (currentPage - 1) * ENTRIES_PER_PAGE + 1;
+                                                            const endIdx = Math.min(currentPage * ENTRIES_PER_PAGE, totalEntries);
+                                                            const paginatedEntries = batch.pecahBonEntries;
                                                             const selectedIds = selectedEntryIds[batch.id] ?? [];
                                                             const pageEntryIds = paginatedEntries.map((entry) => entry.id);
                                                             const selectedOnPage = pageEntryIds.filter((id) => selectedIds.includes(id));
                                                             const allPageSelected = pageEntryIds.length > 0 && selectedOnPage.length === pageEntryIds.length;
 
                                                             const goToPage = (page: number) => {
-                                                                setRawBatches((prev) =>
-                                                                    prev.map((b) =>
-                                                                        b.id === batch.id ? { ...b, entriesPage: page } : b
-                                                                    )
-                                                                );
+                                                                if (page < 1 || page > totalPages || page === currentPage) return;
+                                                                loadEntriesPage(batch.id, page);
                                                             };
 
                                                             return (
                                                                 <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
                                                                     <div className="flex items-center justify-between bg-green-50 border-b border-gray-200 px-3 py-2">
                                                                         <span className="text-sm text-green-800">
-                                                                            Menampilkan <strong>{startIdx + 1}</strong> - <strong>{endIdx}</strong> dari <strong>{totalEntries}</strong> entries
+                                                                            Menampilkan <strong>{startIdx}</strong> - <strong>{endIdx}</strong> dari <strong>{totalEntries}</strong> entries
                                                                         </span>
                                                                         <div className="flex flex-wrap items-center justify-end gap-2">
                                                                             <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-green-700 border border-green-200">
@@ -1475,25 +1510,25 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                                                                         variant="ghost"
                                                                                         onClick={(e) => {
                                                                                             e.stopPropagation();
-                                                                                            goToPage(currentPage - 1);
+                                                                                            void goToPage(currentPage - 1);
                                                                                         }}
-                                                                                        disabled={currentPage === 0}
+                                                                                        disabled={currentPage === 1 || batch.entriesLoading}
                                                                                         className="h-7 px-2"
                                                                                     >
                                                                                         <ChevronLeft className="h-4 w-4" />
                                                                                         Sebelumnya
                                                                                     </Button>
                                                                                     <span className="text-sm text-green-700 tabular-nums">
-                                                                                        {currentPage + 1} / {totalPages}
+                                                                                        {currentPage} / {totalPages}
                                                                                     </span>
                                                                                     <Button
                                                                                         size="sm"
                                                                                         variant="ghost"
                                                                                         onClick={(e) => {
                                                                                             e.stopPropagation();
-                                                                                            goToPage(currentPage + 1);
+                                                                                            void goToPage(currentPage + 1);
                                                                                         }}
-                                                                                        disabled={currentPage >= totalPages - 1}
+                                                                                        disabled={currentPage >= totalPages || batch.entriesLoading}
                                                                                         className="h-7 px-2"
                                                                                     >
                                                                                         Selanjutnya
@@ -1598,24 +1633,24 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                                                                 variant="ghost"
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation();
-                                                                                    goToPage(currentPage - 1);
+                                                                                    void goToPage(currentPage - 1);
                                                                                 }}
-                                                                                disabled={currentPage === 0}
+                                                                                disabled={currentPage === 1 || batch.entriesLoading}
                                                                                 className="h-7 px-2"
                                                                             >
                                                                                 <ChevronLeft className="h-4 w-4" />
                                                                             </Button>
                                                                             <span className="text-sm text-gray-600 tabular-nums">
-                                                                                Halaman {currentPage + 1} dari {totalPages}
+                                                                                Halaman {currentPage} dari {totalPages}
                                                                             </span>
                                                                             <Button
                                                                                 size="sm"
                                                                                 variant="ghost"
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation();
-                                                                                    goToPage(currentPage + 1);
+                                                                                    void goToPage(currentPage + 1);
                                                                                 }}
-                                                                                disabled={currentPage >= totalPages - 1}
+                                                                                disabled={currentPage >= totalPages || batch.entriesLoading}
                                                                                 className="h-7 px-2"
                                                                             >
                                                                                 <ChevronRight className="h-4 w-4" />
@@ -1635,8 +1670,39 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                         </React.Fragment>
                                     ))}
                                 </tbody>
-                            </table>
-                        </div>
+                                </table>
+                            </div>
+                            {batchTotalPages > 1 && (
+                                <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-4 py-3 text-sm">
+                                    <span className="text-gray-600">
+                                        Menampilkan {(batchPage - 1) * BATCHES_PER_PAGE + 1} - {Math.min(batchPage * BATCHES_PER_PAGE, batchTotal)} dari {batchTotal} batch
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => loadData(batchPage - 1)}
+                                            disabled={batchPage <= 1 || loading}
+                                        >
+                                            <ChevronLeft className="h-4 w-4" />
+                                            Sebelumnya
+                                        </Button>
+                                        <span className="text-xs text-gray-600 tabular-nums">
+                                            {batchPage} / {batchTotalPages}
+                                        </span>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => loadData(batchPage + 1)}
+                                            disabled={batchPage >= batchTotalPages || loading}
+                                        >
+                                            Berikutnya
+                                            <ChevronRight className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>

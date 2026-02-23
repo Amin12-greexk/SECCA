@@ -10,8 +10,8 @@ export declare class LocationsService {
         name: string;
         createdAt: Date;
         updatedAt: Date;
-        code: string;
         type: import("@prisma/client").$Enums.RackType;
+        code: string;
     } | {
         defaults: {
             id: string;
@@ -19,8 +19,8 @@ export declare class LocationsService {
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            code: string;
             type: import("@prisma/client").$Enums.RackType;
+            code: string;
         }[];
         workerLocations: unknown[];
     }>;
@@ -31,8 +31,8 @@ export declare class LocationsService {
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            code: string;
             type: import("@prisma/client").$Enums.RackType;
+            code: string;
         }[];
         workerLocations: unknown[];
     }>;
@@ -52,8 +52,8 @@ export declare class LocationsService {
         name: string;
         createdAt: Date;
         updatedAt: Date;
-        code: string;
         type: import("@prisma/client").$Enums.RackType;
+        code: string;
     })[]>;
     findLots(locationId: string): Promise<{
         location: {
@@ -62,8 +62,8 @@ export declare class LocationsService {
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            code: string;
             type: import("@prisma/client").$Enums.RackType;
+            code: string;
         };
         lots: ({
             grade: {
@@ -71,8 +71,8 @@ export declare class LocationsService {
                 name: string;
                 createdAt: Date;
                 updatedAt: Date;
-                code: string;
                 type: import("@prisma/client").$Enums.GradeType;
+                code: string;
             };
         } & {
             id: string;
@@ -98,8 +98,8 @@ export declare class LocationsService {
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            code: string;
             type: import("@prisma/client").$Enums.RackType;
+            code: string;
         };
         lots: ({
             grade: {
@@ -107,8 +107,8 @@ export declare class LocationsService {
                 name: string;
                 createdAt: Date;
                 updatedAt: Date;
-                code: string;
                 type: import("@prisma/client").$Enums.GradeType;
+                code: string;
             };
         } & {
             id: string;

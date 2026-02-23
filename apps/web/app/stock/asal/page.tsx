@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Package, Pencil, Printer, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Package, Pencil, Printer, RefreshCw } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,8 +23,10 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/lib/toast';
-import { getRawBatchByCardId, getRawBatches, getSuppliers, updateRawBatch, type RawBatch, type Supplier } from '@/lib/api';
+import { getRawBatchByCardId, getRawBatchesPaginated, getSuppliers, updateRawBatch, type RawBatch, type Supplier } from '@/lib/api';
 import BatchCard from '@/components/print/BatchCard';
+
+const BATCHES_PER_PAGE = 20;
 
 export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
     const toast = useToast();
@@ -32,6 +34,9 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [supplierLoadError, setSupplierLoadError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const [batchPage, setBatchPage] = useState(1);
+    const [batchTotalPages, setBatchTotalPages] = useState(1);
+    const [batchTotal, setBatchTotal] = useState(0);
     const [printBatch, setPrintBatch] = useState<RawBatch | null>(null);
     const [printOpen, setPrintOpen] = useState(false);
     const [editBatch, setEditBatch] = useState<RawBatch | null>(null);
@@ -210,10 +215,19 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
         toast.error('Gagal cetak. Pastikan aplikasi desktop terpasang dan printer terhubung.');
     };
 
-    const loadData = async () => {
+    const loadData = async (page = batchPage) => {
         setLoading(true);
         try {
-            const data = await getRawBatches();
+            const response = await getRawBatchesPaginated({
+                page,
+                limit: BATCHES_PER_PAGE,
+                activeOnly: false,
+            });
+            if (response.total > 0 && response.page > response.totalPages) {
+                await loadData(response.totalPages);
+                return;
+            }
+            const data = response.items;
             // Map rawBatchId to id for frontend compatibility
             const mapped = data.map((item: RawBatch & { rawBatchId?: string }) => ({
                 ...item,
@@ -221,6 +235,9 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
             }));
             mapped.sort((left, right) => left.batchNumber.localeCompare(right.batchNumber));
             setRawBatches(mapped);
+            setBatchPage(response.page);
+            setBatchTotalPages(response.totalPages);
+            setBatchTotal(response.total);
         } catch (err) {
             console.error('Error loading raw batches:', err);
             toast.error('Gagal memuat data stock asal.');
@@ -230,7 +247,7 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
     };
 
     useEffect(() => {
-        loadData();
+        loadData(1);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -337,7 +354,7 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
             await updateRawBatch(editBatch.id, payload);
             toast.success('Data batch berhasil diperbarui.');
             setEditOpen(false);
-            await loadData();
+            await loadData(batchPage);
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Gagal memperbarui batch.';
             toast.error(message);
@@ -468,7 +485,7 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
                         </div>
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
-                        <Button variant="outline" onClick={loadData} disabled={loading}>
+                        <Button variant="outline" onClick={() => loadData(batchPage)} disabled={loading}>
                             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                             Refresh
                         </Button>
@@ -483,8 +500,9 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
                             <p className="text-sm mt-1">Data penerimaan baku akan muncul di sini.</p>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
+                        <>
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-200">
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -563,8 +581,39 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
                                         </tr>
                                     ))}
                                 </tbody>
-                            </table>
-                        </div>
+                                </table>
+                            </div>
+                            {batchTotalPages > 1 && (
+                                <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-4 py-3 text-sm">
+                                    <span className="text-gray-600">
+                                        Menampilkan {(batchPage - 1) * BATCHES_PER_PAGE + 1} - {Math.min(batchPage * BATCHES_PER_PAGE, batchTotal)} dari {batchTotal} batch
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => loadData(batchPage - 1)}
+                                            disabled={batchPage <= 1 || loading}
+                                        >
+                                            <ChevronLeft className="h-4 w-4" />
+                                            Sebelumnya
+                                        </Button>
+                                        <span className="text-xs text-gray-600 tabular-nums">
+                                            {batchPage} / {batchTotalPages}
+                                        </span>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => loadData(batchPage + 1)}
+                                            disabled={batchPage >= batchTotalPages || loading}
+                                        >
+                                            Berikutnya
+                                            <ChevronRight className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>

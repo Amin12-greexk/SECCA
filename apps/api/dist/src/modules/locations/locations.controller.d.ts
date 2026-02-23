@@ -9,8 +9,8 @@ export declare class LocationsController {
         name: string;
         createdAt: Date;
         updatedAt: Date;
-        code: string;
         type: import("@prisma/client").$Enums.RackType;
+        code: string;
     } | {
         defaults: {
             id: string;
@@ -18,8 +18,8 @@ export declare class LocationsController {
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            code: string;
             type: import("@prisma/client").$Enums.RackType;
+            code: string;
         }[];
         workerLocations: unknown[];
     }>;
@@ -39,8 +39,8 @@ export declare class LocationsController {
         name: string;
         createdAt: Date;
         updatedAt: Date;
-        code: string;
         type: import("@prisma/client").$Enums.RackType;
+        code: string;
     })[]>;
     findLotsByCode(code: string): Promise<{
         location: {
@@ -49,8 +49,8 @@ export declare class LocationsController {
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            code: string;
             type: import("@prisma/client").$Enums.RackType;
+            code: string;
         };
         lots: ({
             grade: {
@@ -58,8 +58,8 @@ export declare class LocationsController {
                 name: string;
                 createdAt: Date;
                 updatedAt: Date;
-                code: string;
                 type: import("@prisma/client").$Enums.GradeType;
+                code: string;
             };
         } & {
             id: string;
@@ -85,8 +85,8 @@ export declare class LocationsController {
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            code: string;
             type: import("@prisma/client").$Enums.RackType;
+            code: string;
         };
         lots: ({
             grade: {
@@ -94,8 +94,8 @@ export declare class LocationsController {
                 name: string;
                 createdAt: Date;
                 updatedAt: Date;
-                code: string;
                 type: import("@prisma/client").$Enums.GradeType;
+                code: string;
             };
         } & {
             id: string;

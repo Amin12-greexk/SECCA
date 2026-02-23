@@ -20,6 +20,8 @@ const receive_raw_batch_dto_1 = require("./dto/receive-raw-batch.dto");
 const create_pecah_bon_dto_1 = require("./dto/create-pecah-bon.dto");
 const update_pecah_bon_dto_1 = require("./dto/update-pecah-bon.dto");
 const update_raw_batch_dto_1 = require("./dto/update-raw-batch.dto");
+const raw_batch_page_query_dto_1 = require("./dto/raw-batch-page-query.dto");
+const pecah_bon_page_query_dto_1 = require("./dto/pecah-bon-page-query.dto");
 const baku_service_1 = require("./baku.service");
 let BakuController = class BakuController {
     bakuService;
@@ -31,6 +33,9 @@ let BakuController = class BakuController {
     }
     findAll() {
         return this.bakuService.findAll();
+    }
+    findAllPaginated(query) {
+        return this.bakuService.findAllPaginated(query);
     }
     findPecahBonById(pecahBonId) {
         return this.bakuService.findPecahBonById(pecahBonId);
@@ -53,6 +58,9 @@ let BakuController = class BakuController {
     getPecahBonEntries(id) {
         return this.bakuService.getPecahBonEntries(id);
     }
+    getPecahBonEntriesPaginated(id, query) {
+        return this.bakuService.getPecahBonEntriesPaginated(id, query);
+    }
 };
 exports.BakuController = BakuController;
 __decorate([
@@ -68,6 +76,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], BakuController.prototype, "findAll", null);
+__decorate([
+    (0, common_1.Get)("paginated"),
+    __param(0, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [raw_batch_page_query_dto_1.RawBatchPageQueryDto]),
+    __metadata("design:returntype", void 0)
+], BakuController.prototype, "findAllPaginated", null);
 __decorate([
     (0, common_1.Get)("pecah-bon/:pecahBonId"),
     (0, swagger_1.ApiParam)({ name: "pecahBonId" }),
@@ -127,6 +142,15 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], BakuController.prototype, "getPecahBonEntries", null);
+__decorate([
+    (0, common_1.Get)(":id/pecah-bon/paginated"),
+    (0, swagger_1.ApiParam)({ name: "id" }),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, pecah_bon_page_query_dto_1.PecahBonPageQueryDto]),
+    __metadata("design:returntype", void 0)
+], BakuController.prototype, "getPecahBonEntriesPaginated", null);
 exports.BakuController = BakuController = __decorate([
     (0, swagger_1.ApiTags)("Baku"),
     (0, swagger_1.ApiBearerAuth)(),

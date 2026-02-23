@@ -6,10 +6,16 @@ import { ReceiveRawBatchDto } from "./dto/receive-raw-batch.dto";
 import { CreatePecahBonDto } from "./dto/create-pecah-bon.dto";
 import { UpdatePecahBonDto } from "./dto/update-pecah-bon.dto";
 import { UpdateRawBatchDto } from "./dto/update-raw-batch.dto";
+import { RawBatchPageQueryDto } from "./dto/raw-batch-page-query.dto";
+import { PecahBonPageQueryDto } from "./dto/pecah-bon-page-query.dto";
 import { NumberingService } from "../../common/numbering/numbering.service";
 import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
 import { LOCATION_CODES } from "../../common/constants";
 import { roundDryWeight } from "../../common/utils/weight";
+
+type RawBatchWithSupplier = Prisma.RawBatchGetPayload<{
+  include: { supplier: true };
+}>;
 
 @Injectable()
 export class BakuService {
@@ -81,34 +87,43 @@ export class BakuService {
       orderBy: { createdAt: "desc" },
     });
 
-    const usedTotals = await this.prisma.pecahBonEntry.groupBy({
-      by: ["rawBatchId"],
-      _sum: { initialWeightGram: true },
-    });
-    const usedMap = new Map(
-      usedTotals.map((item) => [item.rawBatchId, item._sum.initialWeightGram ?? 0]),
+    const usedMap = await this.getUsedWeightMap();
+
+    return items.map((rawBatch) =>
+      this.mapRawBatch(rawBatch, usedMap.get(rawBatch.id) ?? 0),
+    );
+  }
+
+  async findAllPaginated(query: RawBatchPageQueryDto) {
+    const { page, limit, skip } = this.resolvePagination(query);
+    const activeOnly = query.activeOnly ?? true;
+    const where: Prisma.RawBatchWhereInput | undefined = activeOnly
+      ? { wetWeightGram: { gt: 0 } }
+      : undefined;
+
+    const [total, items] = await Promise.all([
+      this.prisma.rawBatch.count({ where }),
+      this.prisma.rawBatch.findMany({
+        where,
+        include: { supplier: true },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    const usedMap = await this.getUsedWeightMap(items.map((item) => item.id));
+    const mapped = items.map((rawBatch) =>
+      this.mapRawBatch(rawBatch, usedMap.get(rawBatch.id) ?? 0),
     );
 
-    return items.map((rawBatch) => ({
-      originalWetWeightGram: this.roundToTwoDecimals(
-        rawBatch.wetWeightGram + (usedMap.get(rawBatch.id) ?? 0),
-      ),
-      rawBatchId: rawBatch.id,
-      batchNumber: rawBatch.batchNumber,
-      cardId: rawBatch.cardId,
-      supplier: {
-        id: rawBatch.supplier.id,
-        name: rawBatch.supplier.name,
-        code: rawBatch.supplier.code,
-      },
-      featherCondition: rawBatch.featherCondition,
-      invoiceWeightGram: rawBatch.invoiceWeightGram,
-      wetWeightGram: rawBatch.wetWeightGram,
-      moisturePercent: rawBatch.moisturePercent,
-      notes: rawBatch.notes,
-      createdAt: rawBatch.createdAt,
-      updatedAt: rawBatch.updatedAt,
-    }));
+    return {
+      items: mapped,
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
   }
 
   async findByCardId(cardId: string) {
@@ -125,28 +140,7 @@ export class BakuService {
       where: { rawBatchId: rawBatch.id },
       _sum: { initialWeightGram: true },
     });
-    const originalWetWeightGram = this.roundToTwoDecimals(
-      rawBatch.wetWeightGram + (usedTotal._sum.initialWeightGram ?? 0),
-    );
-
-    return {
-      originalWetWeightGram,
-      rawBatchId: rawBatch.id,
-      batchNumber: rawBatch.batchNumber,
-      cardId: rawBatch.cardId,
-      supplier: {
-        id: rawBatch.supplier.id,
-        name: rawBatch.supplier.name,
-        code: rawBatch.supplier.code,
-      },
-      featherCondition: rawBatch.featherCondition,
-      invoiceWeightGram: rawBatch.invoiceWeightGram,
-      wetWeightGram: rawBatch.wetWeightGram,
-      moisturePercent: rawBatch.moisturePercent,
-      notes: rawBatch.notes,
-      createdAt: rawBatch.createdAt,
-      updatedAt: rawBatch.updatedAt,
-    };
+    return this.mapRawBatch(rawBatch, usedTotal._sum.initialWeightGram ?? 0);
   }
 
   async createPecahBon(rawBatchId: string, dto: CreatePecahBonDto) {
@@ -694,6 +688,37 @@ export class BakuService {
     return entries;
   }
 
+  async getPecahBonEntriesPaginated(
+    rawBatchId: string,
+    query: PecahBonPageQueryDto,
+  ) {
+    const { page, limit, skip } = this.resolvePagination(query);
+    const where = { rawBatchId };
+
+    const [total, items] = await Promise.all([
+      this.prisma.pecahBonEntry.count({ where }),
+      this.prisma.pecahBonEntry.findMany({
+        where,
+        include: {
+          grade: true,
+          featherGrade: true,
+          colorGrade: true,
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      items,
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
+  }
+
   async findPecahBonById(pecahBonId: string) {
     const entry = await this.prisma.pecahBonEntry.findUnique({
       where: { pecahBonId },
@@ -847,6 +872,50 @@ export class BakuService {
 
   private roundToTwoDecimals(value: number) {
     return Math.round(value * 100) / 100;
+  }
+
+  private resolvePagination(query: { page?: number; limit?: number }) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    return { page, limit, skip: (page - 1) * limit };
+  }
+
+  private async getUsedWeightMap(rawBatchIds?: string[]) {
+    const usedTotals = await this.prisma.pecahBonEntry.groupBy({
+      by: ["rawBatchId"],
+      where:
+        rawBatchIds && rawBatchIds.length > 0
+          ? { rawBatchId: { in: rawBatchIds } }
+          : undefined,
+      _sum: { initialWeightGram: true },
+    });
+
+    return new Map(
+      usedTotals.map((item) => [item.rawBatchId, item._sum.initialWeightGram ?? 0]),
+    );
+  }
+
+  private mapRawBatch(rawBatch: RawBatchWithSupplier, usedWeightGram: number) {
+    return {
+      originalWetWeightGram: this.roundToTwoDecimals(
+        rawBatch.wetWeightGram + usedWeightGram,
+      ),
+      rawBatchId: rawBatch.id,
+      batchNumber: rawBatch.batchNumber,
+      cardId: rawBatch.cardId,
+      supplier: {
+        id: rawBatch.supplier.id,
+        name: rawBatch.supplier.name,
+        code: rawBatch.supplier.code,
+      },
+      featherCondition: rawBatch.featherCondition,
+      invoiceWeightGram: rawBatch.invoiceWeightGram,
+      wetWeightGram: rawBatch.wetWeightGram,
+      moisturePercent: rawBatch.moisturePercent,
+      notes: rawBatch.notes,
+      createdAt: rawBatch.createdAt,
+      updatedAt: rawBatch.updatedAt,
+    };
   }
 
   private async getPreSaleLocation(tx: Prisma.TransactionClient) {

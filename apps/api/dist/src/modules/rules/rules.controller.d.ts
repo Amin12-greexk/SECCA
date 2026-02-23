@@ -24,24 +24,24 @@ export declare class RulesController {
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            code: string;
             type: import("@prisma/client").$Enums.GradeType;
+            code: string;
         } | null;
         colorGrade: {
             id: string;
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            code: string;
             type: import("@prisma/client").$Enums.GradeType;
+            code: string;
         } | null;
         shapeGrade: {
             id: string;
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            code: string;
             type: import("@prisma/client").$Enums.GradeType;
+            code: string;
         };
     } & {
         id: string;

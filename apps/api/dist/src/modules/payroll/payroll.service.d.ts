@@ -17,8 +17,8 @@ export declare class PayrollService {
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            code: string;
             type: import("@prisma/client").$Enums.GradeType;
+            code: string;
         };
         workOrderItem: {
             id: string;

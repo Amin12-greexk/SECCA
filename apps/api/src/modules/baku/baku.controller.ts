@@ -1,10 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiBearerAuth, ApiParam, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../auth/roles.decorator";
 import { ReceiveRawBatchDto } from "./dto/receive-raw-batch.dto";
 import { CreatePecahBonDto } from "./dto/create-pecah-bon.dto";
 import { UpdatePecahBonDto } from "./dto/update-pecah-bon.dto";
 import { UpdateRawBatchDto } from "./dto/update-raw-batch.dto";
+import { RawBatchPageQueryDto } from "./dto/raw-batch-page-query.dto";
+import { PecahBonPageQueryDto } from "./dto/pecah-bon-page-query.dto";
 import { BakuService } from "./baku.service";
 
 @ApiTags("Baku")
@@ -22,6 +24,11 @@ export class BakuController {
   @Get()
   findAll() {
     return this.bakuService.findAll();
+  }
+
+  @Get("paginated")
+  findAllPaginated(@Query() query: RawBatchPageQueryDto) {
+    return this.bakuService.findAllPaginated(query);
   }
 
   @Get("pecah-bon/:pecahBonId")
@@ -64,5 +71,14 @@ export class BakuController {
   @ApiParam({ name: "id" })
   getPecahBonEntries(@Param("id") id: string) {
     return this.bakuService.getPecahBonEntries(id);
+  }
+
+  @Get(":id/pecah-bon/paginated")
+  @ApiParam({ name: "id" })
+  getPecahBonEntriesPaginated(
+    @Param("id") id: string,
+    @Query() query: PecahBonPageQueryDto,
+  ) {
+    return this.bakuService.getPecahBonEntriesPaginated(id, query);
   }
 }
