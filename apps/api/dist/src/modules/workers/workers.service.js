@@ -12,21 +12,47 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.WorkersService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../prisma/prisma.service");
+const client_1 = require("@prisma/client");
 const errors_1 = require("../../common/errors");
 let WorkersService = class WorkersService {
     prisma;
     constructor(prisma) {
         this.prisma = prisma;
     }
-    create(dto) {
-        return this.prisma.worker.create({
-            data: {
-                name: dto.name,
-                code: dto.code,
-                capacityGram: dto.capacityGram ?? null,
-                trainerId: dto.trainerId ?? null,
-            },
-        });
+    async create(dto) {
+        const normalizedPin = dto.pin ? this.normalizePin(dto.pin) : null;
+        if (normalizedPin) {
+            const owner = await this.prisma.worker.findUnique({
+                where: { pin: normalizedPin },
+                select: { id: true },
+            });
+            if (owner) {
+                return (0, errors_1.conflict)("PIN sudah digunakan oleh worker lain", {
+                    pin: normalizedPin,
+                });
+            }
+        }
+        try {
+            return await this.prisma.worker.create({
+                data: {
+                    name: dto.name,
+                    code: dto.code,
+                    pin: normalizedPin,
+                    capacityGram: dto.capacityGram ?? null,
+                    trainerId: dto.trainerId ?? null,
+                },
+            });
+        }
+        catch (error) {
+            if (error instanceof client_1.Prisma.PrismaClientKnownRequestError) {
+                if (error.code === "P2002") {
+                    return (0, errors_1.conflict)("PIN sudah digunakan oleh worker lain", {
+                        pin: normalizedPin,
+                    });
+                }
+            }
+            throw error;
+        }
     }
     async update(id, dto) {
         const worker = await this.prisma.worker.findUnique({
@@ -50,14 +76,39 @@ let WorkersService = class WorkersService {
             data.name = dto.name;
         if (dto.code !== undefined)
             data.code = dto.code;
+        if (dto.pin !== undefined) {
+            const normalizedPin = dto.pin ? this.normalizePin(dto.pin) : null;
+            if (normalizedPin) {
+                const owner = await this.prisma.worker.findUnique({
+                    where: { pin: normalizedPin },
+                    select: { id: true },
+                });
+                if (owner && owner.id !== id) {
+                    return (0, errors_1.conflict)("PIN sudah digunakan oleh worker lain", {
+                        pin: normalizedPin,
+                    });
+                }
+            }
+            data.pin = normalizedPin;
+        }
         if (dto.capacityGram !== undefined)
             data.capacityGram = dto.capacityGram;
         if (dto.trainerId !== undefined)
             data.trainerId = dto.trainerId;
-        return this.prisma.worker.update({
-            where: { id },
-            data,
-        });
+        try {
+            return await this.prisma.worker.update({
+                where: { id },
+                data,
+            });
+        }
+        catch (error) {
+            if (error instanceof client_1.Prisma.PrismaClientKnownRequestError) {
+                if (error.code === "P2002") {
+                    return (0, errors_1.conflict)("PIN sudah digunakan oleh worker lain");
+                }
+            }
+            throw error;
+        }
     }
     findAll() {
         return this.prisma.worker.findMany({
@@ -134,6 +185,9 @@ let WorkersService = class WorkersService {
             worker,
             weeks: buckets,
         };
+    }
+    normalizePin(pin) {
+        return pin.replace(/\D/g, "");
     }
 };
 exports.WorkersService = WorkersService;

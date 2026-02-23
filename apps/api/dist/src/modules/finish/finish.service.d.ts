@@ -15,8 +15,11 @@ export declare class FinishService {
         susutProsesPctBps: number;
         susutHilangPctBps: number;
         payroll: {
+            baseGram: number;
+            byProductCoefficientPercent: number;
             rateRpPerGram: number;
             amountRp: number;
         };
     }>;
+    private getByProductCoefficientBps;
 }

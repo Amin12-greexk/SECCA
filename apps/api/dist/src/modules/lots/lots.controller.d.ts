@@ -30,8 +30,8 @@ export declare class LotsController {
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            type: import("@prisma/client").$Enums.GradeType;
             code: string;
+            type: import("@prisma/client").$Enums.GradeType;
         };
         location: {
             id: string;
@@ -39,8 +39,8 @@ export declare class LotsController {
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            type: import("@prisma/client").$Enums.RackType;
             code: string;
+            type: import("@prisma/client").$Enums.RackType;
         };
     } & {
         id: string;

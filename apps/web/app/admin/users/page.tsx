@@ -20,6 +20,7 @@ import {
   createWorker,
   getUsers,
   getWorkers,
+  updateWorker,
   updateUser,
   type User,
   type Worker,
@@ -43,6 +44,7 @@ function UsersContent() {
     password: '',
     role: '' as RoleOption | '',
     workerId: '' as string | '',
+    pin: '',
   });
   const [editForm, setEditForm] = useState({
     name: '',
@@ -50,6 +52,7 @@ function UsersContent() {
     password: '',
     role: '' as RoleOption | '',
     workerId: '' as string | '',
+    pin: '',
   });
 
   const loadUsers = async () => {
@@ -90,9 +93,19 @@ function UsersContent() {
     setSaving(true);
     try {
       let workerId = form.workerId || undefined;
+      const pin = form.pin.replace(/\D/g, '').slice(0, 6);
+      if (form.role === 'mitra' && pin && pin.length < 3) {
+        toast.error('PIN mitra minimal 3 digit.');
+        return;
+      }
       if (form.role === 'mitra' && !workerId) {
-        const worker = await createWorker({ name: form.name.trim() });
+        const worker = await createWorker({
+          name: form.name.trim(),
+          pin: pin || undefined,
+        });
         workerId = worker.id;
+      } else if (form.role === 'mitra' && workerId && pin) {
+        await updateWorker(workerId, { pin });
       }
       await createUser({
         name: form.name.trim(),
@@ -102,8 +115,9 @@ function UsersContent() {
         workerId,
       });
       toast.success('Akun berhasil dibuat.');
-      setForm({ name: '', email: '', password: '', role: '', workerId: '' });
+      setForm({ name: '', email: '', password: '', role: '', workerId: '', pin: '' });
       await loadUsers();
+      await loadWorkers();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Gagal membuat akun.');
     } finally {
@@ -112,6 +126,7 @@ function UsersContent() {
   };
 
   const openEdit = (user: User) => {
+    const worker = workers.find((item) => item.id === user.workerId);
     setEditUser(user);
     setEditForm({
       name: user.name ?? '',
@@ -119,6 +134,7 @@ function UsersContent() {
       password: '',
       role: (user.role as RoleOption) ?? '',
       workerId: user.workerId ?? '',
+      pin: worker?.pin ?? '',
     });
     setEditOpen(true);
   };
@@ -133,9 +149,19 @@ function UsersContent() {
     setEditSaving(true);
     try {
       let workerId = editForm.workerId || null;
+      const pin = editForm.pin.replace(/\D/g, '').slice(0, 6);
+      if (editForm.role === 'mitra' && pin && pin.length < 3) {
+        toast.error('PIN mitra minimal 3 digit.');
+        return;
+      }
       if (editForm.role === 'mitra' && !workerId) {
-        const worker = await createWorker({ name: editForm.name.trim() });
+        const worker = await createWorker({
+          name: editForm.name.trim(),
+          pin: pin || undefined,
+        });
         workerId = worker.id;
+      } else if (editForm.role === 'mitra' && workerId) {
+        await updateWorker(workerId, { pin: pin || null });
       }
       await updateUser(editUser.id, {
         name: editForm.name.trim(),
@@ -148,6 +174,7 @@ function UsersContent() {
       setEditOpen(false);
       setEditUser(null);
       await loadUsers();
+      await loadWorkers();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Gagal memperbarui akun.');
     } finally {
@@ -238,6 +265,22 @@ function UsersContent() {
                       )}
                     </SelectContent>
                   </Select>
+                </div>
+              )}
+              {form.role === 'mitra' && (
+                <div className="space-y-2">
+                  <Label>PIN Mitra (opsional)</Label>
+                  <Input
+                    value={form.pin}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        pin: event.target.value.replace(/\D/g, '').slice(0, 6),
+                      }))
+                    }
+                    inputMode="numeric"
+                    maxLength={6}
+                  />
                 </div>
               )}
               <Button className="w-full" onClick={handleCreate} disabled={saving}>
@@ -345,16 +388,16 @@ function UsersContent() {
                 </SelectContent>
               </Select>
             </div>
-              {editForm.role === 'mitra' && (
-                <div className="space-y-2">
-                  <Label>Pilih Mitra (opsional)</Label>
-                  <Select
-                    value={editForm.workerId}
-                    onValueChange={(value) => setEditForm((prev) => ({ ...prev, workerId: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Auto-buat mitra dari nama akun" />
-                    </SelectTrigger>
+            {editForm.role === 'mitra' && (
+              <div className="space-y-2">
+                <Label>Pilih Mitra (opsional)</Label>
+                <Select
+                  value={editForm.workerId}
+                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, workerId: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Auto-buat mitra dari nama akun" />
+                  </SelectTrigger>
                   <SelectContent>
                     {workersLoading ? (
                       <SelectItem value="loading" disabled>
@@ -373,6 +416,22 @@ function UsersContent() {
                     )}
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+            {editForm.role === 'mitra' && (
+              <div className="space-y-2">
+                <Label>PIN Mitra</Label>
+                <Input
+                  value={editForm.pin}
+                  onChange={(event) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      pin: event.target.value.replace(/\D/g, '').slice(0, 6),
+                    }))
+                  }
+                  inputMode="numeric"
+                  maxLength={6}
+                />
               </div>
             )}
           </div>

@@ -15,6 +15,7 @@ const class_validator_1 = require("class-validator");
 class CreateWorkerDto {
     name;
     code;
+    pin;
     capacityGram;
     trainerId;
 }
@@ -31,6 +32,16 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateWorkerDto.prototype, "code", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({
+        description: "PIN karyawan/mitra untuk pendaftaran mandiri",
+    }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumberString)(),
+    (0, class_validator_1.MinLength)(3),
+    (0, class_validator_1.MaxLength)(6),
+    __metadata("design:type", String)
+], CreateWorkerDto.prototype, "pin", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)(),
     (0, class_validator_1.IsOptional)(),

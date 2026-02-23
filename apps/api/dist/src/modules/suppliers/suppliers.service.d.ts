@@ -7,34 +7,34 @@ export declare class SuppliersService {
     constructor(prisma: PrismaService);
     create(dto: CreateSupplierDto): Prisma.Prisma__SupplierClient<{
         id: string;
+        phone: string | null;
         name: string;
         createdAt: Date;
         updatedAt: Date;
         code: string | null;
-        phone: string | null;
     }, never, import("@prisma/client/runtime/client").DefaultArgs, Prisma.PrismaClientOptions>;
     findAll(): Prisma.PrismaPromise<{
         id: string;
+        phone: string | null;
         name: string;
         createdAt: Date;
         updatedAt: Date;
         code: string | null;
-        phone: string | null;
     }[]>;
     update(id: string, dto: UpdateSupplierDto): Promise<{
         id: string;
+        phone: string | null;
         name: string;
         createdAt: Date;
         updatedAt: Date;
         code: string | null;
-        phone: string | null;
     }>;
     remove(id: string): Promise<{
         id: string;
+        phone: string | null;
         name: string;
         createdAt: Date;
         updatedAt: Date;
         code: string | null;
-        phone: string | null;
     }>;
 }

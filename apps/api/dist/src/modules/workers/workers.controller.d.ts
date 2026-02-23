@@ -4,21 +4,23 @@ import { WorkersService } from "./workers.service";
 export declare class WorkersController {
     private readonly workersService;
     constructor(workersService: WorkersService);
-    create(dto: CreateWorkerDto): import("@prisma/client").Prisma.Prisma__WorkerClient<{
+    create(dto: CreateWorkerDto): Promise<{
         id: string;
         name: string;
         createdAt: Date;
         updatedAt: Date;
         code: string | null;
+        pin: string | null;
         capacityGram: number | null;
         trainerId: string | null;
-    }, never, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
+    }>;
     update(id: string, dto: UpdateWorkerDto): Promise<{
         id: string;
         name: string;
         createdAt: Date;
         updatedAt: Date;
         code: string | null;
+        pin: string | null;
         capacityGram: number | null;
         trainerId: string | null;
     }>;
@@ -28,6 +30,7 @@ export declare class WorkersController {
         createdAt: Date;
         updatedAt: Date;
         code: string | null;
+        pin: string | null;
         capacityGram: number | null;
         trainerId: string | null;
     }[]>;

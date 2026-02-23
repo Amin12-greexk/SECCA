@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -181,6 +182,13 @@ export default function LoginPage() {
                             <a href="#" className="text-emerald-600 hover:text-emerald-700 font-medium">
                                 Lupa Password?
                             </a>
+                        </div>
+
+                        <div className="reveal-field text-sm text-gray-600" style={{ opacity: 0 }}>
+                            Belum punya akun mitra?{' '}
+                            <Link href="/register/mitra" className="font-semibold text-emerald-600 hover:text-emerald-700">
+                                Daftar di sini
+                            </Link>
                         </div>
 
                         {/* Error Alert */}

@@ -115,7 +115,11 @@ export class FinishService {
       }
 
       const rateRpPerGram = baseTariff.rateRpPerGram + featherRate + colorRate;
-      const amountRp = rateRpPerGram * dryIn;
+      const byProductCoefficientBps = this.getByProductCoefficientBps();
+      // Payroll = main out + by-product berbobot koefisien (default 50%).
+      const payrollWeightedGramBps = mainOut * 10000 + byProduct * byProductCoefficientBps;
+      const payrollBaseGram = Number((payrollWeightedGramBps / 10000).toFixed(2));
+      const amountRp = Math.round((rateRpPerGram * payrollWeightedGramBps) / 10000);
       const finishedLocation = await tx.rackLocation.upsert({
         where: { code: LOCATION_CODES.FINISHED },
         update: { name: "Rak Finished", type: RackType.FINISHED },
@@ -200,10 +204,18 @@ export class FinishService {
         susutProsesPctBps,
         susutHilangPctBps,
         payroll: {
+          baseGram: payrollBaseGram,
+          byProductCoefficientPercent: Number((byProductCoefficientBps / 100).toFixed(2)),
           rateRpPerGram,
           amountRp,
         },
       };
     });
+  }
+
+  private getByProductCoefficientBps() {
+    const raw = Number(process.env.PAYROLL_BYPRODUCT_COEFFICIENT_BPS ?? 5000);
+    if (!Number.isFinite(raw)) return 5000;
+    return Math.max(0, Math.min(10000, Math.round(raw)));
   }
 }

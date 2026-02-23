@@ -9,6 +9,7 @@ export declare class PayrollController {
             createdAt: Date;
             updatedAt: Date;
             code: string | null;
+            pin: string | null;
             capacityGram: number | null;
             trainerId: string | null;
         };
@@ -17,8 +18,8 @@ export declare class PayrollController {
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            type: import("@prisma/client").$Enums.GradeType;
             code: string;
+            type: import("@prisma/client").$Enums.GradeType;
         };
         workOrderItem: {
             id: string;

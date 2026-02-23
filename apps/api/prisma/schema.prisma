@@ -29,6 +29,13 @@ enum WorkLane {
   READY_TO_SUBMIT
 }
 
+enum MitraOrderRequestStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  FULFILLED
+}
+
 enum RackType {
   PRE_SALE
   MITRA_ORDER
@@ -60,6 +67,7 @@ model AppUser {
   id           String   @id @default(uuid())
   name         String
   email        String   @unique
+  phone        String?  @unique
   passwordHash String
   role         UserRole
   workerId     String?  @unique
@@ -68,6 +76,8 @@ model AppUser {
 
   worker            Worker? @relation("UserWorker", fields: [workerId], references: [id])
   supervisedWorkers Worker[] @relation("WorkerTrainer")
+  mitraOrderRequests MitraOrderRequest[] @relation("MitraOrderRequester")
+  mitraOrderProcessed MitraOrderRequest[] @relation("MitraOrderProcessor")
 
   @@index([role])
 }
@@ -170,6 +180,7 @@ model Worker {
   id        String   @id @default(uuid())
   name      String
   code      String?  @unique
+  pin       String?  @unique
   capacityGram Int?
   trainerId String?
   createdAt DateTime @default(now())
@@ -181,8 +192,46 @@ model Worker {
   payrolls      PayrollEntry[]
   activeWorkOrder WorkerActiveWorkOrder?
   trainer      AppUser? @relation("WorkerTrainer", fields: [trainerId], references: [id])
+  mitraOrderRequests MitraOrderRequest[]
 
   @@index([trainerId])
+}
+
+model MitraOrderRequest {
+  id                String                  @id @default(uuid())
+  workerId          String?
+  requestedByUserId String
+  requestedGram     Int
+  note              String?
+  status            MitraOrderRequestStatus @default(REQUESTED)
+  rejectionReason   String?
+  processedByUserId String?
+  processedAt       DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  worker      Worker?  @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  requestedBy AppUser  @relation("MitraOrderRequester", fields: [requestedByUserId], references: [id])
+  processedBy AppUser? @relation("MitraOrderProcessor", fields: [processedByUserId], references: [id])
+  lines       MitraOrderRequestLine[]
+
+  @@index([workerId, status, createdAt])
+  @@index([requestedByUserId, createdAt])
+}
+
+model MitraOrderRequestLine {
+  id             String   @id @default(uuid())
+  orderRequestId String
+  sequence       Int
+  weightGram     Int
+  lpCount        Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  orderRequest MitraOrderRequest @relation(fields: [orderRequestId], references: [id], onDelete: Cascade)
+
+  @@index([orderRequestId, sequence])
+  @@unique([orderRequestId, sequence])
 }
 
 model NumberSequence {

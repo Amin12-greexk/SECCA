@@ -164,18 +164,35 @@ export interface LoginResponse {
         id: string;
         name: string;
         email: string;
+        phone?: string | null;
+        pin?: string | null;
         role: string;
         workerId?: string | null;
     };
     token: string;
 }
 
+export interface RegisterMitraRequest {
+    pinKaryawan: string;
+    name: string;
+    email: string;
+    phone: string;
+    password: string;
+}
+
 export interface User {
     id: string;
     name: string;
     email: string;
+    phone?: string | null;
+    pin?: string | null;
     role: string;
     workerId?: string | null;
+}
+
+export interface ChangePasswordRequest {
+    currentPassword: string;
+    newPassword: string;
 }
 
 export interface CreateUserRequest {
@@ -198,6 +215,7 @@ export interface Worker {
     id: string;
     name: string;
     code?: string | null;
+    pin?: string | null;
     capacityGram?: number | null;
     trainerId?: string | null;
     createdAt?: string;
@@ -267,6 +285,56 @@ export interface WorkOrderBoard {
     };
 }
 
+export type MitraOrderRequestStatus = 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'FULFILLED';
+export type MitraOrderRequesterRole = 'MITRA' | 'TRAINER' | 'BAKU' | 'MANAGER' | 'KOREKSI';
+
+export interface MitraOrderRequest {
+    id: string;
+    workerId: string | null;
+    requestedByUserId: string;
+    requestedGram: number;
+    note?: string | null;
+    status: MitraOrderRequestStatus;
+    rejectionReason?: string | null;
+    processedByUserId?: string | null;
+    processedAt?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    lines?: Array<{
+        id: string;
+        sequence: number;
+        weightGram: number;
+        lpCount: number;
+    }>;
+    worker?: {
+        id: string;
+        name: string;
+        code?: string | null;
+        capacityGram?: number | null;
+        trainerId?: string | null;
+    };
+    requestedBy?: {
+        id: string;
+        name: string;
+        role: MitraOrderRequesterRole;
+    };
+    processedBy?: {
+        id: string;
+        name: string;
+        role: MitraOrderRequesterRole;
+    } | null;
+}
+
+export interface CreateMitraOrderRequest {
+    workerId?: string;
+    requestedGram?: number;
+    lines?: Array<{
+        weightGram: number;
+        lpCount: number;
+    }>;
+    note?: string;
+}
+
 type ApiResponse<T> = {
     data: T;
     meta?: { timestamp: string };
@@ -282,7 +350,10 @@ function unwrap<T>(payload: ApiResponse<T> | T): T {
 
 // Helper: Get auth headers
 function getAuthHeaders(options: { json?: boolean } = { json: true }): HeadersInit {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const token =
+        typeof window !== 'undefined'
+            ? localStorage.getItem('token') ?? sessionStorage.getItem('token')
+            : null;
     const headers: Record<string, string> = {};
 
     if (options.json !== false) {
@@ -326,6 +397,56 @@ export async function login(data: LoginRequest): Promise<LoginResponse> {
         return unwrap<LoginResponse>(json);
     } catch (error) {
         console.error('Error logging in:', error);
+        throw error;
+    }
+}
+
+export async function registerMitra(data: RegisterMitraRequest): Promise<LoginResponse> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/register/mitra`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || 'Pendaftaran mitra gagal');
+        }
+
+        const json = await response.json();
+        return unwrap<LoginResponse>(json);
+    } catch (error) {
+        console.error('Error registering mitra:', error);
+        throw error;
+    }
+}
+
+export async function changePassword(data: ChangePasswordRequest): Promise<{ ok: boolean; message?: string }> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || 'Gagal mengubah password');
+        }
+
+        const json = await response.json();
+        return unwrap<{ ok: boolean; message?: string }>(json);
+    } catch (error) {
+        console.error('Error changing password:', error);
         throw error;
     }
 }
@@ -445,6 +566,7 @@ export async function getWorkers(): Promise<Worker[]> {
 export async function createWorker(data: {
     name: string;
     code?: string;
+    pin?: string;
     capacityGram?: number | null;
     trainerId?: string | null;
 }): Promise<Worker> {
@@ -471,6 +593,7 @@ export async function createWorker(data: {
 export async function updateWorker(workerId: string, data: {
     name?: string;
     code?: string | null;
+    pin?: string | null;
     capacityGram?: number | null;
     trainerId?: string | null;
 }): Promise<Worker> {
@@ -618,6 +741,171 @@ export async function cancelWorkItem(itemId: string) {
         return unwrap(json);
     } catch (error) {
         console.error('Error canceling work item:', error);
+        throw error;
+    }
+}
+
+export async function createMitraOrderRequest(data: CreateMitraOrderRequest): Promise<MitraOrderRequest> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/mitra-orders/requests`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to create request: ${response.statusText}`);
+        }
+        const json = await response.json();
+        return unwrap<MitraOrderRequest>(json);
+    } catch (error) {
+        console.error('Error creating mitra order request:', error);
+        throw error;
+    }
+}
+
+export async function getMitraOrderRequests(params?: {
+    workerId?: string;
+    status?: MitraOrderRequestStatus;
+    requestedByRole?: MitraOrderRequesterRole;
+    limit?: number;
+}): Promise<MitraOrderRequest[]> {
+    try {
+        const url = new URL(`${API_BASE_URL}/api/mitra-orders/requests`);
+        if (params?.workerId) url.searchParams.set('workerId', params.workerId);
+        if (params?.status) url.searchParams.set('status', params.status);
+        if (params?.requestedByRole) url.searchParams.set('requestedByRole', params.requestedByRole);
+        if (params?.limit) url.searchParams.set('limit', String(params.limit));
+
+        const response = await fetch(url.toString(), {
+            headers: getAuthHeaders({ json: false }),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to fetch requests: ${response.statusText}`);
+        }
+        const json = await response.json();
+        return unwrap<MitraOrderRequest[]>(json);
+    } catch (error) {
+        console.error('Error fetching mitra order requests:', error);
+        throw error;
+    }
+}
+
+export async function getMitraOrderRequestById(requestId: string): Promise<MitraOrderRequest> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/mitra-orders/requests/${requestId}`, {
+            headers: getAuthHeaders({ json: false }),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to fetch request: ${response.statusText}`);
+        }
+        const json = await response.json();
+        return unwrap<MitraOrderRequest>(json);
+    } catch (error) {
+        console.error('Error fetching mitra order request by id:', error);
+        throw error;
+    }
+}
+
+export async function approveMitraOrderRequest(requestId: string): Promise<MitraOrderRequest> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/mitra-orders/requests/${requestId}/approve`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to approve request: ${response.statusText}`);
+        }
+        const json = await response.json();
+        return unwrap<MitraOrderRequest>(json);
+    } catch (error) {
+        console.error('Error approving mitra request:', error);
+        throw error;
+    }
+}
+
+export async function rejectMitraOrderRequest(
+    requestId: string,
+    reason?: string
+): Promise<MitraOrderRequest> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/mitra-orders/requests/${requestId}/reject`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ reason }),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to reject request: ${response.statusText}`);
+        }
+        const json = await response.json();
+        return unwrap<MitraOrderRequest>(json);
+    } catch (error) {
+        console.error('Error rejecting mitra request:', error);
+        throw error;
+    }
+}
+
+export async function fulfillMitraOrderRequest(requestId: string): Promise<MitraOrderRequest> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/mitra-orders/requests/${requestId}/fulfill`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to fulfill request: ${response.statusText}`);
+        }
+        const json = await response.json();
+        return unwrap<MitraOrderRequest>(json);
+    } catch (error) {
+        console.error('Error fulfilling mitra request:', error);
+        throw error;
+    }
+}
+
+export async function assignMitraOrderRequestWorker(
+    requestId: string,
+    workerId: string
+): Promise<MitraOrderRequest> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/mitra-orders/requests/${requestId}/assign-worker`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ workerId }),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to assign worker: ${response.statusText}`);
+        }
+        const json = await response.json();
+        return unwrap<MitraOrderRequest>(json);
+    } catch (error) {
+        console.error('Error assigning worker for request:', error);
         throw error;
     }
 }

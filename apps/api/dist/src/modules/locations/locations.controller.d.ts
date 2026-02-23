@@ -9,8 +9,8 @@ export declare class LocationsController {
         name: string;
         createdAt: Date;
         updatedAt: Date;
-        type: import("@prisma/client").$Enums.RackType;
         code: string;
+        type: import("@prisma/client").$Enums.RackType;
     } | {
         defaults: {
             id: string;
@@ -18,8 +18,8 @@ export declare class LocationsController {
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            type: import("@prisma/client").$Enums.RackType;
             code: string;
+            type: import("@prisma/client").$Enums.RackType;
         }[];
         workerLocations: unknown[];
     }>;
@@ -30,6 +30,7 @@ export declare class LocationsController {
             createdAt: Date;
             updatedAt: Date;
             code: string | null;
+            pin: string | null;
             capacityGram: number | null;
             trainerId: string | null;
         } | null;
@@ -39,8 +40,8 @@ export declare class LocationsController {
         name: string;
         createdAt: Date;
         updatedAt: Date;
-        type: import("@prisma/client").$Enums.RackType;
         code: string;
+        type: import("@prisma/client").$Enums.RackType;
     })[]>;
     findLotsByCode(code: string): Promise<{
         location: {
@@ -49,8 +50,8 @@ export declare class LocationsController {
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            type: import("@prisma/client").$Enums.RackType;
             code: string;
+            type: import("@prisma/client").$Enums.RackType;
         };
         lots: ({
             grade: {
@@ -58,8 +59,8 @@ export declare class LocationsController {
                 name: string;
                 createdAt: Date;
                 updatedAt: Date;
-                type: import("@prisma/client").$Enums.GradeType;
                 code: string;
+                type: import("@prisma/client").$Enums.GradeType;
             };
         } & {
             id: string;
@@ -85,8 +86,8 @@ export declare class LocationsController {
             name: string;
             createdAt: Date;
             updatedAt: Date;
-            type: import("@prisma/client").$Enums.RackType;
             code: string;
+            type: import("@prisma/client").$Enums.RackType;
         };
         lots: ({
             grade: {
@@ -94,8 +95,8 @@ export declare class LocationsController {
                 name: string;
                 createdAt: Date;
                 updatedAt: Date;
-                type: import("@prisma/client").$Enums.GradeType;
                 code: string;
+                type: import("@prisma/client").$Enums.GradeType;
             };
         } & {
             id: string;

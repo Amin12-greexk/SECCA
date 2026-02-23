@@ -1,4 +1,5 @@
 import { PrismaService } from "../../prisma/prisma.service";
+import { Prisma } from "@prisma/client";
 import { CreateWorkerDto } from "./dto/create-worker.dto";
 import { UpdateWorkerDto } from "./dto/update-worker.dto";
 type WeeklyBucket = {
@@ -13,30 +14,33 @@ type WeeklyBucket = {
 export declare class WorkersService {
     private readonly prisma;
     constructor(prisma: PrismaService);
-    create(dto: CreateWorkerDto): import("@prisma/client").Prisma.Prisma__WorkerClient<{
+    create(dto: CreateWorkerDto): Promise<{
         id: string;
         name: string;
         createdAt: Date;
         updatedAt: Date;
         code: string | null;
+        pin: string | null;
         capacityGram: number | null;
         trainerId: string | null;
-    }, never, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
+    }>;
     update(id: string, dto: UpdateWorkerDto): Promise<{
         id: string;
         name: string;
         createdAt: Date;
         updatedAt: Date;
         code: string | null;
+        pin: string | null;
         capacityGram: number | null;
         trainerId: string | null;
     }>;
-    findAll(): import("@prisma/client").Prisma.PrismaPromise<{
+    findAll(): Prisma.PrismaPromise<{
         id: string;
         name: string;
         createdAt: Date;
         updatedAt: Date;
         code: string | null;
+        pin: string | null;
         capacityGram: number | null;
         trainerId: string | null;
     }[]>;
@@ -48,5 +52,6 @@ export declare class WorkersService {
         };
         weeks: WeeklyBucket[];
     }>;
+    private normalizePin;
 }
 export {};

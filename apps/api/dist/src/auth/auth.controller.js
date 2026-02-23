@@ -17,6 +17,8 @@ const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const auth_service_1 = require("./auth.service");
 const login_dto_1 = require("./dto/login.dto");
+const register_mitra_dto_1 = require("./dto/register-mitra.dto");
+const change_password_dto_1 = require("./dto/change-password.dto");
 const public_decorator_1 = require("./public.decorator");
 let AuthController = class AuthController {
     authService;
@@ -26,9 +28,16 @@ let AuthController = class AuthController {
     login(dto) {
         return this.authService.login(dto.email, dto.password);
     }
+    registerMitra(dto) {
+        return this.authService.registerMitra(dto);
+    }
     getProfile(req) {
         const userId = req.user?.sub;
         return this.authService.profile(userId ?? "");
+    }
+    changePassword(req, dto) {
+        const userId = req.user?.sub;
+        return this.authService.changePassword(userId ?? "", dto);
     }
     logout() {
         return { ok: true };
@@ -44,6 +53,17 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "login", null);
 __decorate([
+    (0, public_decorator_1.Public)(),
+    (0, common_1.Post)("register/mitra"),
+    (0, swagger_1.ApiOperation)({
+        summary: "Pendaftaran mandiri mitra menggunakan PIN karyawan",
+    }),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [register_mitra_dto_1.RegisterMitraDto]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "registerMitra", null);
+__decorate([
     (0, common_1.Get)("profile"),
     (0, swagger_1.ApiBearerAuth)(),
     __param(0, (0, common_1.Req)()),
@@ -51,6 +71,18 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "getProfile", null);
+__decorate([
+    (0, common_1.Post)("change-password"),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({
+        summary: "Ubah password akun yang sedang login",
+    }),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, change_password_dto_1.ChangePasswordDto]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "changePassword", null);
 __decorate([
     (0, common_1.Post)("logout"),
     (0, swagger_1.ApiBearerAuth)(),

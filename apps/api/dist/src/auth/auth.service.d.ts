@@ -1,5 +1,7 @@
 import { JwtService } from "@nestjs/jwt";
 import { PrismaService } from "../prisma/prisma.service";
+import { RegisterMitraDto } from "./dto/register-mitra.dto";
+import { ChangePasswordDto } from "./dto/change-password.dto";
 export declare class AuthService {
     private readonly jwtService;
     private readonly prisma;
@@ -9,8 +11,22 @@ export declare class AuthService {
             id: string;
             name: string;
             email: string;
+            phone: string | null;
             role: string;
             workerId: string | null;
+            pin: string | null;
+        };
+        token: string;
+    }>;
+    registerMitra(dto: RegisterMitraDto): Promise<{
+        user: {
+            id: string;
+            name: string;
+            email: string;
+            phone: string | null;
+            role: string;
+            workerId: string | null;
+            pin: string | null;
         };
         token: string;
     }>;
@@ -18,8 +34,17 @@ export declare class AuthService {
         id: string;
         name: string;
         email: string;
+        phone: string | null;
         role: string;
         workerId: string | null;
+        pin: string | null;
     }>;
+    changePassword(userId: string, dto: ChangePasswordDto): Promise<{
+        ok: boolean;
+        message: string;
+    }>;
+    private buildAuthResponse;
+    private normalizePin;
+    private normalizePhone;
     private hashPassword;
 }

@@ -1,182 +1,190 @@
-'use client';
+﻿'use client';
 
-import { useEffect, useState, useMemo } from 'react';
-import { useAuth } from '@/lib/auth/AuthContext';
+import { useMemo, useState } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import LoadingCircle from '@/components/LoadingCircle';
 import { useToast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import type { Worker, WorkLane } from '@/lib/api';
-import { getWorkers, createWorkOrder } from '@/lib/api';
+import { createMitraOrderRequest } from '@/lib/api';
+
+type OrderLineDraft = {
+    id: string;
+    weightGram: string;
+    lpCount: string;
+};
+
+const createLineId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 function TrainerOrdersContent() {
-    const { user } = useAuth();
     const toast = useToast();
-
-    const [workers, setWorkers] = useState<Worker[]>([]);
-    const [loadingWorkers, setLoadingWorkers] = useState(true);
-
-    // Form state
-    const [selectedWorkerId, setSelectedWorkerId] = useState('');
-    const [lotText, setLotText] = useState('');
-    const [lane, setLane] = useState<WorkLane>('NEXT_DAY');
+    const [note, setNote] = useState('');
+    const [orderLines, setOrderLines] = useState<OrderLineDraft[]>([
+        { id: createLineId(), weightGram: '', lpCount: '' },
+    ]);
     const [submitting, setSubmitting] = useState(false);
-    const [errorMsg, setErrorMsg] = useState('');
 
-    // Derived
-    const lotNumbers = useMemo(
+    const normalizedLines = useMemo(
         () =>
-            lotText
-                .split('\n')
-                .map((l) => l.trim())
-                .filter(Boolean),
-        [lotText],
+            orderLines
+                .map((line) => {
+                    const weightGram = Number(line.weightGram);
+                    const lpCount = Number(line.lpCount);
+                    const valid =
+                        Number.isFinite(weightGram) &&
+                        weightGram > 0 &&
+                        Number.isFinite(lpCount) &&
+                        lpCount > 0;
+                    return {
+                        ...line,
+                        weightGram: valid ? Math.round(weightGram) : 0,
+                        lpCount: valid ? Math.round(lpCount) : 0,
+                        valid,
+                    };
+                })
+                .filter((line) => line.valid)
+                .map((line) => ({
+                    weightGram: line.weightGram,
+                    lpCount: line.lpCount,
+                })),
+        [orderLines]
     );
 
-    // Load workers
-    useEffect(() => {
-        getWorkers()
-            .then((list) => {
-                // If trainer, filter by trainerId
-                if (user?.role === 'trainer') {
-                    setWorkers(list.filter((w) => w.trainerId === user.id));
-                } else {
-                    setWorkers(list);
-                }
-            })
-            .catch((err) => toast.error(err.message))
-            .finally(() => setLoadingWorkers(false));
-    }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+    const totalRequestedGram = useMemo(
+        () => normalizedLines.reduce((sum, line) => sum + line.weightGram * line.lpCount, 0),
+        [normalizedLines]
+    );
+
+    const addOrderLine = () => {
+        setOrderLines((prev) => [
+            ...prev,
+            { id: createLineId(), weightGram: '', lpCount: '' },
+        ]);
+    };
+
+    const removeOrderLine = (lineId: string) => {
+        setOrderLines((prev) =>
+            prev.length === 1 ? prev : prev.filter((line) => line.id !== lineId)
+        );
+    };
+
+    const updateOrderLine = (
+        lineId: string,
+        field: keyof Pick<OrderLineDraft, 'weightGram' | 'lpCount'>,
+        value: string
+    ) => {
+        setOrderLines((prev) =>
+            prev.map((line) =>
+                line.id === lineId
+                    ? {
+                          ...line,
+                          [field]: value,
+                      }
+                    : line
+            )
+        );
+    };
 
     const handleSubmit = async () => {
-        setErrorMsg('');
-        if (!selectedWorkerId) {
-            toast.error('Pilih pekerja terlebih dahulu');
-            return;
-        }
-        if (lotNumbers.length === 0) {
-            toast.error('Masukkan minimal satu lot number');
+        if (normalizedLines.length === 0) {
+            toast.error('Isi minimal satu baris template (berat x jumlah LP).');
             return;
         }
 
         setSubmitting(true);
         try {
-            await createWorkOrder({
-                workerId: selectedWorkerId,
-                lotNumbers,
-                lane,
+            await createMitraOrderRequest({
+                lines: normalizedLines,
+                note: note.trim() || undefined,
             });
-            toast.success(`Work order berhasil dibuat (${lotNumbers.length} lot)`);
-            // Reset form
-            setSelectedWorkerId('');
-            setLotText('');
-            setLane('NEXT_DAY');
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Gagal membuat work order';
-            if (msg.includes('WORK_NOT_FINISHED')) {
-                setErrorMsg('Pekerja ini masih memiliki work order yang belum selesai. Selesaikan terlebih dahulu sebelum membuat order baru.');
-            } else {
-                toast.error(msg);
-            }
+            toast.success('Template order trainer berhasil disimpan.');
+            setOrderLines([{ id: createLineId(), weightGram: '', lpCount: '' }]);
+            setNote('');
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Gagal membuat template order trainer.');
         } finally {
             setSubmitting(false);
         }
     };
 
-    if (!user) return null;
-
     return (
-        <div className="space-y-6 max-w-xl">
-            {/* Header */}
+        <div className="mx-auto max-w-2xl space-y-6">
             <div>
-                <h1 className="text-2xl font-bold text-gray-900">Buat Work Order</h1>
-                <p className="text-sm text-gray-500 mt-1">Atur order mitra sesuai kapasitas</p>
+                <h1 className="text-2xl font-bold text-gray-900">Template Order Trainer</h1>
+                <p className="mt-1 text-sm text-gray-500">
+                    Catat kebutuhan gram per LP. Assign mitra dilakukan di menu terpisah.
+                </p>
             </div>
 
-            {/* Worker select */}
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Pekerja</label>
-                {loadingWorkers ? (
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <LoadingCircle size="sm" /> Memuat pekerja...
-                    </div>
-                ) : (
-                    <Select value={selectedWorkerId} onValueChange={setSelectedWorkerId}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Pilih pekerja..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {workers.map((w) => (
-                                <SelectItem key={w.id} value={w.id}>
-                                    {w.name}{w.code ? ` (${w.code})` : ''}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                )}
+            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="mb-3 flex items-center justify-between">
+                    <h2 className="text-sm font-semibold text-gray-800">Template LP</h2>
+                    <Button type="button" size="sm" variant="outline" onClick={addOrderLine}>
+                        <Plus className="h-4 w-4" />
+                        Tambah Baris
+                    </Button>
+                </div>
+
+                <div className="space-y-2">
+                    {orderLines.map((line, index) => (
+                        <div key={line.id} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                            <input
+                                type="number"
+                                min={1}
+                                value={line.weightGram}
+                                onChange={(event) =>
+                                    updateOrderLine(line.id, 'weightGram', event.target.value)
+                                }
+                                className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-green-600 focus:ring-2 focus:ring-green-100"
+                                placeholder={`Berat LP #${index + 1} (gram)`}
+                            />
+                            <input
+                                type="number"
+                                min={1}
+                                value={line.lpCount}
+                                onChange={(event) =>
+                                    updateOrderLine(line.id, 'lpCount', event.target.value)
+                                }
+                                className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-green-600 focus:ring-2 focus:ring-green-100"
+                                placeholder="Jumlah LP"
+                            />
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeOrderLine(line.id)}
+                                disabled={orderLines.length <= 1}
+                                className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    ))}
+                </div>
+
+                <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                    Total order: <span className="font-semibold">{totalRequestedGram}</span> gram
+                </div>
             </div>
 
-            {/* Lot numbers */}
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Lot Number <span className="text-gray-400 font-normal">(satu per baris)</span>
-                </label>
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Catatan (opsional)</label>
                 <Textarea
-                    value={lotText}
-                    onChange={(e) => setLotText(e.target.value)}
-                    rows={6}
-                    placeholder={'LOT-001\nLOT-002\nLOT-003'}
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
+                    placeholder="Contoh: untuk target setoran hari Selasa"
                 />
             </div>
 
-            {/* Lane select */}
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Lane Awal</label>
-                <Select value={lane} onValueChange={(v) => setLane(v as WorkLane)}>
-                    <SelectTrigger>
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="NEXT_DAY">Besok Dikerjakan</SelectItem>
-                        <SelectItem value="IN_PROGRESS">Langsung Dikerjakan</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-
-            {/* Summary */}
-            {lotNumbers.length > 0 && (
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <p className="text-sm text-gray-700">
-                        <span className="font-medium">Total lot:</span> {lotNumbers.length}
-                    </p>
-                </div>
-            )}
-
-            {/* Error message (e.g. WORK_NOT_FINISHED) */}
-            {errorMsg && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-                    {errorMsg}
-                </div>
-            )}
-
-            {/* Submit */}
             <div className="flex items-center gap-3">
                 <Button onClick={handleSubmit} disabled={submitting}>
-                    {submitting ? 'Menyimpan...' : 'Buat Work Order'}
+                    {submitting ? 'Menyimpan...' : 'Simpan Template'}
                 </Button>
                 <a
-                    href="/trainer/board"
+                    href="/trainer/assign"
                     className="text-sm text-green-600 hover:text-green-700 hover:underline"
                 >
-                    Lihat Board →
+                    Assign ke Mitra -&gt;
                 </a>
             </div>
         </div>

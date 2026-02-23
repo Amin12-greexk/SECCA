@@ -27,7 +27,7 @@ export class WorkOrdersService {
       return badRequest("Duplicate lot numbers in request");
     }
 
-    const requestedLane = dto.lane ?? WorkLane.NEXT_DAY;
+    const requestedLane = dto.lane ?? WorkLane.IN_PROGRESS;
     if (requestedLane === WorkLane.READY_TO_SUBMIT) {
       return badRequest("Lane READY_TO_SUBMIT tidak valid untuk order baru");
     }

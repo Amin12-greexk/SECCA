@@ -32,7 +32,7 @@ __decorate([
     __metadata("design:type", Array)
 ], CreateWorkOrderDto.prototype, "lotNumbers", void 0);
 __decorate([
-    (0, swagger_1.ApiPropertyOptional)({ enum: client_1.WorkLane }),
+    (0, swagger_1.ApiPropertyOptional)({ enum: client_1.WorkLane, description: "Default: IN_PROGRESS" }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(client_1.WorkLane),
     __metadata("design:type", String)

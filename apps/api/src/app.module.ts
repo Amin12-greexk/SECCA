@@ -19,6 +19,7 @@ import { WorkItemsModule } from "./modules/work-items/work-items.module";
 import { WorkersModule } from "./modules/workers/workers.module";
 import { UsersModule } from "./modules/users/users.module";
 import { AnalyticsModule } from "./modules/analytics/analytics.module";
+import { MitraOrdersModule } from "./modules/mitra-orders/mitra-orders.module";
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { AnalyticsModule } from "./modules/analytics/analytics.module";
     PayrollModule,
     UsersModule,
     AnalyticsModule,
+    MitraOrdersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

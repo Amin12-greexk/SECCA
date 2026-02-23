@@ -28,7 +28,7 @@ let WorkOrdersService = class WorkOrdersService {
         if (uniqueLotNumbers.size !== dto.lotNumbers.length) {
             return (0, errors_1.badRequest)("Duplicate lot numbers in request");
         }
-        const requestedLane = dto.lane ?? client_1.WorkLane.NEXT_DAY;
+        const requestedLane = dto.lane ?? client_1.WorkLane.IN_PROGRESS;
         if (requestedLane === client_1.WorkLane.READY_TO_SUBMIT) {
             return (0, errors_1.badRequest)("Lane READY_TO_SUBMIT tidak valid untuk order baru");
         }

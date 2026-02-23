@@ -68,6 +68,16 @@ const menuItems: MenuItem[] = [
                 ),
                 roles: ['baku', 'manager'],
             },
+            {
+                name: 'Order Mitra',
+                href: '/baku/orders',
+                icon: (
+                    <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                        <path d="M4 7h16M4 12h16M4 17h16" />
+                    </svg>
+                ),
+                roles: ['baku', 'manager'],
+            },
         ],
     },
     // Menu Stock (dengan dropdown) - khusus role baku dan manager
@@ -149,6 +159,17 @@ const menuItems: MenuItem[] = [
                 icon: (
                     <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                         <path d="M12 5v14m7-7H5" />
+                    </svg>
+                ),
+                roles: ['trainer', 'manager'],
+            },
+            {
+                name: 'Assign Mitra',
+                href: '/trainer/assign',
+                icon: (
+                    <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                        <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                        <path d="M12 14v7m0 0l-3-3m3 3l3-3" />
                     </svg>
                 ),
                 roles: ['trainer', 'manager'],

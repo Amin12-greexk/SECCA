@@ -32,10 +32,12 @@ import {
     getPecahBonEntries,
     getPecahBonEntriesPaginated,
     getPecahBonById,
+    getMitraOrderRequests,
     updatePecahBonEntry,
     markPecahBonPrinted,
     type RawBatch,
     type Grade,
+    type MitraOrderRequest,
     type PecahBonEntry,
 } from '@/lib/api';
 import PecahBonCard from '@/components/print/PecahBonCard';
@@ -103,6 +105,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     const [batchTotalPages, setBatchTotalPages] = useState(1);
     const [batchTotal, setBatchTotal] = useState(0);
     const [grades, setGrades] = useState<Grade[]>([]);
+    const [trainerOrderTemplates, setTrainerOrderTemplates] = useState<MitraOrderRequest[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedBatch, setSelectedBatch] = useState<BatchWithEntries | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -139,6 +142,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
 
     // Multi-entry state for bulk pecah bon
     const [multiEntries, setMultiEntries] = useState<MultiEntryRow[]>([]);
+    const [selectedTemplateRequestId, setSelectedTemplateRequestId] = useState('NONE');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [syncFields, setSyncFields] = useState({
         gradeId: false,
@@ -152,6 +156,13 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     const shapeGrades = useMemo(() => grades.filter((grade) => grade.type === 'BENTUK'), [grades]);
     const featherGrades = useMemo(() => grades.filter((grade) => grade.type === 'BULU'), [grades]);
     const colorGrades = useMemo(() => grades.filter((grade) => grade.type === 'WARNA'), [grades]);
+    const selectedTrainerTemplate = useMemo(
+        () =>
+            selectedTemplateRequestId === 'NONE'
+                ? null
+                : trainerOrderTemplates.find((item) => item.id === selectedTemplateRequestId) ?? null,
+        [selectedTemplateRequestId, trainerOrderTemplates]
+    );
     const normalizeLpDigits = (value: string) => value.replace(/\D/g, '').slice(0, 4);
     const normalizeYearSuffix = (value: string) => value.replace(/\D/g, '').slice(0, 2);
 
@@ -214,6 +225,47 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
             if (!firstRow) return prev;
             return prev.map((row, idx) => (idx === 0 ? row : { ...row, [field]: firstRow[field as keyof MultiEntryRow] }));
         });
+    };
+
+    const applyTemplateToRows = (requestId: string) => {
+        if (requestId === 'NONE') {
+            setSelectedTemplateRequestId('NONE');
+            return;
+        }
+
+        const template = trainerOrderTemplates.find((request) => request.id === requestId);
+        if (!template) {
+            toast.error('Template order tidak ditemukan.');
+            return;
+        }
+
+        const lines = template.lines ?? [];
+        if (lines.length === 0) {
+            toast.error('Template order ini belum memiliki rincian LP.');
+            return;
+        }
+
+        const totalLp = lines.reduce((sum, line) => sum + line.lpCount, 0);
+        if (totalLp > 200) {
+            toast.error('Template terlalu besar. Maksimal 200 LP per batch input.');
+            return;
+        }
+
+        const rows: MultiEntryRow[] = [];
+        lines.forEach((line) => {
+            for (let index = 0; index < line.lpCount; index += 1) {
+                rows.push(
+                    createEmptyRow({
+                        initialWeightGram: line.weightGram,
+                        moisturePercent: selectedBatch?.moisturePercent ?? '',
+                    })
+                );
+            }
+        });
+
+        setSelectedTemplateRequestId(requestId);
+        setMultiEntries(rows.length > 0 ? rows : [createEmptyRow()]);
+        toast.success(`Template trainer diterapkan (${totalLp} LP).`);
     };
 
     const flashRow = (rowId: string) => {
@@ -616,17 +668,25 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         },
     });
 
-    const loadData = async (page = batchPage, options?: { withGrades?: boolean }) => {
+    const loadData = async (page = batchPage, options?: { withGrades?: boolean; withTemplates?: boolean }) => {
         setLoading(true);
         try {
             const shouldLoadGrades = options?.withGrades ?? grades.length === 0;
-            const [batchResponse, gradeData] = await Promise.all([
+            const shouldLoadTemplates = options?.withTemplates ?? trainerOrderTemplates.length === 0;
+            const [batchResponse, gradeData, templateData] = await Promise.all([
                 getRawBatchesPaginated({
                     page,
                     limit: BATCHES_PER_PAGE,
                     activeOnly: true,
                 }),
                 shouldLoadGrades ? getGrades() : Promise.resolve(grades),
+                shouldLoadTemplates
+                    ? getMitraOrderRequests({
+                        status: 'APPROVED',
+                        requestedByRole: 'TRAINER',
+                        limit: 200,
+                    })
+                    : Promise.resolve(trainerOrderTemplates),
             ]);
             if (batchResponse.total > 0 && batchResponse.page > batchResponse.totalPages) {
                 await loadData(batchResponse.totalPages, options);
@@ -649,6 +709,9 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
             if (shouldLoadGrades) {
                 setGrades(gradeData);
             }
+            if (shouldLoadTemplates) {
+                setTrainerOrderTemplates(templateData);
+            }
             setBatchPage(batchResponse.page);
             setBatchTotalPages(batchResponse.totalPages);
             setBatchTotal(batchResponse.total);
@@ -661,7 +724,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     };
 
     useEffect(() => {
-        loadData(1, { withGrades: true });
+        loadData(1, { withGrades: true, withTemplates: true });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -726,6 +789,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
 
     const openPecahBonDialog = (batch: BatchWithEntries) => {
         setSelectedBatch(batch);
+        setSelectedTemplateRequestId('NONE');
         setMultiEntries([
             createEmptyRow({
                 moisturePercent: batch.moisturePercent,
@@ -1728,7 +1792,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                             </div>
 
                             
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <div className="space-y-1">
                                     <Label className="text-xs text-gray-600">Kondisi Baku</Label>
                                     <Input
@@ -1736,6 +1800,32 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                         value={selectedBatch?.featherCondition ?? ''}
                                         disabled
                                     />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-gray-600">Template Order Trainer (opsional)</Label>
+                                    <Select
+                                        value={selectedTemplateRequestId}
+                                        onValueChange={applyTemplateToRows}
+                                    >
+                                        <SelectTrigger className="h-9 text-sm">
+                                            <SelectValue placeholder="Pilih template order" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="NONE">Tanpa template</SelectItem>
+                                            {trainerOrderTemplates.map((request) => (
+                                                <SelectItem key={request.id} value={request.id}>
+                                                    {`${request.worker?.name ?? 'Mitra'} • ${request.requestedGram}g`}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {selectedTrainerTemplate?.lines && selectedTrainerTemplate.lines.length > 0 && (
+                                        <p className="text-[11px] text-gray-500">
+                                            {selectedTrainerTemplate.lines
+                                                .map((line) => `${line.weightGram}g x ${line.lpCount} LP`)
+                                                .join(' | ')}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </div>
