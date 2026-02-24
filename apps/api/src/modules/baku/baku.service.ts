@@ -8,6 +8,7 @@ import { UpdatePecahBonDto } from "./dto/update-pecah-bon.dto";
 import { UpdateRawBatchDto } from "./dto/update-raw-batch.dto";
 import { RawBatchPageQueryDto } from "./dto/raw-batch-page-query.dto";
 import { PecahBonPageQueryDto } from "./dto/pecah-bon-page-query.dto";
+import { PecahBonHistoryQueryDto } from "./dto/pecah-bon-history-query.dto";
 import { NumberingService } from "../../common/numbering/numbering.service";
 import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
 import { LOCATION_CODES } from "../../common/constants";
@@ -705,6 +706,72 @@ export class BakuService {
           colorGrade: true,
         },
         orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      items,
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
+  }
+
+  async getPecahBonHistory(query: PecahBonHistoryQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+    const where: Prisma.PecahBonEntryWhereInput = {};
+
+    const from = query.from ? new Date(query.from) : null;
+    const to = query.to ? new Date(query.to) : null;
+
+    if (from) {
+      from.setHours(0, 0, 0, 0);
+    }
+    if (to) {
+      to.setHours(23, 59, 59, 999);
+    }
+
+    if (from && to && from.getTime() > to.getTime()) {
+      return badRequest("Rentang tanggal tidak valid (from > to)", {
+        from: query.from,
+        to: query.to,
+      });
+    }
+
+    if (from || to) {
+      where.pecahBonDate = {};
+      if (from) where.pecahBonDate.gte = from;
+      if (to) where.pecahBonDate.lte = to;
+    }
+
+    const search = query.search?.trim();
+    if (search) {
+      where.OR = [
+        { pecahBonId: { contains: search, mode: "insensitive" } },
+        { featherCondition: { contains: search, mode: "insensitive" } },
+        { rawBatch: { batchNumber: { contains: search, mode: "insensitive" } } },
+        { grade: { code: { contains: search, mode: "insensitive" } } },
+        { featherGrade: { code: { contains: search, mode: "insensitive" } } },
+        { colorGrade: { code: { contains: search, mode: "insensitive" } } },
+      ];
+    }
+
+    const [total, items] = await Promise.all([
+      this.prisma.pecahBonEntry.count({ where }),
+      this.prisma.pecahBonEntry.findMany({
+        where,
+        include: {
+          rawBatch: { select: { id: true, batchNumber: true } },
+          grade: { select: { id: true, code: true, name: true, type: true } },
+          featherGrade: { select: { id: true, code: true, name: true, type: true } },
+          colorGrade: { select: { id: true, code: true, name: true, type: true } },
+        },
+        orderBy: [{ pecahBonDate: "desc" }, { createdAt: "desc" }],
         skip,
         take: limit,
       }),

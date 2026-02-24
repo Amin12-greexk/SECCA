@@ -7,6 +7,7 @@ import { UpdatePecahBonDto } from "./dto/update-pecah-bon.dto";
 import { UpdateRawBatchDto } from "./dto/update-raw-batch.dto";
 import { RawBatchPageQueryDto } from "./dto/raw-batch-page-query.dto";
 import { PecahBonPageQueryDto } from "./dto/pecah-bon-page-query.dto";
+import { PecahBonHistoryQueryDto } from "./dto/pecah-bon-history-query.dto";
 import { BakuService } from "./baku.service";
 
 @ApiTags("Baku")
@@ -29,6 +30,11 @@ export class BakuController {
   @Get("paginated")
   findAllPaginated(@Query() query: RawBatchPageQueryDto) {
     return this.bakuService.findAllPaginated(query);
+  }
+
+  @Get("pecah-bon/history")
+  getPecahBonHistory(@Query() query: PecahBonHistoryQueryDto) {
+    return this.bakuService.getPecahBonHistory(query);
   }
 
   @Get("pecah-bon/:pecahBonId")

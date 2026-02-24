@@ -67,6 +67,20 @@ export interface ProductionLot {
     grade?: Grade;
     featherGrade?: Grade | null;
     colorGrade?: Grade | null;
+    workItem?: {
+        id: string;
+        status: string;
+        lane: WorkLane;
+        workOrder: {
+            id: string;
+            workerId: string;
+            worker?: {
+                id: string;
+                name: string;
+                code?: string | null;
+            } | null;
+        };
+    } | null;
     location?: RackLocation;
     createdAt: string;
     updatedAt: string;
@@ -256,6 +270,14 @@ export interface PecahBonEntryPageQuery {
     limit?: number;
 }
 
+export interface PecahBonHistoryQuery {
+    page?: number;
+    limit?: number;
+    from?: string;
+    to?: string;
+    search?: string;
+}
+
 export type WorkLane = 'NEXT_DAY' | 'IN_PROGRESS' | 'READY_TO_SUBMIT';
 
 export interface WorkOrderBoardItem {
@@ -283,6 +305,31 @@ export interface WorkOrderBoard {
         IN_PROGRESS: number;
         READY_TO_SUBMIT: number;
     };
+}
+
+export interface MitraAttendanceRecord {
+    date: string | null;
+    checkIn: string | null;
+    checkOut: string | null;
+    status: string | null;
+    note: string | null;
+    raw: Record<string, unknown>;
+}
+
+export interface MitraAttendanceResponse {
+    workerId: string;
+    pin: string;
+    range: {
+        from: string | null;
+        to: string | null;
+    };
+    summary: {
+        totalRecords: number;
+        presentDays: number;
+        absentDays: number;
+        estimatedPremiumBaseDays: number;
+    };
+    items: MitraAttendanceRecord[];
 }
 
 export type MitraOrderRequestStatus = 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'FULFILLED';
@@ -691,11 +738,72 @@ export async function getWorkOrderBoard(workerId: string): Promise<WorkOrderBoar
     }
 }
 
+export async function getMyAttendance(params?: {
+    from?: string;
+    to?: string;
+}): Promise<MitraAttendanceResponse> {
+    try {
+        const query = buildQueryString({
+            from: params?.from,
+            to: params?.to,
+        });
+        const response = await fetch(`${API_BASE_URL}/api/attendance/me${query}`, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to fetch attendance: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<MitraAttendanceResponse>(json);
+    } catch (error) {
+        console.error('Error fetching attendance:', error);
+        throw error;
+    }
+}
+
+export async function createWorkOrderFromMitraOrder(data: {
+    workerId: string;
+    lotIds: string[];
+}): Promise<{
+    workOrderId: string;
+    status: string;
+    lane?: WorkLane;
+    items: Array<{ workOrderItemId: string; lotNumber: string; lane: WorkLane }>;
+}> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/work-orders/assign-from-mitra-order`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to assign lots: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap(json);
+    } catch (error) {
+        console.error('Error assigning lots from mitra order rack:', error);
+        throw error;
+    }
+}
+
 export async function startWorkItem(itemId: string) {
     try {
         const response = await fetch(`${API_BASE_URL}/api/work-items/${itemId}/start`, {
             method: 'POST',
-            headers: getAuthHeaders(),
+            headers: getAuthHeaders({ json: false }),
         });
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
@@ -713,7 +821,7 @@ export async function markWorkItemReady(itemId: string) {
     try {
         const response = await fetch(`${API_BASE_URL}/api/work-items/${itemId}/mark-ready`, {
             method: 'POST',
-            headers: getAuthHeaders(),
+            headers: getAuthHeaders({ json: false }),
         });
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
@@ -731,7 +839,7 @@ export async function cancelWorkItem(itemId: string) {
     try {
         const response = await fetch(`${API_BASE_URL}/api/work-items/${itemId}/cancel`, {
             method: 'POST',
-            headers: getAuthHeaders(),
+            headers: getAuthHeaders({ json: false }),
         });
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
@@ -822,7 +930,7 @@ export async function approveMitraOrderRequest(requestId: string): Promise<Mitra
     try {
         const response = await fetch(`${API_BASE_URL}/api/mitra-orders/requests/${requestId}/approve`, {
             method: 'POST',
-            headers: getAuthHeaders(),
+            headers: getAuthHeaders({ json: false }),
         });
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
@@ -868,7 +976,7 @@ export async function fulfillMitraOrderRequest(requestId: string): Promise<Mitra
     try {
         const response = await fetch(`${API_BASE_URL}/api/mitra-orders/requests/${requestId}/fulfill`, {
             method: 'POST',
-            headers: getAuthHeaders(),
+            headers: getAuthHeaders({ json: false }),
         });
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
@@ -1283,7 +1391,7 @@ export async function updatePecahBonEntry(entryId: string, data: PecahBonUpdateR
 export async function markPecahBonPrinted(entryId: string): Promise<ProductionLot> {
     const response = await fetch(`${API_BASE_URL}/api/baku/pecah-bon-entry/${entryId}/printed`, {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers: getAuthHeaders({ json: false }),
     });
 
     if (!response.ok) {
@@ -1334,6 +1442,37 @@ export async function getPecahBonEntriesPaginated(
         return unwrap<PaginatedResult<PecahBonEntry>>(json);
     } catch (error) {
         console.error('Error fetching paginated pecah bon entries:', error);
+        throw error;
+    }
+}
+
+export async function getPecahBonHistoryPaginated(
+    query: PecahBonHistoryQuery = {}
+): Promise<PaginatedResult<PecahBonEntry>> {
+    try {
+        const queryString = buildQueryString({
+            page: query.page,
+            limit: query.limit,
+            from: query.from,
+            to: query.to,
+            search: query.search,
+        });
+        const response = await fetch(`${API_BASE_URL}/api/baku/pecah-bon/history${queryString}`, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to fetch koreksi history: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<PaginatedResult<PecahBonEntry>>(json);
+    } catch (error) {
+        console.error('Error fetching pecah bon history:', error);
         throw error;
     }
 }
