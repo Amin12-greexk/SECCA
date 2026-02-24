@@ -384,7 +384,7 @@ function KoreksiHistoryContent() {
                       <td className="px-3 py-2 text-gray-600">{formatDate(entry.pecahBonDate)}</td>
                       <td className="px-3 py-2 text-gray-700">{entry.rawBatch?.batchNumber ?? '-'}</td>
                       <td className="px-3 py-2 text-gray-700">{gradeLabelFor(entry)}</td>
-                      <td className="px-3 py-2 text-right font-mono text-gray-700">{entry.pieceCount} pcs</td>
+                      <td className="px-3 py-2 text-right font-mono text-gray-700">{entry.pieceCount}</td>
                       <td className="px-3 py-2 text-right font-mono text-gray-700">
                         {formatNumber(entry.initialWeightGram, 2)}
                       </td>
@@ -447,4 +447,3 @@ export default function KoreksiHistoryPage() {
     </ProtectedRoute>
   );
 }
-
