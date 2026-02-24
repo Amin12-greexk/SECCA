@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Loader2, Plus, Printer, RefreshCw, Scissors, X, Copy, Trash2, CheckCircle2 } from 'lucide-react';
+import { Camera, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Loader2, Plus, Printer, RefreshCw, Scissors, X, Copy, Trash2, CheckCircle2 } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,9 +26,11 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/lib/toast';
 import {
+    approveMitraOrderRequest,
     getRawBatchesPaginated,
     getGrades,
     createPecahBon,
+    fulfillMitraOrderRequest,
     getPecahBonEntries,
     getPecahBonEntriesPaginated,
     getPecahBonById,
@@ -79,6 +81,16 @@ interface MultiEntryRow {
     moisturePercent: number | '';
 }
 
+type DetectedBarcodeLike = {
+    rawValue?: string;
+};
+
+type BarcodeDetectorLike = {
+    detect: (source: unknown) => Promise<DetectedBarcodeLike[]>;
+};
+
+type BarcodeDetectorCtorLike = new (options?: { formats?: string[] }) => BarcodeDetectorLike;
+
 // Generate simple unique ID
 const generateId = () => Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
 
@@ -106,6 +118,8 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     const [batchTotal, setBatchTotal] = useState(0);
     const [grades, setGrades] = useState<Grade[]>([]);
     const [trainerOrderTemplates, setTrainerOrderTemplates] = useState<MitraOrderRequest[]>([]);
+    const [pendingTrainerOrders, setPendingTrainerOrders] = useState<MitraOrderRequest[]>([]);
+    const [orderActionLoadingId, setOrderActionLoadingId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedBatch, setSelectedBatch] = useState<BatchWithEntries | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -135,6 +149,17 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     const [, setScanLoading] = useState(false);
     const scanBufferRef = useRef('');
     const scanLastAtRef = useRef(0);
+    const [cameraScanOpen, setCameraScanOpen] = useState(false);
+    const [cameraScanStarting, setCameraScanStarting] = useState(false);
+    const [cameraScanError, setCameraScanError] = useState<string | null>(null);
+    const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
+    const cameraStreamRef = useRef<MediaStream | null>(null);
+    const cameraLoopRef = useRef<number | null>(null);
+    const cameraDetectorRef = useRef<BarcodeDetectorLike | null>(null);
+    const cameraDetectingRef = useRef(false);
+    const cameraLastPayloadRef = useRef('');
+    const cameraLastAtRef = useRef(0);
+    const scanOpenHandlerRef = useRef<(value: string) => Promise<boolean>>(async () => false);
     const [lpDigits, setLpDigits] = useState('');
     const [yearSuffix, setYearSuffix] = useState(String(new Date().getFullYear()).slice(-2));
     const [searchLoading, setSearchLoading] = useState(false);
@@ -165,6 +190,10 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     );
     const normalizeLpDigits = (value: string) => value.replace(/\D/g, '').slice(0, 4);
     const normalizeYearSuffix = (value: string) => value.replace(/\D/g, '').slice(0, 2);
+    const formatTemplateLines = (request: MitraOrderRequest) =>
+        (request.lines ?? [])
+            .map((line) => `${line.weightGram}g x ${line.lpCount} LP`)
+            .join(' | ');
 
     // Multi-entry handlers
     const addEntry = () => {
@@ -230,6 +259,14 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     const applyTemplateToRows = (requestId: string) => {
         if (requestId === 'NONE') {
             setSelectedTemplateRequestId('NONE');
+            setSyncFields({
+                gradeId: false,
+                featherGradeId: false,
+                colorGradeId: false,
+                pieceCount: false,
+                initialWeightGram: false,
+                moisturePercent: false,
+            });
             return;
         }
 
@@ -257,6 +294,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                 rows.push(
                     createEmptyRow({
                         initialWeightGram: line.weightGram,
+                        pieceCount: 1,
                         moisturePercent: selectedBatch?.moisturePercent ?? '',
                     })
                 );
@@ -264,8 +302,35 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         });
 
         setSelectedTemplateRequestId(requestId);
+        setSyncFields({
+            gradeId: true,
+            featherGradeId: true,
+            colorGradeId: true,
+            pieceCount: false,
+            initialWeightGram: false,
+            moisturePercent: false,
+        });
         setMultiEntries(rows.length > 0 ? rows : [createEmptyRow()]);
         toast.success(`Template trainer diterapkan (${totalLp} LP).`);
+    };
+
+    const handleApproveTrainerOrder = async (requestId: string) => {
+        setOrderActionLoadingId(requestId);
+        try {
+            const approved = await approveMitraOrderRequest(requestId);
+            toast.success('Order trainer disetujui. Template siap digunakan di Pecah Bon.');
+
+            setPendingTrainerOrders((prev) => prev.filter((item) => item.id !== requestId));
+            setTrainerOrderTemplates((prev) => [approved, ...prev.filter((item) => item.id !== requestId)]);
+
+            if (selectedBatch && dialogOpen) {
+                applyTemplateToRows(approved.id);
+            }
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Gagal menyetujui order trainer.');
+        } finally {
+            setOrderActionLoadingId(null);
+        }
     };
 
     const flashRow = (rowId: string) => {
@@ -673,7 +738,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         try {
             const shouldLoadGrades = options?.withGrades ?? grades.length === 0;
             const shouldLoadTemplates = options?.withTemplates ?? trainerOrderTemplates.length === 0;
-            const [batchResponse, gradeData, templateData] = await Promise.all([
+            const [batchResponse, gradeData, templateData, pendingTemplateData] = await Promise.all([
                 getRawBatchesPaginated({
                     page,
                     limit: BATCHES_PER_PAGE,
@@ -687,6 +752,11 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                         limit: 200,
                     })
                     : Promise.resolve(trainerOrderTemplates),
+                getMitraOrderRequests({
+                    status: 'REQUESTED',
+                    requestedByRole: 'TRAINER',
+                    limit: 200,
+                }),
             ]);
             if (batchResponse.total > 0 && batchResponse.page > batchResponse.totalPages) {
                 await loadData(batchResponse.totalPages, options);
@@ -712,6 +782,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
             if (shouldLoadTemplates) {
                 setTrainerOrderTemplates(templateData);
             }
+            setPendingTrainerOrders(pendingTemplateData);
             setBatchPage(batchResponse.page);
             setBatchTotalPages(batchResponse.totalPages);
             setBatchTotal(batchResponse.total);
@@ -1022,6 +1093,25 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         return { digits: match[2], year: match[3] };
     };
 
+    const resolveScanLookupValue = (value: string) => {
+        const trimmed = value.trim();
+        if (!trimmed) return '';
+
+        try {
+            const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+            const candidates = [parsed.pecahBonId, parsed.id, parsed.cardId];
+            for (const candidate of candidates) {
+                if (typeof candidate === 'string' && candidate.trim().length > 0) {
+                    return candidate.trim();
+                }
+            }
+        } catch {
+            // Not a JSON payload, continue with raw text.
+        }
+
+        return trimmed;
+    };
+
     const sortEntriesByPecahBonId = (entries: PecahBonEntry[]) =>
         [...entries].sort((left, right) => {
             const leftId = left.pecahBonId ?? '';
@@ -1133,12 +1223,14 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         }
     };
 
-    const handleScanOpen = async (value: string) => {
+    const handleScanOpen = async (value: string): Promise<boolean> => {
         const trimmed = value.trim();
-        if (!trimmed) return;
+        if (!trimmed) return false;
+        const lookupValue = resolveScanLookupValue(trimmed);
+        if (!lookupValue) return false;
         setScanLoading(true);
         try {
-            const entry = await getPecahBonById(trimmed);
+            const entry = await getPecahBonById(lookupValue);
             if (entry.pecahBonId) {
                 const parsed = parsePecahBonId(entry.pecahBonId);
                 if (parsed) {
@@ -1147,10 +1239,12 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                 }
             }
             await openFromScan(entry, { openPrint: false, persistHighlight: true });
-            toast.success(`LP ${entry.pecahBonId ?? trimmed} ditemukan. Pilih aksi Print/Edit/Setoran pada tabel.`);
+            toast.success(`LP ${entry.pecahBonId ?? lookupValue} ditemukan. Pilih aksi Print/Edit/Setoran pada tabel.`);
+            return true;
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Gagal menemukan QR.';
             toast.error(message);
+            return false;
         } finally {
             setScanLoading(false);
         }
@@ -1184,6 +1278,159 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
             setSearchLoading(false);
         }
     };
+
+    scanOpenHandlerRef.current = handleScanOpen;
+
+    const stopCameraScanner = () => {
+        if (cameraLoopRef.current !== null && typeof window !== 'undefined') {
+            window.cancelAnimationFrame(cameraLoopRef.current);
+            cameraLoopRef.current = null;
+        }
+
+        if (cameraStreamRef.current) {
+            for (const track of cameraStreamRef.current.getTracks()) {
+                track.stop();
+            }
+            cameraStreamRef.current = null;
+        }
+
+        if (cameraVideoRef.current) {
+            cameraVideoRef.current.pause();
+            cameraVideoRef.current.srcObject = null;
+        }
+
+        cameraDetectorRef.current = null;
+        cameraDetectingRef.current = false;
+    };
+
+    useEffect(() => {
+        if (!cameraScanOpen) {
+            stopCameraScanner();
+            return;
+        }
+
+        let cancelled = false;
+
+        const startCameraScanner = async () => {
+            if (!navigator.mediaDevices?.getUserMedia) {
+                setCameraScanError('Browser tidak mendukung akses kamera.');
+                return;
+            }
+
+            const barcodeDetectorCtor = (window as Window & { BarcodeDetector?: BarcodeDetectorCtorLike })
+                .BarcodeDetector;
+
+            if (!barcodeDetectorCtor) {
+                setCameraScanError(
+                    'Browser belum mendukung scan barcode via kamera. Gunakan Chrome terbaru atau scanner mesin.'
+                );
+                return;
+            }
+
+            setCameraScanStarting(true);
+            setCameraScanError(null);
+            cameraLastPayloadRef.current = '';
+            cameraLastAtRef.current = 0;
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' } },
+                    audio: false,
+                });
+
+                if (cancelled) {
+                    for (const track of stream.getTracks()) {
+                        track.stop();
+                    }
+                    return;
+                }
+
+                cameraStreamRef.current = stream;
+
+                const videoElement = cameraVideoRef.current;
+                if (!videoElement) {
+                    throw new Error('Elemen preview kamera tidak tersedia.');
+                }
+
+                videoElement.srcObject = stream;
+                await videoElement.play();
+
+                try {
+                    cameraDetectorRef.current = new barcodeDetectorCtor({
+                        formats: ['qr_code', 'code_128'],
+                    });
+                } catch {
+                    cameraDetectorRef.current = new barcodeDetectorCtor();
+                }
+
+                const scanLoop = async () => {
+                    if (cancelled || !cameraScanOpen) return;
+
+                    const detector = cameraDetectorRef.current;
+                    const video = cameraVideoRef.current;
+
+                    if (
+                        detector &&
+                        video &&
+                        video.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA &&
+                        !cameraDetectingRef.current
+                    ) {
+                        cameraDetectingRef.current = true;
+                        try {
+                            const detections = await detector.detect(video);
+                            const rawValue =
+                                detections.find(
+                                    (item) =>
+                                        typeof item.rawValue === 'string' &&
+                                        item.rawValue.trim().length > 0
+                                )?.rawValue ?? '';
+
+                            if (rawValue) {
+                                const now = Date.now();
+                                if (
+                                    rawValue !== cameraLastPayloadRef.current ||
+                                    now - cameraLastAtRef.current > 1200
+                                ) {
+                                    cameraLastPayloadRef.current = rawValue;
+                                    cameraLastAtRef.current = now;
+                                    const found = await scanOpenHandlerRef.current(rawValue);
+                                    if (found) {
+                                        setCameraScanOpen(false);
+                                        return;
+                                    }
+                                }
+                            }
+                        } catch {
+                            // Ignore transient detection failures while stream is stabilizing.
+                        } finally {
+                            cameraDetectingRef.current = false;
+                        }
+                    }
+
+                    cameraLoopRef.current = window.requestAnimationFrame(() => {
+                        void scanLoop();
+                    });
+                };
+
+                cameraLoopRef.current = window.requestAnimationFrame(() => {
+                    void scanLoop();
+                });
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'Gagal membuka kamera.';
+                setCameraScanError(message);
+                stopCameraScanner();
+            } finally {
+                setCameraScanStarting(false);
+            }
+        };
+
+        void startCameraScanner();
+
+        return () => {
+            cancelled = true;
+            stopCameraScanner();
+        };
+    }, [cameraScanOpen]);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -1239,7 +1486,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
             });
             toast.success('Pecah Bon berhasil disimpan.');
             setDialogOpen(false);
-            loadData();
+            await loadData(batchPage, { withTemplates: true });
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Gagal menyimpan Pecah Bon.';
             toast.error(message);
@@ -1314,8 +1561,25 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         }
 
         if (successCount > 0) {
+            const selectedTemplateId = selectedTemplateRequestId;
+            if (selectedTemplateId !== 'NONE' && successCount === validEntries.length) {
+                try {
+                    await fulfillMitraOrderRequest(selectedTemplateId);
+                    setTrainerOrderTemplates((prev) =>
+                        prev.filter((item) => item.id !== selectedTemplateId)
+                    );
+                    setSelectedTemplateRequestId('NONE');
+                    toast.success('Template order otomatis ditandai selesai.');
+                } catch (error) {
+                    toast.error(
+                        error instanceof Error
+                            ? error.message
+                            : 'Gagal menandai template selesai.'
+                    );
+                }
+            }
             setDialogOpen(false);
-            loadData();
+            await loadData(batchPage, { withTemplates: true });
         }
     };
 
@@ -1421,11 +1685,57 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                 {searchLoading ? 'Cari...' : 'Cari LP'}
                             </Button>
                         </div>
+                        <Button variant="outline" onClick={() => setCameraScanOpen(true)} className="h-9">
+                            <Camera className="h-4 w-4" />
+                            Scan Kamera
+                        </Button>
                         <Button variant="outline" onClick={() => loadData(batchPage)} disabled={loading} className="h-9">
                             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                             Refresh
                         </Button>
                     </div>
+                </div>
+
+                <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <p className="text-sm font-semibold text-amber-900">Order Trainer / Pengawas</p>
+                            <p className="text-xs text-amber-700">
+                                Accept order di sini, lalu gunakan sebagai guide otomatis saat Pecah Bon.
+                            </p>
+                        </div>
+                        <span className="rounded-full border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-800">
+                            Pending {pendingTrainerOrders.length}
+                        </span>
+                    </div>
+                    {pendingTrainerOrders.length === 0 ? (
+                        <p className="mt-3 text-xs text-amber-700">Tidak ada order pending dari trainer.</p>
+                    ) : (
+                        <div className="mt-3 space-y-2">
+                            {pendingTrainerOrders.map((request) => (
+                                <div
+                                    key={request.id}
+                                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-white px-3 py-2"
+                                >
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-semibold text-gray-900">
+                                            {request.requestedBy?.name ?? 'Trainer'} - {request.requestedGram} gram
+                                        </p>
+                                        <p className="truncate text-xs text-gray-600">
+                                            {formatTemplateLines(request) || 'Tanpa rincian LP'}
+                                        </p>
+                                    </div>
+                                    <Button
+                                        size="sm"
+                                        onClick={() => handleApproveTrainerOrder(request.id)}
+                                        disabled={orderActionLoadingId === request.id}
+                                    >
+                                        {orderActionLoadingId === request.id ? 'Memproses...' : 'Accept'}
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -1814,7 +2124,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                             <SelectItem value="NONE">Tanpa template</SelectItem>
                                             {trainerOrderTemplates.map((request) => (
                                                 <SelectItem key={request.id} value={request.id}>
-                                                    {`${request.worker?.name ?? 'Mitra'} • ${request.requestedGram}g`}
+                                                    {`${request.requestedBy?.name ?? 'Trainer'} | ${request.requestedGram}g`}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -1824,6 +2134,14 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                             {selectedTrainerTemplate.lines
                                                 .map((line) => `${line.weightGram}g x ${line.lpCount} LP`)
                                                 .join(' | ')}
+                                        </p>
+                                    )}
+                                    <p className="text-[11px] text-gray-500">
+                                        Pilih template untuk auto-generate jumlah LP sesuai order. Tinggal isi grading.
+                                    </p>
+                                    {selectedTemplateRequestId !== 'NONE' && (
+                                        <p className="text-[11px] text-green-700">
+                                            Saat grading di baris pertama dipilih, baris bawah otomatis mengikuti. Bisa diubah per baris.
                                         </p>
                                     )}
                                 </div>
@@ -2050,6 +2368,44 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                     Simpan {validEntriesCount} LP
                                 </>
                             )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={cameraScanOpen} onOpenChange={setCameraScanOpen}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Scan Kamera</DialogTitle>
+                        <DialogDescription>
+                            Arahkan kamera ke QR/barcode kartu pecah bon. Scanner mesin tetap bisa dipakai seperti biasa.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                        <div className="overflow-hidden rounded-lg border border-gray-200 bg-black">
+                            <video
+                                ref={cameraVideoRef}
+                                className="h-64 w-full object-cover"
+                                muted
+                                playsInline
+                                autoPlay
+                            />
+                        </div>
+                        {cameraScanStarting && (
+                            <p className="text-sm text-gray-600">Meminta izin kamera...</p>
+                        )}
+                        {cameraScanError && (
+                            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                {cameraScanError}
+                            </p>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setCameraScanOpen(false)}
+                        >
+                            Tutup
                         </Button>
                     </DialogFooter>
                 </DialogContent>
