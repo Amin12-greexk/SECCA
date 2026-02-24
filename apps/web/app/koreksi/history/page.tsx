@@ -13,11 +13,13 @@ import {
 } from '@/lib/api';
 
 const ROWS_PER_PAGE = 20;
+const EXPORT_PAGE_LIMIT = 100;
 const CSV_DELIMITER = ';';
 
 function KoreksiHistoryContent() {
   const toast = useToast();
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState<'page' | 'filtered' | 'all' | null>(null);
   const [tableQuery, setTableQuery] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -53,41 +55,6 @@ function KoreksiHistoryContent() {
     return `${shape}/${feather}/${color}`;
   };
 
-  const parsePecahBonId = (value: string) => {
-    const match = value.trim().toUpperCase().match(/^([A-Z]+)-(\d{1,6})-(\d{2})$/);
-    if (!match) return null;
-    return {
-      prefix: match[1],
-      digits: match[2],
-      year: match[3],
-      number: Number(match[2]),
-    };
-  };
-
-  const sortEntries = (entries: PecahBonEntry[]) =>
-    [...entries].sort((left, right) => {
-      const leftParsed = left.pecahBonId ? parsePecahBonId(left.pecahBonId) : null;
-      const rightParsed = right.pecahBonId ? parsePecahBonId(right.pecahBonId) : null;
-
-      if (leftParsed && rightParsed) {
-        if (leftParsed.year !== rightParsed.year) {
-          return leftParsed.year.localeCompare(rightParsed.year);
-        }
-        if (leftParsed.number !== rightParsed.number) {
-          return leftParsed.number - rightParsed.number;
-        }
-        if (leftParsed.prefix !== rightParsed.prefix) {
-          return leftParsed.prefix.localeCompare(rightParsed.prefix);
-        }
-      } else if (leftParsed) {
-        return -1;
-      } else if (rightParsed) {
-        return 1;
-      }
-
-      return new Date(left.pecahBonDate).getTime() - new Date(right.pecahBonDate).getTime();
-    });
-
   const loadPage = async (page: number, query = tableQuery, from = dateFrom, to = dateTo) => {
     setLoading(true);
     try {
@@ -121,7 +88,7 @@ function KoreksiHistoryContent() {
     await loadPage(0);
   };
 
-  const rows = useMemo(() => sortEntries(pageData.items), [pageData.items]);
+  const rows = useMemo(() => pageData.items, [pageData.items]);
 
   const allSelectedOnPage =
     rows.length > 0 && rows.every((entry) => selectedIds.includes(entry.id));
@@ -155,15 +122,9 @@ function KoreksiHistoryContent() {
     return new RegExp(`["\\n${CSV_DELIMITER}]`).test(escaped) ? `"${escaped}"` : escaped;
   };
 
-  const downloadExcel = () => {
-    const exportRows = selectedRows.length > 0 ? selectedRows : rows;
-    if (exportRows.length === 0) {
-      toast.error('Tidak ada data untuk diunduh.');
-      return;
-    }
-
+  const buildExcelRows = (exportRows: PecahBonEntry[], startIndex = 0) => {
     const headers = [
-      'No Halaman',
+      'No',
       'ID Pecah Bon',
       'Tanggal Pecah',
       'Batch',
@@ -174,16 +135,15 @@ function KoreksiHistoryContent() {
       'Kadar Air (%)',
       'Berat Kering (Gr)',
     ];
-
     const csvRows = exportRows.map((entry, index) =>
       [
-        currentPage * ROWS_PER_PAGE + index + 1,
+        startIndex + index + 1,
         entry.pecahBonId ?? '-',
         formatDate(entry.pecahBonDate),
         entry.rawBatch?.batchNumber ?? '-',
         gradeLabelFor(entry),
         entry.featherCondition ?? '-',
-        `${entry.pieceCount} pcs`,
+        entry.pieceCount,
         formatNumber(entry.initialWeightGram, 2),
         formatNumber(entry.moisturePercent, 1),
         formatNumber(entry.dryWeightGram, 2),
@@ -191,18 +151,108 @@ function KoreksiHistoryContent() {
         .map(escapeCsv)
         .join(CSV_DELIMITER)
     );
+    return { headers, csvRows };
+  };
 
+  const downloadCsv = (rowsToExport: PecahBonEntry[], fileName: string, startIndex = 0) => {
+    if (rowsToExport.length === 0) {
+      toast.error('Tidak ada data untuk diunduh.');
+      return;
+    }
+    const { headers, csvRows } = buildExcelRows(rowsToExport, startIndex);
     const csvContent = `\uFEFF${[headers.join(CSV_DELIMITER), ...csvRows].join('\r\n')}`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `riwayat-koreksi-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.download = fileName;
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
     URL.revokeObjectURL(url);
-    toast.success(`Berhasil mengunduh ${exportRows.length} baris.`);
+  };
+
+  const fetchAllHistoryRows = async (params?: {
+    from?: string;
+    to?: string;
+    search?: string;
+  }) => {
+    let page = 1;
+    let totalPages = 1;
+    const allRows: PecahBonEntry[] = [];
+
+    while (page <= totalPages) {
+      const response = await getPecahBonHistoryPaginated({
+        page,
+        limit: EXPORT_PAGE_LIMIT,
+        from: params?.from || undefined,
+        to: params?.to || undefined,
+        search: params?.search || undefined,
+      });
+      allRows.push(...response.items);
+      totalPages = response.totalPages;
+      page += 1;
+    }
+
+    return allRows;
+  };
+
+  const downloadExcelPage = () => {
+    const exportRows = selectedRows.length > 0 ? selectedRows : rows;
+    if (exportRows.length === 0) {
+      toast.error('Tidak ada data untuk diunduh.');
+      return;
+    }
+    setExporting('page');
+    downloadCsv(
+      exportRows,
+      `riwayat-koreksi-page-${currentPage + 1}-${new Date().toISOString().slice(0, 10)}.csv`,
+      currentPage * ROWS_PER_PAGE
+    );
+    toast.success(`Berhasil mengunduh ${exportRows.length} baris (halaman ini).`);
+    setExporting(null);
+  };
+
+  const downloadExcelFiltered = async () => {
+    if (dateFrom && dateTo && new Date(dateFrom) > new Date(dateTo)) {
+      toast.error('Rentang tanggal tidak valid (dari > sampai).');
+      return;
+    }
+    setExporting('filtered');
+    try {
+      const allRows = await fetchAllHistoryRows({
+        from: dateFrom || undefined,
+        to: dateTo || undefined,
+        search: tableQuery || undefined,
+      });
+      downloadCsv(
+        allRows,
+        `riwayat-koreksi-filter-${new Date().toISOString().slice(0, 10)}.csv`,
+        0
+      );
+      toast.success(`Berhasil mengunduh ${allRows.length} baris (sesuai filter).`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Gagal mengunduh data filter.');
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const downloadExcelAll = async () => {
+    setExporting('all');
+    try {
+      const allRows = await fetchAllHistoryRows();
+      downloadCsv(
+        allRows,
+        `riwayat-koreksi-semua-${new Date().toISOString().slice(0, 10)}.csv`,
+        0
+      );
+      toast.success(`Berhasil mengunduh ${allRows.length} baris (semua data).`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Gagal mengunduh semua data.');
+    } finally {
+      setExporting(null);
+    }
   };
 
   const copyTable = async () => {
@@ -232,7 +282,7 @@ function KoreksiHistoryContent() {
         entry.rawBatch?.batchNumber ?? '-',
         gradeLabelFor(entry),
         entry.featherCondition ?? '-',
-        `${entry.pieceCount} pcs`,
+        entry.pieceCount,
         formatNumber(entry.initialWeightGram, 2),
         formatNumber(entry.moisturePercent, 1),
         formatNumber(entry.dryWeightGram, 2),
@@ -325,8 +375,24 @@ function KoreksiHistoryContent() {
               <Button type="button" variant="outline" onClick={copyTable} disabled={loading || rows.length === 0}>
                 Copy Table
               </Button>
-              <Button type="button" onClick={downloadExcel} disabled={loading || rows.length === 0}>
-                Download Excel
+              <Button type="button" onClick={downloadExcelPage} disabled={loading || rows.length === 0 || exporting !== null}>
+                {exporting === 'page' ? 'Menyiapkan...' : 'Download Halaman'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void downloadExcelFiltered()}
+                disabled={loading || exporting !== null}
+              >
+                {exporting === 'filtered' ? 'Menyiapkan...' : 'Download Filter'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void downloadExcelAll()}
+                disabled={loading || exporting !== null}
+              >
+                {exporting === 'all' ? 'Menyiapkan...' : 'Download Semua'}
               </Button>
             </div>
           </div>

@@ -771,7 +771,7 @@ export class BakuService {
           featherGrade: { select: { id: true, code: true, name: true, type: true } },
           colorGrade: { select: { id: true, code: true, name: true, type: true } },
         },
-        orderBy: [{ pecahBonDate: "desc" }, { createdAt: "desc" }],
+        orderBy: [{ pecahBonDate: "asc" }, { createdAt: "asc" }],
         skip,
         take: limit,
       }),
