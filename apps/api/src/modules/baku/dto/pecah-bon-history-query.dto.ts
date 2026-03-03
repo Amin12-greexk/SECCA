@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsDateString, IsInt, IsOptional, IsString, Max, Min } from "class-validator";
+import { IsDateString, IsIn, IsInt, IsOptional, IsString, Max, Min } from "class-validator";
 
 export class PecahBonHistoryQueryDto {
   @ApiPropertyOptional({ minimum: 1, default: 1 })
@@ -40,5 +40,13 @@ export class PecahBonHistoryQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
-}
 
+  @ApiPropertyOptional({
+    enum: ["asc", "desc"],
+    default: "asc",
+    description: "Urutan data berdasarkan tanggal pecah dan waktu buat",
+  })
+  @IsOptional()
+  @IsIn(["asc", "desc"])
+  order?: "asc" | "desc" = "asc";
+}
