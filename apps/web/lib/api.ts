@@ -30,6 +30,9 @@ export interface RawBatch {
     originalWetWeightGram?: number;
     moisturePercent: number;
     notes?: string | null;
+    mergedIntoRawBatchId?: string | null;
+    mergedAt?: string | null;
+    isMergedSource?: boolean;
     createdAt: string;
     updatedAt: string;
 }
@@ -1291,6 +1294,42 @@ export async function updateRawBatch(rawBatchId: string, data: RawBatchUpdateReq
         return unwrap<RawBatch>(json);
     } catch (error) {
         console.error('Error updating raw batch:', error);
+        throw error;
+    }
+}
+
+export async function mergeRawBatches(data: {
+    sourceRawBatchIds: string[];
+    supplierId: string;
+    featherCondition: string;
+    moisturePercent: number;
+    notes?: string;
+    confirmSupplier: boolean;
+    confirmFeatherCondition: boolean;
+    confirmMoisturePercent: boolean;
+    confirmMerge: boolean;
+}): Promise<RawBatch> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/baku/raw-batch/merge`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const rawMessage = typeof errorData.message === 'string'
+                ? errorData.message
+                : Array.isArray(errorData.message)
+                    ? errorData.message.join(' ')
+                    : '';
+            throw new Error(rawMessage || `Gagal menggabungkan kartu: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<RawBatch>(json);
+    } catch (error) {
+        console.error('Error merging raw batches:', error);
         throw error;
     }
 }

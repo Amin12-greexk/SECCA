@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Loader2, Package, Pencil, Printer, RefreshCw } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/lib/toast';
-import { getRawBatchByCardId, getRawBatchesPaginated, getSuppliers, updateRawBatch, type RawBatch, type Supplier } from '@/lib/api';
+import { getRawBatchByCardId, getRawBatchesPaginated, getSuppliers, mergeRawBatches, updateRawBatch, type RawBatch, type Supplier } from '@/lib/api';
 import BatchCard from '@/components/print/BatchCard';
 
 const BATCHES_PER_PAGE = 20;
@@ -42,6 +42,19 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
     const [editBatch, setEditBatch] = useState<RawBatch | null>(null);
     const [editOpen, setEditOpen] = useState(false);
     const [editSaving, setEditSaving] = useState(false);
+    const [selectedRawBatchIds, setSelectedRawBatchIds] = useState<string[]>([]);
+    const [mergeOpen, setMergeOpen] = useState(false);
+    const [mergeSaving, setMergeSaving] = useState(false);
+    const [mergeValues, setMergeValues] = useState({
+        supplierId: '',
+        featherCondition: '',
+        moisturePercent: '',
+        notes: '',
+        confirmSupplier: false,
+        confirmFeatherCondition: false,
+        confirmMoisturePercent: false,
+        confirmMerge: false,
+    });
     const [editValues, setEditValues] = useState({
         batchNumber: '',
         supplierId: '',
@@ -54,6 +67,27 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
     const [scanLoading, setScanLoading] = useState(false);
     const scanBufferRef = useRef('');
     const scanLastAtRef = useRef(0);
+
+    const selectedBatches = useMemo(
+        () => rawBatches.filter((item) => selectedRawBatchIds.includes(item.id)),
+        [rawBatches, selectedRawBatchIds],
+    );
+    const mergeEligibleBatchIds = useMemo(
+        () => rawBatches.filter((item) => item.wetWeightGram > 0).map((item) => item.id),
+        [rawBatches],
+    );
+    const mergeTotalWetWeightGram = useMemo(
+        () => selectedBatches.reduce((sum, item) => sum + item.wetWeightGram, 0),
+        [selectedBatches],
+    );
+    const mergeSuggestedMoisturePercent = useMemo(() => {
+        if (selectedBatches.length === 0 || mergeTotalWetWeightGram <= 0) return 0;
+        const weightedSum = selectedBatches.reduce(
+            (sum, item) => sum + item.wetWeightGram * item.moisturePercent,
+            0,
+        );
+        return weightedSum / mergeTotalWetWeightGram;
+    }, [selectedBatches, mergeTotalWetWeightGram]);
 
     const buildPrintOptions = () => {
         // Options for electron-secure-pos-printer library
@@ -235,6 +269,9 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
             }));
             mapped.sort((left, right) => left.batchNumber.localeCompare(right.batchNumber));
             setRawBatches(mapped);
+            setSelectedRawBatchIds((prev) =>
+                prev.filter((id) => mapped.some((item) => item.id === id && item.wetWeightGram > 0)),
+            );
             setBatchPage(response.page);
             setBatchTotalPages(response.totalPages);
             setBatchTotal(response.total);
@@ -282,6 +319,105 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
             notes: batch.notes ?? '',
         });
         setEditOpen(true);
+    };
+
+    const toggleSelectBatch = (batchId: string, checked: boolean) => {
+        if (!mergeEligibleBatchIds.includes(batchId)) {
+            return;
+        }
+        setSelectedRawBatchIds((prev) => {
+            if (checked) {
+                if (prev.includes(batchId)) return prev;
+                return [...prev, batchId];
+            }
+            return prev.filter((id) => id !== batchId);
+        });
+    };
+
+    const toggleSelectAllVisible = (checked: boolean) => {
+        if (!checked) {
+            setSelectedRawBatchIds([]);
+            return;
+        }
+        setSelectedRawBatchIds(mergeEligibleBatchIds);
+    };
+
+    const openMergeDialog = () => {
+        if (selectedBatches.length < 2) {
+            toast.error('Pilih minimal 2 kartu untuk digabung.');
+            return;
+        }
+
+        const first = selectedBatches[0];
+        setMergeValues({
+            supplierId: first?.supplier?.id ?? first?.supplierId ?? '',
+            featherCondition: first?.featherCondition ?? '',
+            moisturePercent: mergeSuggestedMoisturePercent.toFixed(2),
+            notes: '',
+            confirmSupplier: false,
+            confirmFeatherCondition: false,
+            confirmMoisturePercent: false,
+            confirmMerge: false,
+        });
+        setMergeOpen(true);
+    };
+
+    const handleMergeSave = async () => {
+        if (selectedBatches.length < 2) {
+            toast.error('Pilih minimal 2 kartu untuk digabung.');
+            return;
+        }
+
+        const supplierId = mergeValues.supplierId.trim();
+        const featherCondition = mergeValues.featherCondition.trim();
+        const moisturePercent = Number(mergeValues.moisturePercent);
+        if (!supplierId) {
+            toast.error('Supplier wajib dipilih.');
+            return;
+        }
+        if (!featherCondition) {
+            toast.error('Kondisi baku wajib diisi.');
+            return;
+        }
+        if (!Number.isFinite(moisturePercent) || moisturePercent < 0 || moisturePercent > 100) {
+            toast.error('Kadar air wajib diisi (0 - 100).');
+            return;
+        }
+
+        if (
+            !mergeValues.confirmSupplier ||
+            !mergeValues.confirmFeatherCondition ||
+            !mergeValues.confirmMoisturePercent ||
+            !mergeValues.confirmMerge
+        ) {
+            toast.error('Semua konfirmasi merge wajib dicentang.');
+            return;
+        }
+
+        setMergeSaving(true);
+        try {
+            const merged = await mergeRawBatches({
+                sourceRawBatchIds: selectedBatches.map((item) => item.id),
+                supplierId,
+                featherCondition,
+                moisturePercent,
+                notes: mergeValues.notes.trim() || undefined,
+                confirmSupplier: mergeValues.confirmSupplier,
+                confirmFeatherCondition: mergeValues.confirmFeatherCondition,
+                confirmMoisturePercent: mergeValues.confirmMoisturePercent,
+                confirmMerge: mergeValues.confirmMerge,
+            });
+
+            toast.success(`Kartu berhasil digabung ke ${merged.batchNumber}.`);
+            setMergeOpen(false);
+            setSelectedRawBatchIds([]);
+            await loadData(batchPage);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Gagal menggabungkan kartu.';
+            toast.error(message);
+        } finally {
+            setMergeSaving(false);
+        }
     };
 
     const handleEditSave = async () => {
@@ -485,6 +621,13 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
                         </div>
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
+                        <Button
+                            variant="outline"
+                            onClick={openMergeDialog}
+                            disabled={selectedRawBatchIds.length < 2}
+                        >
+                            Gabung Kartu ({selectedRawBatchIds.length})
+                        </Button>
                         <Button variant="outline" onClick={() => loadData(batchPage)} disabled={loading}>
                             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                             Refresh
@@ -505,6 +648,17 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
                                 <table className="w-full">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-200">
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <input
+                                                type="checkbox"
+                                                checked={
+                                                    mergeEligibleBatchIds.length > 0 &&
+                                                    selectedRawBatchIds.length === mergeEligibleBatchIds.length
+                                                }
+                                                onChange={(event) => toggleSelectAllVisible(event.target.checked)}
+                                                aria-label="Pilih semua batch di halaman ini"
+                                            />
+                                        </th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                             Batch
                                         </th>
@@ -534,6 +688,15 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
                                 <tbody className="divide-y divide-gray-100">
                                     {rawBatches.map((batch) => (
                                         <tr key={batch.id} className="hover:bg-gray-50 transition-colors">
+                                            <td className="px-4 py-3 text-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedRawBatchIds.includes(batch.id)}
+                                                    onChange={(event) => toggleSelectBatch(batch.id, event.target.checked)}
+                                                    disabled={batch.wetWeightGram <= 0}
+                                                    aria-label={`Pilih ${batch.batchNumber}`}
+                                                />
+                                            </td>
                                             <td className="px-4 py-3">
                                                 <div className="font-medium text-gray-900">{batch.batchNumber}</div>
                                             </td>
@@ -677,6 +840,141 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
                             </div>
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Merge Dialog */}
+            <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
+                <DialogContent className="max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>Gabung Kartu Baku</DialogTitle>
+                        <DialogDescription>
+                            Kartu sumber akan disembunyikan dari daftar, lalu dibuat kartu baru dengan nomor identitas baru.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                            <p className="font-medium text-gray-900">Ringkasan kartu sumber</p>
+                            <p className="mt-1">
+                                {selectedBatches.map((item) => item.batchNumber).join(', ') || '-'}
+                            </p>
+                            <div className="mt-2 flex flex-wrap items-center gap-4 text-xs">
+                                <span>Total sisa gram: <strong>{formatNumber(mergeTotalWetWeightGram)} gr</strong></span>
+                                <span>Kadar air saran: <strong>{formatNumber(mergeSuggestedMoisturePercent, 2)}%</strong></span>
+                            </div>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label>Supplier Baru</Label>
+                                <Select
+                                    value={mergeValues.supplierId}
+                                    onValueChange={(value) =>
+                                        setMergeValues((prev) => ({ ...prev, supplierId: value }))
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Pilih supplier" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {suppliers.map((supplier) => (
+                                            <SelectItem key={supplier.id} value={supplier.id}>
+                                                {supplier.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Kondisi Baku Baru</Label>
+                                <Input
+                                    value={mergeValues.featherCondition}
+                                    onChange={(event) =>
+                                        setMergeValues((prev) => ({ ...prev, featherCondition: event.target.value }))
+                                    }
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label>Kadar Air Baru (%)</Label>
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    step="0.01"
+                                    value={mergeValues.moisturePercent}
+                                    onChange={(event) =>
+                                        setMergeValues((prev) => ({ ...prev, moisturePercent: event.target.value }))
+                                    }
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Catatan Merge</Label>
+                                <Textarea
+                                    value={mergeValues.notes}
+                                    onChange={(event) =>
+                                        setMergeValues((prev) => ({ ...prev, notes: event.target.value }))
+                                    }
+                                    placeholder="Opsional"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                            <label className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    checked={mergeValues.confirmSupplier}
+                                    onChange={(event) =>
+                                        setMergeValues((prev) => ({ ...prev, confirmSupplier: event.target.checked }))
+                                    }
+                                />
+                                Konfirmasi supplier sudah benar
+                            </label>
+                            <label className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    checked={mergeValues.confirmFeatherCondition}
+                                    onChange={(event) =>
+                                        setMergeValues((prev) => ({ ...prev, confirmFeatherCondition: event.target.checked }))
+                                    }
+                                />
+                                Konfirmasi kondisi baku sudah benar
+                            </label>
+                            <label className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    checked={mergeValues.confirmMoisturePercent}
+                                    onChange={(event) =>
+                                        setMergeValues((prev) => ({ ...prev, confirmMoisturePercent: event.target.checked }))
+                                    }
+                                />
+                                Konfirmasi kadar air sudah benar
+                            </label>
+                            <label className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    checked={mergeValues.confirmMerge}
+                                    onChange={(event) =>
+                                        setMergeValues((prev) => ({ ...prev, confirmMerge: event.target.checked }))
+                                    }
+                                />
+                                Konfirmasi proses merge dan sembunyikan kartu sumber
+                            </label>
+                        </div>
+
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setMergeOpen(false)} disabled={mergeSaving}>
+                                Batal
+                            </Button>
+                            <Button onClick={handleMergeSave} disabled={mergeSaving}>
+                                {mergeSaving ? 'Menggabungkan...' : 'Gabung Kartu'}
+                            </Button>
+                        </DialogFooter>
+                    </div>
                 </DialogContent>
             </Dialog>
 

@@ -8,6 +8,7 @@ import { UpdateRawBatchDto } from "./dto/update-raw-batch.dto";
 import { RawBatchPageQueryDto } from "./dto/raw-batch-page-query.dto";
 import { PecahBonPageQueryDto } from "./dto/pecah-bon-page-query.dto";
 import { PecahBonHistoryQueryDto } from "./dto/pecah-bon-history-query.dto";
+import { MergeRawBatchesDto } from "./dto/merge-raw-batches.dto";
 import { BakuService } from "./baku.service";
 
 @ApiTags("Baku")
@@ -65,6 +66,12 @@ export class BakuController {
   @ApiParam({ name: "id" })
   updateRawBatch(@Param("id") id: string, @Body() dto: UpdateRawBatchDto) {
     return this.bakuService.updateRawBatch(id, dto);
+  }
+
+  @Post("raw-batch/merge")
+  @Roles("manager", "baku")
+  mergeRawBatches(@Body() dto: MergeRawBatchesDto) {
+    return this.bakuService.mergeRawBatches(dto);
   }
 
   @Post("pecah-bon-entry/:id/printed")

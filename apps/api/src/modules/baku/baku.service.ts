@@ -9,6 +9,7 @@ import { UpdateRawBatchDto } from "./dto/update-raw-batch.dto";
 import { RawBatchPageQueryDto } from "./dto/raw-batch-page-query.dto";
 import { PecahBonPageQueryDto } from "./dto/pecah-bon-page-query.dto";
 import { PecahBonHistoryQueryDto } from "./dto/pecah-bon-history-query.dto";
+import { MergeRawBatchesDto } from "./dto/merge-raw-batches.dto";
 import { NumberingService } from "../../common/numbering/numbering.service";
 import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
 import { LOCATION_CODES } from "../../common/constants";
@@ -84,6 +85,7 @@ export class BakuService {
 
   async findAll() {
     const items = await this.prisma.rawBatch.findMany({
+      where: { mergedIntoRawBatchId: null },
       include: { supplier: true },
       orderBy: { createdAt: "desc" },
     });
@@ -98,9 +100,9 @@ export class BakuService {
   async findAllPaginated(query: RawBatchPageQueryDto) {
     const { page, limit, skip } = this.resolvePagination(query);
     const activeOnly = query.activeOnly ?? true;
-    const where: Prisma.RawBatchWhereInput | undefined = activeOnly
-      ? { wetWeightGram: { gt: 0 } }
-      : undefined;
+    const where: Prisma.RawBatchWhereInput = activeOnly
+      ? { mergedIntoRawBatchId: null, wetWeightGram: { gt: 0 } }
+      : { mergedIntoRawBatchId: null };
 
     const [total, items] = await Promise.all([
       this.prisma.rawBatch.count({ where }),
@@ -128,14 +130,16 @@ export class BakuService {
   }
 
   async findByCardId(cardId: string) {
-    const rawBatch = await this.prisma.rawBatch.findUnique({
+    const sourceBatch = await this.prisma.rawBatch.findUnique({
       where: { cardId },
       include: { supplier: true },
     });
 
-    if (!rawBatch) {
+    if (!sourceBatch) {
       return notFound("Raw batch not found", { cardId });
     }
+
+    const rawBatch = await this.resolveEffectiveRawBatch(sourceBatch.id);
 
     const usedTotal = await this.prisma.pecahBonEntry.aggregate({
       where: { rawBatchId: rawBatch.id },
@@ -675,6 +679,120 @@ export class BakuService {
     });
   }
 
+  async mergeRawBatches(dto: MergeRawBatchesDto) {
+    if (
+      !dto.confirmSupplier ||
+      !dto.confirmFeatherCondition ||
+      !dto.confirmMoisturePercent ||
+      !dto.confirmMerge
+    ) {
+      return badRequest("Semua konfirmasi merge harus disetujui terlebih dahulu.");
+    }
+
+    const sourceRawBatchIds = [...new Set(dto.sourceRawBatchIds)];
+    if (sourceRawBatchIds.length !== dto.sourceRawBatchIds.length) {
+      return badRequest("ID batch sumber duplikat.");
+    }
+
+    const supplier = await this.prisma.supplier.findUnique({
+      where: { id: dto.supplierId },
+      select: { id: true },
+    });
+    if (!supplier) {
+      return notFound("Supplier not found", { supplierId: dto.supplierId });
+    }
+
+    const createdAt = new Date();
+    const mergedBatch = await this.prisma.$transaction(async (tx) => {
+      const sourceBatches = await tx.rawBatch.findMany({
+        where: { id: { in: sourceRawBatchIds } },
+        include: { supplier: true },
+      });
+
+      if (sourceBatches.length !== sourceRawBatchIds.length) {
+        const existingIds = new Set(sourceBatches.map((item) => item.id));
+        const missingIds = sourceRawBatchIds.filter((item) => !existingIds.has(item));
+        return notFound("Raw batch not found", { rawBatchIds: missingIds });
+      }
+
+      const sourceMap = new Map(sourceBatches.map((item) => [item.id, item]));
+      const orderedSources = sourceRawBatchIds.map((item) => sourceMap.get(item)!);
+      const alreadyMerged = orderedSources.find((item) => item.mergedIntoRawBatchId);
+      if (alreadyMerged) {
+        return conflict("Ada batch sumber yang sudah digabung sebelumnya.", {
+          rawBatchId: alreadyMerged.id,
+          batchNumber: alreadyMerged.batchNumber,
+        });
+      }
+
+      const invalidWeight = orderedSources.filter((item) => item.wetWeightGram <= 0);
+      if (invalidWeight.length > 0) {
+        return conflict("Ada batch sumber tanpa sisa gram.", {
+          batchNumbers: invalidWeight.map((item) => item.batchNumber),
+        });
+      }
+
+      const activeGradeStocks = await tx.rawBatchGradeStock.findMany({
+        where: {
+          rawBatchId: { in: sourceRawBatchIds },
+          remainingWetWeightGram: { gt: 0 },
+        },
+        select: { rawBatchId: true },
+      });
+      if (activeGradeStocks.length > 0) {
+        const blockedIds = [...new Set(activeGradeStocks.map((item) => item.rawBatchId))];
+        return conflict("Batch sumber masih punya stok grading aktif.", {
+          rawBatchIds: blockedIds,
+        });
+      }
+
+      const totalWetWeightGram = this.roundToTwoDecimals(
+        orderedSources.reduce((sum, item) => sum + item.wetWeightGram, 0),
+      );
+      if (totalWetWeightGram <= 0) {
+        return badRequest("Total sisa gram dari batch sumber harus lebih dari 0.");
+      }
+
+      const { batchNumber, cardId } = await this.generateIdentifiers(tx, createdAt);
+      const mergedNotes = this.composeMergeNotes(
+        dto.notes,
+        orderedSources.map((item) => item.batchNumber),
+      );
+
+      const createdBatch = await tx.rawBatch.create({
+        data: {
+          batchNumber,
+          cardId,
+          supplierId: dto.supplierId,
+          featherCondition: dto.featherCondition.trim(),
+          invoiceWeightGram: totalWetWeightGram,
+          wetWeightGram: totalWetWeightGram,
+          moisturePercent: this.roundToTwoDecimals(dto.moisturePercent),
+          notes: mergedNotes,
+          createdAt,
+        },
+        include: { supplier: true },
+      });
+
+      await tx.rawBatch.updateMany({
+        where: { id: { in: sourceRawBatchIds } },
+        data: {
+          wetWeightGram: 0,
+          mergedIntoRawBatchId: createdBatch.id,
+          mergedAt: createdAt,
+        },
+      });
+
+      return createdBatch;
+    });
+
+    this.logger.log(
+      `Raw batches merged into ${mergedBatch.batchNumber} from ${sourceRawBatchIds.length} sources`,
+    );
+
+    return this.mapRawBatch(mergedBatch, 0);
+  }
+
   async getPecahBonEntries(rawBatchId: string) {
     const entries = await this.prisma.pecahBonEntry.findMany({
       where: { rawBatchId },
@@ -964,12 +1082,16 @@ export class BakuService {
 
   private mapRawBatch(rawBatch: RawBatchWithSupplier, usedWeightGram: number) {
     return {
+      id: rawBatch.id,
       originalWetWeightGram: this.roundToTwoDecimals(
         rawBatch.wetWeightGram + usedWeightGram,
       ),
       rawBatchId: rawBatch.id,
       batchNumber: rawBatch.batchNumber,
       cardId: rawBatch.cardId,
+      mergedIntoRawBatchId: rawBatch.mergedIntoRawBatchId,
+      mergedAt: rawBatch.mergedAt,
+      isMergedSource: !!rawBatch.mergedIntoRawBatchId,
       supplier: {
         id: rawBatch.supplier.id,
         name: rawBatch.supplier.name,
@@ -983,6 +1105,45 @@ export class BakuService {
       createdAt: rawBatch.createdAt,
       updatedAt: rawBatch.updatedAt,
     };
+  }
+
+  private composeMergeNotes(
+    notes: string | undefined,
+    sourceBatchNumbers: string[],
+  ) {
+    const sourceLabel = `Gabungan dari: ${sourceBatchNumbers.join(", ")}`;
+    const trimmed = notes?.trim();
+    if (!trimmed) {
+      return sourceLabel;
+    }
+    return `${trimmed}\n${sourceLabel}`;
+  }
+
+  private async resolveEffectiveRawBatch(rawBatchId: string) {
+    const visited = new Set<string>();
+    let currentId = rawBatchId;
+
+    while (true) {
+      if (visited.has(currentId)) {
+        return conflict("Siklus merge batch terdeteksi", { rawBatchId });
+      }
+      visited.add(currentId);
+
+      const current = await this.prisma.rawBatch.findUnique({
+        where: { id: currentId },
+        include: { supplier: true },
+      });
+
+      if (!current) {
+        return notFound("Raw batch not found", { rawBatchId: currentId });
+      }
+
+      if (!current.mergedIntoRawBatchId) {
+        return current;
+      }
+
+      currentId = current.mergedIntoRawBatchId;
+    }
   }
 
   private async getPreSaleLocation(tx: Prisma.TransactionClient) {

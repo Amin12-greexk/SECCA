@@ -247,6 +247,8 @@ model RawBatch {
   batchNumber      String   @unique
   cardId           String   @unique
   supplierId       String
+  mergedIntoRawBatchId String?
+  mergedAt         DateTime?
   featherCondition String
   invoiceWeightGram Float
   wetWeightGram    Float
@@ -256,10 +258,13 @@ model RawBatch {
   updatedAt        DateTime @updatedAt
 
   supplier       Supplier             @relation(fields: [supplierId], references: [id])
+  mergedIntoRawBatch RawBatch?        @relation("RawBatchMerge", fields: [mergedIntoRawBatchId], references: [id])
+  mergedSourceRawBatches RawBatch[]   @relation("RawBatchMerge")
   gradeStocks    RawBatchGradeStock[]
   pecahBonEntries PecahBonEntry[]
 
   @@index([supplierId, createdAt])
+  @@index([mergedIntoRawBatchId])
 }
 
 model PecahBonEntry {
@@ -326,6 +331,10 @@ model ProductionLot {
   sources    LotSource[]
   workItem   WorkOrderItem?
   movements  InventoryMovement[]
+
+  @@index([locationId, createdAt])
+  @@index([locationId, printedAt])
+  @@index([locationId, gradeId, createdAt])
 }
 
 model LotSource {
