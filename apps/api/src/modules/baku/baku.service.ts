@@ -794,8 +794,9 @@ export class BakuService {
   }
 
   async getPecahBonEntries(rawBatchId: string) {
+    const { familyIds } = await this.getMergedFamilyRawBatchIds(rawBatchId);
     const entries = await this.prisma.pecahBonEntry.findMany({
-      where: { rawBatchId },
+      where: { rawBatchId: { in: familyIds } },
       include: {
         grade: true,
         featherGrade: true,
@@ -811,8 +812,9 @@ export class BakuService {
     rawBatchId: string,
     query: PecahBonPageQueryDto,
   ) {
+    const { familyIds } = await this.getMergedFamilyRawBatchIds(rawBatchId);
     const { page, limit, skip } = this.resolvePagination(query);
-    const where = { rawBatchId };
+    const where = { rawBatchId: { in: familyIds } };
 
     const [total, items] = await Promise.all([
       this.prisma.pecahBonEntry.count({ where }),
@@ -841,6 +843,7 @@ export class BakuService {
   async getPecahBonHistory(query: PecahBonHistoryQueryDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
+    const order: Prisma.SortOrder = query.order === "desc" ? "desc" : "asc";
     const skip = (page - 1) * limit;
     const where: Prisma.PecahBonEntryWhereInput = {};
 
@@ -889,7 +892,7 @@ export class BakuService {
           featherGrade: { select: { id: true, code: true, name: true, type: true } },
           colorGrade: { select: { id: true, code: true, name: true, type: true } },
         },
-        orderBy: [{ pecahBonDate: "asc" }, { createdAt: "asc" }],
+        orderBy: [{ pecahBonDate: order }, { createdAt: order }],
         skip,
         take: limit,
       }),
@@ -1144,6 +1147,33 @@ export class BakuService {
 
       currentId = current.mergedIntoRawBatchId;
     }
+  }
+
+  private async getMergedFamilyRawBatchIds(rawBatchId: string) {
+    const effectiveRawBatch = await this.resolveEffectiveRawBatch(rawBatchId);
+    const visited = new Set<string>([effectiveRawBatch.id]);
+    const queue = [effectiveRawBatch.id];
+
+    while (queue.length > 0) {
+      const parentId = queue.shift();
+      if (!parentId) break;
+
+      const mergedSources = await this.prisma.rawBatch.findMany({
+        where: { mergedIntoRawBatchId: parentId },
+        select: { id: true },
+      });
+
+      for (const source of mergedSources) {
+        if (visited.has(source.id)) continue;
+        visited.add(source.id);
+        queue.push(source.id);
+      }
+    }
+
+    return {
+      effectiveRawBatchId: effectiveRawBatch.id,
+      familyIds: Array.from(visited),
+    };
   }
 
   private async getPreSaleLocation(tx: Prisma.TransactionClient) {
