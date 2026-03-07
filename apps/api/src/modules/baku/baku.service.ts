@@ -976,18 +976,11 @@ export class BakuService {
     year: number,
   ): Promise<number> {
     const key = `PB:${year}`;
-    return this.nextSequenceWithCountFallback(tx, key, async () => {
-      const startOfYear = new Date(Date.UTC(year, 0, 1));
-      const endOfYear = new Date(Date.UTC(year + 1, 0, 1));
-      return tx.pecahBonEntry.count({
-        where: {
-          pecahBonDate: {
-            gte: startOfYear,
-            lt: endOfYear,
-          },
-        },
-      });
-    });
+    return this.nextSequenceWithMaxSync(
+      tx,
+      key,
+      () => this.getMaxPecahBonSequenceByYear(tx, year),
+    );
   }
 
   private async generateIdentifiers(
@@ -1015,13 +1008,11 @@ export class BakuService {
 
   private async nextRawBatchSequence(tx: Prisma.TransactionClient, year: number) {
     const key = `RBY:${year}`;
-    return this.nextSequenceWithCountFallback(tx, key, async () => {
-      const yearStart = new Date(Date.UTC(year, 0, 1));
-      const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
-      return tx.rawBatch.count({
-        where: { createdAt: { gte: yearStart, lt: yearEnd } },
-      });
-    });
+    return this.nextSequenceWithMaxSync(
+      tx,
+      key,
+      () => this.getMaxRawBatchSequenceByYear(tx, year),
+    );
   }
 
   private async nextRawCardSequence(
@@ -1031,26 +1022,34 @@ export class BakuService {
   ) {
     const monthCode = String(month + 1).padStart(2, "0");
     const key = `RBC:${year}:${monthCode}`;
-    return this.nextSequenceWithCountFallback(tx, key, async () => {
-      const monthStart = new Date(Date.UTC(year, month, 1));
-      const monthEnd = new Date(Date.UTC(year, month + 1, 1));
-      return tx.rawBatch.count({
-        where: { createdAt: { gte: monthStart, lt: monthEnd } },
-      });
-    });
+    return this.nextSequenceWithMaxSync(
+      tx,
+      key,
+      () => this.getMaxRawCardSequenceByMonth(tx, year, month),
+    );
   }
 
-  private async nextSequenceWithCountFallback(
+  private async nextSequenceWithMaxSync(
     tx: Prisma.TransactionClient,
     key: string,
-    initialCountResolver: () => Promise<number>,
+    maxSequenceResolver: () => Promise<number>,
   ): Promise<number> {
+    const maxSequence = await maxSequenceResolver();
     const existing = await tx.numberSequence.findUnique({
       where: { key },
       select: { current: true },
     });
 
     if (existing) {
+      if (existing.current < maxSequence) {
+        const synced = await tx.numberSequence.update({
+          where: { key },
+          data: { current: maxSequence + 1 },
+          select: { current: true },
+        });
+        return synced.current;
+      }
+
       const updated = await tx.numberSequence.update({
         where: { key },
         data: { current: { increment: 1 } },
@@ -1059,15 +1058,27 @@ export class BakuService {
       return updated.current;
     }
 
-    const initialCount = await initialCountResolver();
     try {
       const created = await tx.numberSequence.create({
-        data: { key, current: initialCount + 1 },
+        data: { key, current: maxSequence + 1 },
         select: { current: true },
       });
       return created.current;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const latest = await tx.numberSequence.findUnique({
+          where: { key },
+          select: { current: true },
+        });
+        if (latest && latest.current < maxSequence) {
+          const synced = await tx.numberSequence.update({
+            where: { key },
+            data: { current: maxSequence + 1 },
+            select: { current: true },
+          });
+          return synced.current;
+        }
+
         const updated = await tx.numberSequence.update({
           where: { key },
           data: { current: { increment: 1 } },
@@ -1077,6 +1088,79 @@ export class BakuService {
       }
       throw error;
     }
+  }
+
+  private async getMaxPecahBonSequenceByYear(
+    tx: Prisma.TransactionClient,
+    year: number,
+  ): Promise<number> {
+    const yearShort = String(year).slice(-2);
+    const rows = await tx.pecahBonEntry.findMany({
+      where: { pecahBonId: { endsWith: `-${yearShort}` } },
+      select: { pecahBonId: true },
+    });
+
+    let maxSequence = 0;
+    for (const row of rows) {
+      if (!row.pecahBonId) continue;
+      const match = row.pecahBonId.match(/^TEI-(\d+)-\d{2}$/);
+      if (!match) continue;
+      const value = Number(match[1]);
+      if (Number.isFinite(value) && value > maxSequence) {
+        maxSequence = value;
+      }
+    }
+
+    return maxSequence;
+  }
+
+  private async getMaxRawBatchSequenceByYear(
+    tx: Prisma.TransactionClient,
+    year: number,
+  ): Promise<number> {
+    const yearShort = String(year).slice(-2);
+    const rows = await tx.rawBatch.findMany({
+      where: { batchNumber: { endsWith: `-TEI-${yearShort}` } },
+      select: { batchNumber: true },
+    });
+
+    let maxSequence = 0;
+    for (const row of rows) {
+      const match = row.batchNumber.match(/^K(\d+)-TEI-\d{2}$/);
+      if (!match) continue;
+      const value = Number(match[1]);
+      if (Number.isFinite(value) && value > maxSequence) {
+        maxSequence = value;
+      }
+    }
+
+    return maxSequence;
+  }
+
+  private async getMaxRawCardSequenceByMonth(
+    tx: Prisma.TransactionClient,
+    year: number,
+    month: number,
+  ): Promise<number> {
+    const yearShort = String(year).slice(-2);
+    const monthCode = String(month + 1).padStart(2, "0");
+    const prefix = `R-${yearShort}${monthCode}-`;
+    const rows = await tx.rawBatch.findMany({
+      where: { cardId: { startsWith: prefix } },
+      select: { cardId: true },
+    });
+
+    let maxSequence = 0;
+    for (const row of rows) {
+      const match = row.cardId.match(/^R-\d{4}-(\d+)$/);
+      if (!match) continue;
+      const value = Number(match[1]);
+      if (Number.isFinite(value) && value > maxSequence) {
+        maxSequence = value;
+      }
+    }
+
+    return maxSequence;
   }
 
   private roundToTwoDecimals(value: number) {
