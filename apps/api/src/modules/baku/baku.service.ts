@@ -976,6 +976,75 @@ export class BakuService {
     year: number,
   ): Promise<number> {
     const key = `PB:${year}`;
+    return this.nextSequenceWithCountFallback(tx, key, async () => {
+      const startOfYear = new Date(Date.UTC(year, 0, 1));
+      const endOfYear = new Date(Date.UTC(year + 1, 0, 1));
+      return tx.pecahBonEntry.count({
+        where: {
+          pecahBonDate: {
+            gte: startOfYear,
+            lt: endOfYear,
+          },
+        },
+      });
+    });
+  }
+
+  private async generateIdentifiers(
+    tx: Prisma.TransactionClient,
+    at: Date,
+  ): Promise<{ batchNumber: string; cardId: string }> {
+    const year = at.getUTCFullYear();
+    const month = at.getUTCMonth();
+
+    const [yearSequence, monthSequence] = await Promise.all([
+      this.nextRawBatchSequence(tx, year),
+      this.nextRawCardSequence(tx, year, month),
+    ]);
+
+    const yearShort = String(year).slice(-2);
+    const monthCode = String(month + 1).padStart(2, "0");
+    const batchSequence = String(yearSequence).padStart(4, "0");
+    const cardSequence = String(monthSequence).padStart(3, "0");
+
+    const batchNumber = `K${batchSequence}-TEI-${yearShort}`;
+    const cardId = `R-${yearShort}${monthCode}-${cardSequence}`;
+
+    return { batchNumber, cardId };
+  }
+
+  private async nextRawBatchSequence(tx: Prisma.TransactionClient, year: number) {
+    const key = `RBY:${year}`;
+    return this.nextSequenceWithCountFallback(tx, key, async () => {
+      const yearStart = new Date(Date.UTC(year, 0, 1));
+      const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
+      return tx.rawBatch.count({
+        where: { createdAt: { gte: yearStart, lt: yearEnd } },
+      });
+    });
+  }
+
+  private async nextRawCardSequence(
+    tx: Prisma.TransactionClient,
+    year: number,
+    month: number,
+  ) {
+    const monthCode = String(month + 1).padStart(2, "0");
+    const key = `RBC:${year}:${monthCode}`;
+    return this.nextSequenceWithCountFallback(tx, key, async () => {
+      const monthStart = new Date(Date.UTC(year, month, 1));
+      const monthEnd = new Date(Date.UTC(year, month + 1, 1));
+      return tx.rawBatch.count({
+        where: { createdAt: { gte: monthStart, lt: monthEnd } },
+      });
+    });
+  }
+
+  private async nextSequenceWithCountFallback(
+    tx: Prisma.TransactionClient,
+    key: string,
+    initialCountResolver: () => Promise<number>,
+  ): Promise<number> {
     const existing = await tx.numberSequence.findUnique({
       where: { key },
       select: { current: true },
@@ -987,75 +1056,27 @@ export class BakuService {
         data: { current: { increment: 1 } },
         select: { current: true },
       });
-
       return updated.current;
     }
 
-    const startOfYear = new Date(Date.UTC(year, 0, 1));
-    const endOfYear = new Date(Date.UTC(year + 1, 0, 1));
-    const count = await tx.pecahBonEntry.count({
-      where: {
-        pecahBonDate: {
-          gte: startOfYear,
-          lt: endOfYear,
-        },
-      },
-    });
-
+    const initialCount = await initialCountResolver();
     try {
       const created = await tx.numberSequence.create({
-        data: { key, current: count + 1 },
+        data: { key, current: initialCount + 1 },
         select: { current: true },
       });
-
       return created.current;
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === "P2002") {
-          const updated = await tx.numberSequence.update({
-            where: { key },
-            data: { current: { increment: 1 } },
-            select: { current: true },
-          });
-
-          return updated.current;
-        }
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const updated = await tx.numberSequence.update({
+          where: { key },
+          data: { current: { increment: 1 } },
+          select: { current: true },
+        });
+        return updated.current;
       }
-
       throw error;
     }
-  }
-
-  private async generateIdentifiers(
-    tx: Prisma.TransactionClient,
-    at: Date,
-  ): Promise<{ batchNumber: string; cardId: string }> {
-    const year = at.getUTCFullYear();
-    const month = at.getUTCMonth();
-
-    const yearStart = new Date(Date.UTC(year, 0, 1));
-    const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
-    const monthStart = new Date(Date.UTC(year, month, 1));
-    const monthEnd = new Date(Date.UTC(year, month + 1, 1));
-
-    const [yearCount, monthCount] = await Promise.all([
-      tx.rawBatch.count({
-        where: { createdAt: { gte: yearStart, lt: yearEnd } },
-      }),
-      tx.rawBatch.count({
-        where: { createdAt: { gte: monthStart, lt: monthEnd } },
-      }),
-    ]);
-
-    const yearShort = String(year).slice(-2);
-    const monthCode = String(month + 1).padStart(2, "0");
-    const batchSequence = String(yearCount + 1).padStart(4, "0");
-    const cardSequence = String(monthCount + 1).padStart(3, "0");
-
-    const batchNumber = `K${batchSequence}-TEI-${yearShort}`;
-    const cardId = `R-${yearShort}${monthCode}-${cardSequence}`;
-
-    return { batchNumber, cardId };
   }
 
   private roundToTwoDecimals(value: number) {
