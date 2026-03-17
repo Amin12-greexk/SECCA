@@ -620,18 +620,6 @@ export class BakuService {
       }
     }
 
-    if (dto.batchNumber && dto.batchNumber !== rawBatch.batchNumber) {
-      const existing = await this.prisma.rawBatch.findUnique({
-        where: { batchNumber: dto.batchNumber },
-        select: { id: true },
-      });
-      if (existing) {
-        return conflict("Batch number already exists", {
-          batchNumber: dto.batchNumber,
-        });
-      }
-    }
-
     const wantsWeightChange =
       dto.invoiceWeightGram !== undefined ||
       dto.wetWeightGram !== undefined ||
@@ -672,11 +660,59 @@ export class BakuService {
       data.notes = trimmed === "" ? null : trimmed;
     }
 
-    return this.prisma.rawBatch.update({
-      where: { id: rawBatchId },
-      data,
-      include: { supplier: true },
-    });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        if (dto.batchNumber && dto.batchNumber !== rawBatch.batchNumber) {
+          const existing = await tx.rawBatch.findFirst({
+            where: {
+              batchNumber: dto.batchNumber,
+              id: { not: rawBatchId },
+            },
+            select: {
+              id: true,
+              batchNumber: true,
+              mergedIntoRawBatchId: true,
+            },
+          });
+
+          if (existing) {
+            if (!existing.mergedIntoRawBatchId) {
+              return conflict("Batch number already exists", {
+                batchNumber: dto.batchNumber,
+              });
+            }
+
+            await tx.rawBatch.update({
+              where: { id: existing.id },
+              data: {
+                batchNumber: this.buildArchivedMergedSourceBatchNumber(
+                  existing.batchNumber,
+                  existing.id,
+                ),
+              },
+            });
+          }
+        }
+
+        return tx.rawBatch.update({
+          where: { id: rawBatchId },
+          data,
+          include: { supplier: true },
+        });
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002" &&
+        dto.batchNumber &&
+        dto.batchNumber !== rawBatch.batchNumber
+      ) {
+        return conflict("Batch number already exists", {
+          batchNumber: dto.batchNumber,
+        });
+      }
+      throw error;
+    }
   }
 
   async mergeRawBatches(dto: MergeRawBatchesDto) {
@@ -1225,6 +1261,14 @@ export class BakuService {
       return sourceLabel;
     }
     return `${trimmed}\n${sourceLabel}`;
+  }
+
+  private buildArchivedMergedSourceBatchNumber(
+    batchNumber: string,
+    rawBatchId: string,
+  ) {
+    const suffix = rawBatchId.replace(/-/g, "").slice(0, 8).toUpperCase();
+    return `${batchNumber}#MERGED#${suffix}`;
   }
 
   private async resolveEffectiveRawBatch(rawBatchId: string) {

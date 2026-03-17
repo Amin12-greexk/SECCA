@@ -90,4 +90,47 @@ describe("BakuService", () => {
       .sort((a, b) => a - b);
     expect(cardSequences).toEqual([1, 2]);
   });
+
+  it("allows reclaiming a merged source batch number on the surviving batch", async () => {
+    const first = await bakuService.receive({
+      supplierId,
+      featherCondition: "SP",
+      wetWeightGram: 1500,
+      moisturePercent: 12.5,
+    });
+
+    const second = await bakuService.receive({
+      supplierId,
+      featherCondition: "SP",
+      wetWeightGram: 1750,
+      moisturePercent: 12.5,
+    });
+
+    const merged = await bakuService.mergeRawBatches({
+      sourceRawBatchIds: [first.id, second.id],
+      supplierId,
+      featherCondition: "SP",
+      moisturePercent: 12.5,
+      confirmSupplier: true,
+      confirmFeatherCondition: true,
+      confirmMoisturePercent: true,
+      confirmMerge: true,
+    });
+
+    const updated = await bakuService.updateRawBatch(merged.id, {
+      batchNumber: first.batchNumber,
+    });
+
+    expect(updated.batchNumber).toBe(first.batchNumber);
+
+    const archivedSource = await prisma.rawBatch.findUnique({
+      where: { id: first.id },
+      select: { batchNumber: true, mergedIntoRawBatchId: true },
+    });
+
+    expect(archivedSource?.mergedIntoRawBatchId).toBe(merged.id);
+    expect(archivedSource?.batchNumber).toMatch(
+      new RegExp(`^${first.batchNumber.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}#MERGED#`),
+    );
+  });
 });
