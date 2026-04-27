@@ -1,5 +1,15 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { GradeType, LotStatus, MovementType, Prisma, RackType } from "@prisma/client";
+import {
+  GradeType,
+  LotStatus,
+  MitraOrderRequestStatus,
+  MovementType,
+  Prisma,
+  RackType,
+  WorkLane,
+  WorkOrderItemStatus,
+  WorkOrderStatus,
+} from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { badRequest, conflict, notFound } from "../../common/errors";
 import { ReceiveRawBatchDto } from "./dto/receive-raw-batch.dto";
@@ -12,7 +22,7 @@ import { PecahBonHistoryQueryDto } from "./dto/pecah-bon-history-query.dto";
 import { MergeRawBatchesDto } from "./dto/merge-raw-batches.dto";
 import { NumberingService } from "../../common/numbering/numbering.service";
 import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
-import { LOCATION_CODES } from "../../common/constants";
+import { LOCATION_CODES, workerRackCode } from "../../common/constants";
 import { roundDryWeight } from "../../common/utils/weight";
 
 type RawBatchWithSupplier = Prisma.RawBatchGetPayload<{
@@ -277,7 +287,7 @@ export class BakuService {
           remainingWetWeightGram: { increment: lotWetWeightGram },
         },
         create: {
-          rawBatchId,
+          rawBatchId: entry.rawBatchId,
           gradeId: dto.gradeId,
           wetWeightGram: lotWetWeightGram,
           remainingWetWeightGram: lotWetWeightGram,
@@ -302,7 +312,13 @@ export class BakuService {
         });
       }
 
-      const location = await this.getPreSaleLocation(tx);
+      const autoAssignment = await this.consumeApprovedMitraOrderLine(
+        tx,
+        lotWetWeightGram,
+      );
+      const location = autoAssignment
+        ? await this.getOrCreateWorkerLocation(tx, autoAssignment.workerId)
+        : await this.getPreSaleLocation(tx);
       const { lotNumber } = await this.numberingService.nextLotNumber(
         tx,
         new Date(),
@@ -319,7 +335,7 @@ export class BakuService {
           wetWeightGram: lotWetWeightGram,
           dryWeightGramLocked: dryWeightLocked,
           moistureBps,
-          status: LotStatus.AVAILABLE,
+          status: autoAssignment ? LotStatus.IN_PROGRESS : LotStatus.AVAILABLE,
           locationId: location.id,
         },
       });
@@ -337,8 +353,25 @@ export class BakuService {
         fromLocationId: null,
         toLocationId: location.id,
         movementType: MovementType.IN,
-        note: "Create lot from pecah bon",
+        note: autoAssignment
+          ? `Auto assign lot dari template order mitra (${autoAssignment.orderRequestId})`
+          : "Create lot from pecah bon",
       });
+
+      if (autoAssignment) {
+        const workOrderId = await this.getOrCreateWorkerWorkOrder(
+          tx,
+          autoAssignment.workerId,
+        );
+        await tx.workOrderItem.create({
+          data: {
+            workOrderId,
+            lotId: lot.id,
+            status: WorkOrderItemStatus.IN_PROGRESS,
+            lane: WorkLane.NEXT_DAY,
+          },
+        });
+      }
 
       await tx.rawBatch.update({
         where: { id: rawBatchId },
@@ -462,17 +495,10 @@ export class BakuService {
     return this.prisma.$transaction(async (tx) => {
       const lot = entry.pecahBonId
         ? await tx.productionLot.findFirst({
-          where: { externalId: entry.pecahBonId },
-          include: { workItem: true, sources: true },
-        })
+            where: { externalId: entry.pecahBonId },
+            include: { workItem: true, sources: true },
+          })
         : null;
-
-      if (lot && (lot.status !== LotStatus.AVAILABLE || lot.workItem)) {
-        return conflict("LP sudah diproses, tidak bisa diedit", {
-          lotId: lot.id,
-          status: lot.status,
-        });
-      }
 
       if (entry.gradeId !== dto.gradeId) {
         const oldStockUpdate = await tx.rawBatchGradeStock.updateMany({
@@ -620,25 +646,6 @@ export class BakuService {
       }
     }
 
-    const wantsWeightChange =
-      dto.invoiceWeightGram !== undefined ||
-      dto.wetWeightGram !== undefined ||
-      dto.moisturePercent !== undefined;
-
-    if (wantsWeightChange) {
-      const [pecahBonCount, gradeStockCount] = await Promise.all([
-        this.prisma.pecahBonEntry.count({ where: { rawBatchId } }),
-        this.prisma.rawBatchGradeStock.count({ where: { rawBatchId } }),
-      ]);
-
-      if (pecahBonCount > 0 || gradeStockCount > 0) {
-        return badRequest(
-          "Berat atau kadar air tidak bisa diubah karena batch sudah dipakai.",
-          { rawBatchId, pecahBonCount, gradeStockCount },
-        );
-      }
-    }
-
     const data: Prisma.RawBatchUpdateInput = {};
     if (dto.batchNumber !== undefined) data.batchNumber = dto.batchNumber;
     if (dto.supplierId !== undefined) {
@@ -694,11 +701,47 @@ export class BakuService {
           }
         }
 
-        return tx.rawBatch.update({
+        const updated = await tx.rawBatch.update({
           where: { id: rawBatchId },
           data,
           include: { supplier: true },
         });
+
+        if (dto.updateExistingEntries && dto.moisturePercent !== undefined) {
+          const newMoistureBps = Math.round(dto.moisturePercent * 100);
+
+          const entries = await tx.pecahBonEntry.findMany({
+            where: { rawBatchId },
+            select: { id: true, initialWeightGram: true, pecahBonId: true },
+          });
+
+          for (const entry of entries) {
+            const newDryWeight = roundDryWeight(
+              entry.initialWeightGram,
+              newMoistureBps,
+            );
+
+            await tx.pecahBonEntry.update({
+              where: { id: entry.id },
+              data: {
+                moisturePercent: dto.moisturePercent,
+                dryWeightGram: newDryWeight,
+              },
+            });
+
+            if (entry.pecahBonId) {
+              await tx.productionLot.updateMany({
+                where: { externalId: entry.pecahBonId },
+                data: {
+                  moistureBps: newMoistureBps,
+                  dryWeightGramLocked: newDryWeight,
+                },
+              });
+            }
+          }
+        }
+
+        return updated;
       });
     } catch (error) {
       if (
@@ -713,6 +756,90 @@ export class BakuService {
       }
       throw error;
     }
+  }
+
+  async deleteRawBatch(id: string) {
+    const rawBatch = await this.prisma.rawBatch.findUnique({
+      where: { id },
+      include: {
+        pecahBonEntries: {
+          select: { pecahBonId: true },
+        },
+      },
+    });
+
+    if (!rawBatch) {
+      return notFound("Raw batch not found", { id });
+    }
+
+    const pecahBonIds = rawBatch.pecahBonEntries
+      .map((e) => e.pecahBonId)
+      .filter((id): id is string => !!id);
+
+    const date = new Date(rawBatch.createdAt);
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+
+    await this.prisma.$transaction(async (tx) => {
+      if (pecahBonIds.length > 0) {
+        const lots = await tx.productionLot.findMany({
+          where: { externalId: { in: pecahBonIds } },
+          select: { id: true },
+        });
+        const lotIds = lots.map((l) => l.id);
+
+        if (lotIds.length > 0) {
+          const workOrderItems = await tx.workOrderItem.findMany({
+            where: { lotId: { in: lotIds } },
+            select: { workOrderId: true },
+          });
+          const workOrderIds = workOrderItems.map((wi) => wi.workOrderId);
+
+          if (workOrderIds.length > 0) {
+            await tx.workerActiveWorkOrder.deleteMany({
+              where: { workOrderId: { in: workOrderIds } },
+            });
+          }
+
+          await tx.workOrderItem.deleteMany({ where: { lotId: { in: lotIds } } });
+          await tx.inventoryMovement.deleteMany({
+            where: { lotId: { in: lotIds } },
+          });
+          await tx.lotSource.deleteMany({ where: { lotId: { in: lotIds } } });
+          await tx.productionLot.deleteMany({ where: { id: { in: lotIds } } });
+        }
+      }
+
+      await tx.rawBatchGradeStock.deleteMany({ where: { rawBatchId: id } });
+      await tx.pecahBonEntry.deleteMany({ where: { rawBatchId: id } });
+      await tx.rawBatch.delete({ where: { id } });
+
+      await this.forceSyncSequence(tx, `PB:${year}`, () =>
+        this.getMaxPecahBonSequenceByYear(tx, year),
+      );
+      await this.forceSyncSequence(tx, `RBY:${year}`, () =>
+        this.getMaxRawBatchSequenceByYear(tx, year),
+      );
+      const monthCode = String(month + 1).padStart(2, "0");
+      await this.forceSyncSequence(tx, `RBC:${year}:${monthCode}`, () =>
+        this.getMaxRawCardSequenceByMonth(tx, year, month),
+      );
+    });
+
+    return { success: true };
+  }
+
+  private async forceSyncSequence(
+    tx: Prisma.TransactionClient,
+    key: string,
+    maxSequenceResolver: () => Promise<number>,
+  ) {
+    const maxSequence = await maxSequenceResolver();
+    await tx.numberSequence.upsert({
+      where: { key },
+      update: { current: maxSequence },
+      create: { key, current: maxSequence },
+    });
   }
 
   async mergeRawBatches(dto: MergeRawBatchesDto) {
@@ -1323,6 +1450,164 @@ export class BakuService {
       effectiveRawBatchId: effectiveRawBatch.id,
       familyIds: Array.from(visited),
     };
+  }
+
+  private async consumeApprovedMitraOrderLine(
+    tx: Prisma.TransactionClient,
+    lotWeightGram: number,
+  ) {
+    while (true) {
+      const line = await tx.mitraOrderRequestLine.findFirst({
+        where: {
+          weightGram: lotWeightGram,
+          lpCount: { gt: 0 },
+          orderRequest: {
+            status: MitraOrderRequestStatus.APPROVED,
+            workerId: { not: null },
+          },
+        },
+        orderBy: [
+          { orderRequest: { createdAt: "asc" } },
+          { updatedAt: "asc" },
+          { id: "asc" },
+        ],
+        include: {
+          orderRequest: {
+            select: {
+              id: true,
+              workerId: true,
+            },
+          },
+        },
+      });
+
+      if (!line?.orderRequest.workerId) {
+        return null;
+      }
+
+      const locked = await tx.mitraOrderRequestLine.updateMany({
+        where: {
+          id: line.id,
+          lpCount: { gt: 0 },
+        },
+        data: {
+          lpCount: { decrement: 1 },
+        },
+      });
+
+      if (locked.count === 0) {
+        continue;
+      }
+
+      const request = await tx.mitraOrderRequest.findUnique({
+        where: { id: line.orderRequest.id },
+        select: { requestedGram: true },
+      });
+      if (!request) {
+        return null;
+      }
+
+      await tx.mitraOrderRequest.update({
+        where: { id: line.orderRequest.id },
+        data: {
+          requestedGram: Math.max(0, request.requestedGram - lotWeightGram),
+        },
+      });
+
+      const remainingLines = await tx.mitraOrderRequestLine.count({
+        where: {
+          orderRequestId: line.orderRequest.id,
+          lpCount: { gt: 0 },
+        },
+      });
+
+      if (remainingLines === 0) {
+        await tx.mitraOrderRequest.update({
+          where: { id: line.orderRequest.id },
+          data: {
+            status: MitraOrderRequestStatus.FULFILLED,
+            processedAt: new Date(),
+          },
+        });
+      }
+
+      return {
+        orderRequestId: line.orderRequest.id,
+        workerId: line.orderRequest.workerId,
+      };
+    }
+  }
+
+  private async getOrCreateWorkerLocation(
+    tx: Prisma.TransactionClient,
+    workerId: string,
+  ) {
+    const worker = await tx.worker.findUnique({
+      where: { id: workerId },
+      select: { id: true, name: true },
+    });
+
+    if (!worker) {
+      throw new Error(`Worker not found for auto assignment: ${workerId}`);
+    }
+
+    return tx.rackLocation.upsert({
+      where: { workerId: worker.id },
+      update: {
+        code: workerRackCode(worker.id),
+        name: `Rak Mitra - ${worker.name}`,
+        type: RackType.WORKER,
+      },
+      create: {
+        code: workerRackCode(worker.id),
+        name: `Rak Mitra - ${worker.name}`,
+        type: RackType.WORKER,
+        workerId: worker.id,
+      },
+    });
+  }
+
+  private async getOrCreateWorkerWorkOrder(
+    tx: Prisma.TransactionClient,
+    workerId: string,
+  ) {
+    const active = await tx.workerActiveWorkOrder.findUnique({
+      where: { workerId },
+      select: { workOrderId: true },
+    });
+    if (active) {
+      return active.workOrderId;
+    }
+
+    const workOrder = await tx.workOrder.create({
+      data: {
+        workerId,
+        status: WorkOrderStatus.IN_PROGRESS,
+      },
+    });
+
+    try {
+      await tx.workerActiveWorkOrder.create({
+        data: {
+          workerId,
+          workOrderId: workOrder.id,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const concurrentActive = await tx.workerActiveWorkOrder.findUnique({
+          where: { workerId },
+          select: { workOrderId: true },
+        });
+        if (concurrentActive) {
+          await tx.workOrder.delete({ where: { id: workOrder.id } });
+          return concurrentActive.workOrderId;
+        }
+      }
+      throw error;
+    }
+
+    return workOrder.id;
   }
 
   private async getPreSaleLocation(tx: Prisma.TransactionClient) {

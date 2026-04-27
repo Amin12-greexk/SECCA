@@ -23,7 +23,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { useToast } from '@/lib/toast';
-import { getRawBatchByCardId, getRawBatchesPaginated, getSuppliers, mergeRawBatches, updateRawBatch, type RawBatch, type Supplier } from '@/lib/api';
+import { getRawBatchByCardId, getRawBatchesPaginated, getSuppliers, mergeRawBatches, updateRawBatch, deleteRawBatch, type RawBatch, type Supplier } from '@/lib/api';
 import BatchCard from '@/components/print/BatchCard';
 
 const BATCHES_PER_PAGE = 20;
@@ -42,6 +42,7 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
     const [editBatch, setEditBatch] = useState<RawBatch | null>(null);
     const [editOpen, setEditOpen] = useState(false);
     const [editSaving, setEditSaving] = useState(false);
+    const [deleteLoading, setDeleteLoading] = useState(false);
     const [selectedRawBatchIds, setSelectedRawBatchIds] = useState<string[]>([]);
     const [mergeOpen, setMergeOpen] = useState(false);
     const [mergeSaving, setMergeSaving] = useState(false);
@@ -64,6 +65,7 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
         moisturePercent: '',
         notes: '',
     });
+    const [updateExistingEntries, setUpdateExistingEntries] = useState(false);
     const [scanLoading, setScanLoading] = useState(false);
     const scanBufferRef = useRef('');
     const scanLastAtRef = useRef(0);
@@ -318,6 +320,7 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
             moisturePercent: batch.moisturePercent?.toString() ?? '',
             notes: batch.notes ?? '',
         });
+        setUpdateExistingEntries(false);
         setEditOpen(true);
     };
 
@@ -427,10 +430,6 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
         const trimmedCondition = editValues.featherCondition.trim();
         const trimmedNotes = editValues.notes.trim();
 
-        const originalWeight = editBatch.originalWetWeightGram ?? editBatch.wetWeightGram;
-        const usedWeight = originalWeight - editBatch.wetWeightGram;
-        const weightLocked = usedWeight > 0.0001;
-
         const payload: {
             batchNumber?: string;
             supplierId?: string;
@@ -453,31 +452,33 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
             payload.featherCondition = trimmedCondition;
         }
 
-        if (!weightLocked) {
-            const invoice = Number(editValues.invoiceWeightGram);
-            const wet = Number(editValues.wetWeightGram);
-            const moisture = Number(editValues.moisturePercent);
+        const invoice = Number(editValues.invoiceWeightGram);
+        const wet = Number(editValues.wetWeightGram);
+        const moisture = Number(editValues.moisturePercent);
 
-            if (!Number.isFinite(invoice) || invoice <= 0) {
-                toast.error('Berat nota wajib diisi (lebih dari 0).');
-                return;
-            }
-            if (!Number.isFinite(wet) || wet <= 0) {
-                toast.error('Berat kedatangan wajib diisi (lebih dari 0).');
-                return;
-            }
-            if (!Number.isFinite(moisture) || moisture < 0 || moisture > 100) {
-                toast.error('Kadar air wajib diisi (0 - 100).');
-                return;
-            }
-
-            if (invoice !== editBatch.invoiceWeightGram) payload.invoiceWeightGram = invoice;
-            if (wet !== editBatch.wetWeightGram) payload.wetWeightGram = wet;
-            if (moisture !== editBatch.moisturePercent) payload.moisturePercent = moisture;
+        if (!Number.isFinite(invoice) || invoice <= 0) {
+            toast.error('Berat nota wajib diisi (lebih dari 0).');
+            return;
         }
+        if (!Number.isFinite(wet) || wet <= 0) {
+            toast.error('Berat kedatangan wajib diisi (lebih dari 0).');
+            return;
+        }
+        if (!Number.isFinite(moisture) || moisture < 0 || moisture > 100) {
+            toast.error('Kadar air wajib diisi (0 - 100).');
+            return;
+        }
+
+        if (invoice !== editBatch.invoiceWeightGram) payload.invoiceWeightGram = invoice;
+        if (wet !== editBatch.wetWeightGram) payload.wetWeightGram = wet;
+        if (moisture !== editBatch.moisturePercent) payload.moisturePercent = moisture;
 
         if (trimmedNotes !== (editBatch.notes ?? '')) {
             payload.notes = trimmedNotes;
+        }
+
+        if (updateExistingEntries) {
+            payload.updateExistingEntries = true;
         }
 
         if (Object.keys(payload).length === 0) {
@@ -488,7 +489,11 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
         setEditSaving(true);
         try {
             await updateRawBatch(editBatch.id, payload);
-            toast.success('Data batch berhasil diperbarui.');
+            toast.success(
+                updateExistingEntries
+                    ? 'Data batch dan LP terkait berhasil diperbarui.'
+                    : 'Data batch berhasil diperbarui.',
+            );
             setEditOpen(false);
             await loadData(batchPage);
         } catch (err) {
@@ -496,6 +501,26 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
             toast.error(message);
         } finally {
             setEditSaving(false);
+        }
+    };
+
+    const handleDeleteBatch = async () => {
+        if (!editBatch) return;
+
+        const confirmText = `Apakah Anda yakin ingin menghapus kartu ${editBatch.batchNumber}? Semua data pecah bon terkait juga akan dihapus.`;
+        if (!window.confirm(confirmText)) return;
+
+        setDeleteLoading(true);
+        try {
+            await deleteRawBatch(editBatch.id);
+            toast.success(`Kartu ${editBatch.batchNumber} berhasil dihapus.`);
+            setEditOpen(false);
+            await loadData(batchPage);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Gagal menghapus batch.';
+            toast.error(message);
+        } finally {
+            setDeleteLoading(false);
         }
     };
 
@@ -1055,7 +1080,6 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
                                         onChange={(e) =>
                                             setEditValues((prev) => ({ ...prev, invoiceWeightGram: e.target.value }))
                                         }
-                                        disabled={editWeightLocked}
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -1068,7 +1092,6 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
                                         onChange={(e) =>
                                             setEditValues((prev) => ({ ...prev, wetWeightGram: e.target.value }))
                                         }
-                                        disabled={editWeightLocked}
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -1082,14 +1105,22 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
                                         onChange={(e) =>
                                             setEditValues((prev) => ({ ...prev, moisturePercent: e.target.value }))
                                         }
-                                        disabled={editWeightLocked}
                                     />
                                 </div>
                             </div>
 
-                            {editWeightLocked && (
-                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                                    Berat/kadar air tidak bisa diubah karena batch sudah dipakai untuk pecah bon.
+                            {editBatch && Number(editValues.moisturePercent) !== editBatch.moisturePercent && (
+                                <div className="flex items-center space-x-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+                                    <input
+                                        type="checkbox"
+                                        id="updateExistingEntries"
+                                        checked={updateExistingEntries}
+                                        onChange={(e) => setUpdateExistingEntries(e.target.checked)}
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <Label htmlFor="updateExistingEntries" className="text-sm font-medium text-blue-700 cursor-pointer">
+                                        Update kadar air di semua LP pecah bon terkait?
+                                    </Label>
                                 </div>
                             )}
 
@@ -1103,13 +1134,22 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
                                 />
                             </div>
 
-                            <DialogFooter>
-                                <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving}>
-                                    Batal
+                            <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+                                <Button
+                                    variant="destructive"
+                                    onClick={handleDeleteBatch}
+                                    disabled={deleteLoading || editSaving}
+                                >
+                                    {deleteLoading ? 'Menghapus...' : 'Hapus Kartu'}
                                 </Button>
-                                <Button onClick={handleEditSave} disabled={editSaving}>
-                                    {editSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
-                                </Button>
+                                <div className="flex gap-2">
+                                    <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving || deleteLoading}>
+                                        Batal
+                                    </Button>
+                                    <Button onClick={handleEditSave} disabled={editSaving || deleteLoading}>
+                                        {editSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
+                                    </Button>
+                                </div>
                             </DialogFooter>
                         </div>
                     )}

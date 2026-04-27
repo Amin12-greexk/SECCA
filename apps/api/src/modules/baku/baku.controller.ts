@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiBearerAuth, ApiParam, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../auth/roles.decorator";
 import { ReceiveRawBatchDto } from "./dto/receive-raw-batch.dto";
@@ -66,6 +66,13 @@ export class BakuController {
   @ApiParam({ name: "id" })
   updateRawBatch(@Param("id") id: string, @Body() dto: UpdateRawBatchDto) {
     return this.bakuService.updateRawBatch(id, dto);
+  }
+
+  @Delete("raw-batch/:id")
+  @ApiParam({ name: "id" })
+  @Roles("manager", "baku")
+  deleteRawBatch(@Param("id") id: string) {
+    return this.bakuService.deleteRawBatch(id);
   }
 
   @Post("raw-batch/merge")

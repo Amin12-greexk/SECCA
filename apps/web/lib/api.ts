@@ -45,6 +45,7 @@ export interface RawBatchUpdateRequest {
     wetWeightGram?: number;
     moisturePercent?: number;
     notes?: string;
+    updateExistingEntries?: boolean;
 }
 
 export interface RackLocation {
@@ -87,6 +88,16 @@ export interface ProductionLot {
     location?: RackLocation;
     createdAt: string;
     updatedAt: string;
+}
+
+export interface RackLotsPaginatedResponse {
+    location: RackLocation;
+    lots: ProductionLot[];
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    totalWetWeightGram: number;
 }
 
 export interface PecahBonRequest {
@@ -171,6 +182,156 @@ export interface PecahBonPreset {
     isActive: boolean;
 }
 
+export interface BarangJadi {
+    id: string;
+    name: string;
+    byProducts: ByProductType[];
+    resultGrades: ResultGradeType[];
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface ByProductType {
+    id: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface ResultGradeType {
+    id: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+function isEntityId(value: unknown): value is string {
+    return typeof value === 'string' && value.trim().length > 0;
+}
+
+function sanitizeIdArray(values: unknown): string[] {
+    if (!Array.isArray(values)) {
+        return [];
+    }
+
+    return Array.from(
+        new Set(
+            values
+                .filter((value): value is string => isEntityId(value))
+                .map((value) => value.trim()),
+        ),
+    );
+}
+
+function normalizeByProductType(payload: unknown): ByProductType | null {
+    if (!payload || typeof payload !== 'object') {
+        return null;
+    }
+
+    const nested = (payload as { byProductType?: unknown }).byProductType;
+    if (nested) {
+        return normalizeByProductType(nested);
+    }
+
+    const row = payload as Partial<ByProductType>;
+    if (!isEntityId(row.id) || typeof row.name !== 'string') {
+        return null;
+    }
+
+    return {
+        id: row.id,
+        name: row.name,
+        createdAt: typeof row.createdAt === 'string' ? row.createdAt : '',
+        updatedAt: typeof row.updatedAt === 'string' ? row.updatedAt : '',
+    };
+}
+
+function normalizeBarangJadi(payload: unknown): BarangJadi | null {
+    if (!payload || typeof payload !== 'object') {
+        return null;
+    }
+
+    const row = payload as Partial<BarangJadi> & { byProducts?: unknown[]; resultGrades?: unknown[] };
+    if (!isEntityId(row.id) || typeof row.name !== 'string') {
+        return null;
+    }
+
+    return {
+        id: row.id,
+        name: row.name,
+        byProducts: Array.isArray(row.byProducts)
+            ? row.byProducts
+                .map((item) => normalizeByProductType(item))
+                .filter((item): item is ByProductType => item !== null)
+            : [],
+        resultGrades: Array.isArray(row.resultGrades)
+            ? row.resultGrades
+                .map((item) => normalizeResultGradeType(item))
+                .filter((item): item is ResultGradeType => item !== null)
+            : [],
+        createdAt: typeof row.createdAt === 'string' ? row.createdAt : '',
+        updatedAt: typeof row.updatedAt === 'string' ? row.updatedAt : '',
+    };
+}
+
+function normalizeResultGradeType(payload: unknown): ResultGradeType | null {
+    if (!payload || typeof payload !== 'object') {
+        return null;
+    }
+
+    const nested = (payload as { resultGradeType?: unknown }).resultGradeType;
+    if (nested) {
+        return normalizeResultGradeType(nested);
+    }
+
+    const row = payload as Partial<ResultGradeType>;
+    if (!isEntityId(row.id) || typeof row.name !== 'string') {
+        return null;
+    }
+
+    return {
+        id: row.id,
+        name: row.name,
+        createdAt: typeof row.createdAt === 'string' ? row.createdAt : '',
+        updatedAt: typeof row.updatedAt === 'string' ? row.updatedAt : '',
+    };
+}
+
+function normalizeUser(payload: unknown): User | null {
+    if (!payload || typeof payload !== 'object') {
+        return null;
+    }
+
+    const row = payload as Partial<User> & { uiAccesses?: unknown[] };
+    if (!isEntityId(row.id) || typeof row.name !== 'string' || typeof row.email !== 'string' || typeof row.role !== 'string') {
+        return null;
+    }
+
+    return {
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        role: row.role.toLowerCase(),
+        workerId: typeof row.workerId === 'string' || row.workerId === null ? row.workerId : undefined,
+        phone: typeof row.phone === 'string' || row.phone === null ? row.phone : undefined,
+        pin: typeof row.pin === 'string' || row.pin === null ? row.pin : undefined,
+        useCustomUiAccess: typeof row.useCustomUiAccess === 'boolean' ? row.useCustomUiAccess : false,
+        uiAccesses: Array.isArray(row.uiAccesses)
+            ? row.uiAccesses
+                .filter((item) => !!item && typeof item === 'object')
+                .map((item) => ({
+                    moduleKey: typeof (item as { moduleKey?: unknown }).moduleKey === 'string'
+                        ? ((item as { moduleKey: string }).moduleKey)
+                        : '',
+                    level: typeof (item as { level?: unknown }).level === 'number'
+                        ? ((item as { level: number }).level)
+                        : 0,
+                }))
+                .filter((item) => item.moduleKey.length > 0 && item.level > 0)
+            : [],
+    };
+}
+
 export interface LoginRequest {
     email: string;
     password: string;
@@ -205,6 +366,11 @@ export interface User {
     pin?: string | null;
     role: string;
     workerId?: string | null;
+    useCustomUiAccess?: boolean;
+    uiAccesses?: Array<{
+        moduleKey: string;
+        level: number;
+    }>;
 }
 
 export interface ChangePasswordRequest {
@@ -218,6 +384,11 @@ export interface CreateUserRequest {
     password: string;
     role: string;
     workerId?: string | null;
+    useCustomUiAccess?: boolean;
+    uiAccesses?: Array<{
+        moduleKey: string;
+        level: number;
+    }>;
 }
 
 export interface UpdateUserRequest {
@@ -226,6 +397,11 @@ export interface UpdateUserRequest {
     role?: string;
     password?: string;
     workerId?: string | null;
+    useCustomUiAccess?: boolean;
+    uiAccesses?: Array<{
+        moduleKey: string;
+        level: number;
+    }>;
 }
 
 export interface Worker {
@@ -235,8 +411,40 @@ export interface Worker {
     pin?: string | null;
     capacityGram?: number | null;
     trainerId?: string | null;
+    trainer?: {
+        id: string;
+        name: string;
+    } | null;
     createdAt?: string;
     updatedAt?: string;
+}
+
+export interface TrainerWorkerOrderCandidate extends Worker {
+    hasActiveWorkOrder: boolean;
+    capacityStats?: {
+        monthlyDryInGram: number;
+        currentWeekDryInGram: number;
+        avgWeeklyDryInGram: number;
+        weeksWithSetoran: number;
+    };
+    activeWorkOrder?: {
+        id: string;
+        status: string;
+        linkedAt: string;
+    } | null;
+    pendingOrderCount: number;
+    pendingOrder?: {
+        id: string;
+        status: MitraOrderRequestStatus;
+        requestedGram: number;
+        createdAt: string;
+        requestedBy: {
+            id: string;
+            name: string;
+            role: MitraOrderRequesterRole;
+        };
+    } | null;
+    isOrderEligible: boolean;
 }
 
 export interface WorkerWeeklyStat {
@@ -279,6 +487,7 @@ export interface PecahBonHistoryQuery {
     from?: string;
     to?: string;
     search?: string;
+    order?: 'asc' | 'desc';
 }
 
 export type WorkLane = 'NEXT_DAY' | 'IN_PROGRESS' | 'READY_TO_SUBMIT';
@@ -288,6 +497,9 @@ export interface WorkOrderBoardItem {
     lotNumber: string;
     lane: WorkLane;
     status: string;
+    processState?: 'NEXT_DAY' | 'IN_PROGRESS' | 'DRYING' | 'DRYING_QC' | 'READY_TO_SUBMIT';
+    dryingStartedAt?: string | null;
+    dryingReadyAt?: string | null;
     grade?: {
         shape?: string | null;
         feather?: string | null;
@@ -385,6 +597,26 @@ export interface CreateMitraOrderRequest {
     note?: string;
 }
 
+export interface CreateTrainerBulkOrderRequest {
+    assignments: Array<{
+        workerId: string;
+        weightGram: number;
+        lpCount: number;
+    }>;
+    note?: string;
+    createIndividualRequests?: boolean;
+}
+
+export interface CreateTrainerBulkOrderResponse {
+    aggregateRequest: MitraOrderRequest;
+    workerRequests: MitraOrderRequest[];
+    summary: {
+        workerCount: number;
+        totalRequestedGram: number;
+        totalLp: number;
+    };
+}
+
 type ApiResponse<T> = {
     data: T;
     meta?: { timestamp: string };
@@ -444,7 +676,15 @@ export async function login(data: LoginRequest): Promise<LoginResponse> {
         }
 
         const json = await response.json();
-        return unwrap<LoginResponse>(json);
+        const payload = unwrap<{ user: unknown; token: string }>(json);
+        const user = normalizeUser(payload.user);
+        if (!user) {
+            throw new Error('Response login tidak valid');
+        }
+        return {
+            token: payload.token,
+            user,
+        };
     } catch (error) {
         console.error('Error logging in:', error);
         throw error;
@@ -470,7 +710,15 @@ export async function registerMitra(data: RegisterMitraRequest): Promise<LoginRe
         }
 
         const json = await response.json();
-        return unwrap<LoginResponse>(json);
+        const payload = unwrap<{ user: unknown; token: string }>(json);
+        const user = normalizeUser(payload.user);
+        if (!user) {
+            throw new Error('Response registrasi tidak valid');
+        }
+        return {
+            token: payload.token,
+            user,
+        };
     } catch (error) {
         console.error('Error registering mitra:', error);
         throw error;
@@ -528,7 +776,11 @@ export async function getProfile(): Promise<User> {
         }
 
         const json = await response.json();
-        return unwrap<User>(json);
+        const user = normalizeUser(unwrap<unknown>(json));
+        if (!user) {
+            throw new Error('Response user tidak valid');
+        }
+        return user;
     } catch (error) {
         console.error('Error fetching profile:', error);
         throw error;
@@ -546,7 +798,9 @@ export async function getUsers(): Promise<User[]> {
         }
 
         const json = await response.json();
-        return unwrap<User[]>(json);
+        return unwrap<unknown[]>(json)
+            .map((item) => normalizeUser(item))
+            .filter((item): item is User => item !== null);
     } catch (error) {
         console.error('Error fetching users:', error);
         throw error;
@@ -567,7 +821,11 @@ export async function createUser(data: CreateUserRequest): Promise<User> {
         }
 
         const json = await response.json();
-        return unwrap<User>(json);
+        const user = normalizeUser(unwrap<unknown>(json));
+        if (!user) {
+            throw new Error('Response user tidak valid');
+        }
+        return user;
     } catch (error) {
         console.error('Error creating user:', error);
         throw error;
@@ -588,7 +846,11 @@ export async function updateUser(userId: string, data: UpdateUserRequest): Promi
         }
 
         const json = await response.json();
-        return unwrap<User>(json);
+        const user = normalizeUser(unwrap<unknown>(json));
+        if (!user) {
+            throw new Error('Response user tidak valid');
+        }
+        return user;
     } catch (error) {
         console.error('Error updating user:', error);
         throw error;
@@ -878,10 +1140,66 @@ export async function createMitraOrderRequest(data: CreateMitraOrderRequest): Pr
     }
 }
 
+export async function createTrainerBulkOrderRequest(
+    data: CreateTrainerBulkOrderRequest
+): Promise<CreateTrainerBulkOrderResponse> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/mitra-orders/requests/trainer-bulk`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to create bulk request: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<CreateTrainerBulkOrderResponse>(json);
+    } catch (error) {
+        console.error('Error creating trainer bulk order request:', error);
+        throw error;
+    }
+}
+
+export async function getTrainerOrderWorkers(params?: {
+    trainerId?: string;
+    includeUnassigned?: boolean;
+}): Promise<TrainerWorkerOrderCandidate[]> {
+    try {
+        const url = new URL(`${API_BASE_URL}/api/mitra-orders/trainer/workers`);
+        if (params?.trainerId) url.searchParams.set('trainerId', params.trainerId);
+        if (params?.includeUnassigned) url.searchParams.set('includeUnassigned', 'true');
+
+        const response = await fetch(url.toString(), {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to fetch trainer workers: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<TrainerWorkerOrderCandidate[]>(json);
+    } catch (error) {
+        console.error('Error fetching trainer order workers:', error);
+        throw error;
+    }
+}
+
 export async function getMitraOrderRequests(params?: {
     workerId?: string;
     status?: MitraOrderRequestStatus;
     requestedByRole?: MitraOrderRequesterRole;
+    aggregateOnly?: boolean;
     limit?: number;
 }): Promise<MitraOrderRequest[]> {
     try {
@@ -889,6 +1207,7 @@ export async function getMitraOrderRequests(params?: {
         if (params?.workerId) url.searchParams.set('workerId', params.workerId);
         if (params?.status) url.searchParams.set('status', params.status);
         if (params?.requestedByRole) url.searchParams.set('requestedByRole', params.requestedByRole);
+        if (params?.aggregateOnly) url.searchParams.set('aggregateOnly', 'true');
         if (params?.limit) url.searchParams.set('limit', String(params.limit));
 
         const response = await fetch(url.toString(), {
@@ -1298,6 +1617,23 @@ export async function updateRawBatch(rawBatchId: string, data: RawBatchUpdateReq
     }
 }
 
+export async function deleteRawBatch(rawBatchId: string): Promise<void> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/baku/raw-batch/${rawBatchId}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Gagal menghapus batch: ${response.statusText}`);
+        }
+    } catch (error) {
+        console.error('Error deleting raw batch:', error);
+        throw error;
+    }
+}
+
 export async function mergeRawBatches(data: {
     sourceRawBatchIds: string[];
     supplierId: string;
@@ -1495,6 +1831,7 @@ export async function getPecahBonHistoryPaginated(
             from: query.from,
             to: query.to,
             search: query.search,
+            order: query.order,
         });
         const response = await fetch(`${API_BASE_URL}/api/baku/pecah-bon/history${queryString}`, {
             headers: getAuthHeaders({ json: false }),
@@ -1556,6 +1893,41 @@ export async function getRackLotsByCode(code: string): Promise<{
         return unwrap<{ location: RackLocation; lots: ProductionLot[] }>(json);
     } catch (error) {
         console.error('Error fetching rack lots:', error);
+        throw error;
+    }
+}
+
+export async function getRackLotsByCodePaginated(
+    code: string,
+    params?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        gradeId?: string;
+        printed?: 'all' | 'printed' | 'unprinted';
+    }
+): Promise<RackLotsPaginatedResponse> {
+    try {
+        const url = new URL(`${API_BASE_URL}/api/locations/code/${code}/lots/paginated`);
+        if (params?.page) url.searchParams.set('page', String(params.page));
+        if (params?.limit) url.searchParams.set('limit', String(params.limit));
+        if (params?.search) url.searchParams.set('search', params.search);
+        if (params?.gradeId) url.searchParams.set('gradeId', params.gradeId);
+        if (params?.printed) url.searchParams.set('printed', params.printed);
+
+        const response = await fetch(url.toString(), {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to fetch paginated rack lots: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<RackLotsPaginatedResponse>(json);
+    } catch (error) {
+        console.error('Error fetching paginated rack lots:', error);
         throw error;
     }
 }
@@ -1729,6 +2101,290 @@ export async function deletePecahBonPreset(id: string): Promise<void> {
     }
 }
 
+export async function getBarangJadiList(): Promise<BarangJadi[]> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/barang-jadi`, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to fetch barang jadi: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<unknown[]>(json)
+            .map((item) => normalizeBarangJadi(item))
+            .filter((item): item is BarangJadi => item !== null);
+    } catch (error) {
+        console.error('Error fetching barang jadi:', error);
+        throw error;
+    }
+}
+
+export async function createBarangJadi(data: {
+    name: string;
+    byProductTypeIds: string[];
+    resultGradeTypeIds: string[];
+}): Promise<BarangJadi> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/barang-jadi`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                name: data.name,
+                byProductTypeIds: sanitizeIdArray(data.byProductTypeIds),
+                resultGradeTypeIds: sanitizeIdArray(data.resultGradeTypeIds),
+            }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to create barang jadi: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        const normalized = normalizeBarangJadi(unwrap<unknown>(json));
+        if (!normalized) {
+            throw new Error('Response barang jadi tidak valid');
+        }
+        return normalized;
+    } catch (error) {
+        console.error('Error creating barang jadi:', error);
+        throw error;
+    }
+}
+
+export async function updateBarangJadi(id: string, data: {
+    name: string;
+    byProductTypeIds: string[];
+    resultGradeTypeIds: string[];
+}): Promise<BarangJadi> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/barang-jadi/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                name: data.name,
+                byProductTypeIds: sanitizeIdArray(data.byProductTypeIds),
+                resultGradeTypeIds: sanitizeIdArray(data.resultGradeTypeIds),
+            }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to update barang jadi: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        const normalized = normalizeBarangJadi(unwrap<unknown>(json));
+        if (!normalized) {
+            throw new Error('Response barang jadi tidak valid');
+        }
+        return normalized;
+    } catch (error) {
+        console.error('Error updating barang jadi:', error);
+        throw error;
+    }
+}
+
+export async function deleteBarangJadi(id: string): Promise<void> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/barang-jadi/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to delete barang jadi: ${response.statusText}`);
+        }
+    } catch (error) {
+        console.error('Error deleting barang jadi:', error);
+        throw error;
+    }
+}
+
+export async function getByProductTypes(): Promise<ByProductType[]> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/barang-jadi/by-products`, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to fetch by product types: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<unknown[]>(json)
+            .map((item) => normalizeByProductType(item))
+            .filter((item): item is ByProductType => item !== null);
+    } catch (error) {
+        console.error('Error fetching by product types:', error);
+        throw error;
+    }
+}
+
+export async function getResultGradeTypes(): Promise<ResultGradeType[]> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/barang-jadi/result-grades`, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to fetch result grade types: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<unknown[]>(json)
+            .map((item) => normalizeResultGradeType(item))
+            .filter((item): item is ResultGradeType => item !== null);
+    } catch (error) {
+        console.error('Error fetching result grade types:', error);
+        throw error;
+    }
+}
+
+export async function createByProductType(data: { name: string }): Promise<ByProductType> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/barang-jadi/by-products`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to create by product type: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        const normalized = normalizeByProductType(unwrap<unknown>(json));
+        if (!normalized) {
+            throw new Error('Response by product tidak valid');
+        }
+        return normalized;
+    } catch (error) {
+        if (!(error instanceof Error) || !error.message.toLowerCase().includes('sudah ada')) {
+            console.error('Error creating by product type:', error);
+        }
+        throw error;
+    }
+}
+
+export async function updateByProductType(id: string, data: { name: string }): Promise<ByProductType> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/barang-jadi/by-products/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to update by product type: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        const normalized = normalizeByProductType(unwrap<unknown>(json));
+        if (!normalized) {
+            throw new Error('Response by product tidak valid');
+        }
+        return normalized;
+    } catch (error) {
+        console.error('Error updating by product type:', error);
+        throw error;
+    }
+}
+
+export async function deleteByProductType(id: string): Promise<void> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/barang-jadi/by-products/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to delete by product type: ${response.statusText}`);
+        }
+    } catch (error) {
+        console.error('Error deleting by product type:', error);
+        throw error;
+    }
+}
+
+export async function createResultGradeType(data: { name: string }): Promise<ResultGradeType> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/barang-jadi/result-grades`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to create result grade type: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        const normalized = normalizeResultGradeType(unwrap<unknown>(json));
+        if (!normalized) {
+            throw new Error('Response grade hasil tidak valid');
+        }
+        return normalized;
+    } catch (error) {
+        if (!(error instanceof Error) || !error.message.toLowerCase().includes('sudah ada')) {
+            console.error('Error creating result grade type:', error);
+        }
+        throw error;
+    }
+}
+
+export async function updateResultGradeType(id: string, data: { name: string }): Promise<ResultGradeType> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/barang-jadi/result-grades/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to update result grade type: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        const normalized = normalizeResultGradeType(unwrap<unknown>(json));
+        if (!normalized) {
+            throw new Error('Response grade hasil tidak valid');
+        }
+        return normalized;
+    } catch (error) {
+        console.error('Error updating result grade type:', error);
+        throw error;
+    }
+}
+
+export async function deleteResultGradeType(id: string): Promise<void> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/barang-jadi/result-grades/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to delete result grade type: ${response.statusText}`);
+        }
+    } catch (error) {
+        console.error('Error deleting result grade type:', error);
+        throw error;
+    }
+}
+
 // ─── Manager Analytics API ────────────────────────────────────────
 
 export interface GradeUsageParams {
@@ -1788,6 +2444,50 @@ export interface CapacityResponse {
     buckets: BucketRow[];
 }
 
+export interface PayrollSummaryParams {
+    from?: string;
+    to?: string;
+    workerId?: string;
+}
+
+export interface PayrollSummaryRow {
+    workerId: string;
+    workerName: string;
+    items: number;
+    dryInGram: number;
+    mainOutWeightGram: number;
+    byProductWeightGram: number;
+    susutProsesGram: number;
+    susutHilangGram: number;
+    payrollAmountRp: number;
+    rendemenMainPctBps: number;
+    rendemenNetPctBps: number;
+    susutProsesPctBps: number;
+    susutHilangPctBps: number;
+}
+
+export interface PayrollSummaryResponse {
+    filters: {
+        from: string;
+        to: string;
+        workerId: string | null;
+    };
+    summary: {
+        items: number;
+        dryInGram: number;
+        mainOutWeightGram: number;
+        byProductWeightGram: number;
+        susutProsesGram: number;
+        susutHilangGram: number;
+        payrollAmountRp: number;
+        rendemenMainPctBps: number;
+        rendemenNetPctBps: number;
+        susutProsesPctBps: number;
+        susutHilangPctBps: number;
+    };
+    workers: PayrollSummaryRow[];
+}
+
 export async function getManagerGradeUsage(params: GradeUsageParams): Promise<GradeUsageResponse> {
     try {
         const url = new URL(`${API_BASE_URL}/api/analytics/manager/grade-usage`);
@@ -1836,3 +2536,361 @@ export async function getManagerCapacity(params: CapacityParams): Promise<Capaci
         throw error;
     }
 }
+
+export async function getPayrollSummary(params: PayrollSummaryParams): Promise<PayrollSummaryResponse> {
+    try {
+        const url = new URL(`${API_BASE_URL}/api/payroll/summary`);
+        if (params.from) url.searchParams.set('from', params.from);
+        if (params.to) url.searchParams.set('to', params.to);
+        if (params.workerId) url.searchParams.set('workerId', params.workerId);
+
+        const response = await fetch(url.toString(), {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to fetch payroll summary: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<PayrollSummaryResponse>(json);
+    } catch (error) {
+        console.error('Error fetching payroll summary:', error);
+        throw error;
+    }
+}
+
+export interface FinishWorkItemLookup {
+    workOrderItemId: string;
+    workOrderId: string;
+    workOrderStatus: string;
+    workOrderItemStatus: string;
+    lane: string;
+    noLp: string;
+    lotNumber: string;
+    pecahBonId?: string | null;
+    workerId: string;
+    workerName: string;
+    grade: string;
+    dryInGram: number;
+    wetWeightGram: number;
+    moisturePercent: number;
+    submittedAt?: string | null;
+    flowState:
+        | 'NEXT_DAY'
+        | 'IN_PROGRESS'
+        | 'DRYING'
+        | 'DRYING_QC'
+        | 'READY_TO_SUBMIT'
+        | 'SUBMITTED'
+        | 'CANCELED';
+    dryingStartedAt?: string | null;
+    dryingReadyAt?: string | null;
+    dryCheckedAt?: string | null;
+    dryingRemainingMinutes?: number;
+    canSubmit: boolean;
+}
+
+export interface FinishSubmitPayload {
+    workOrderItemId: string;
+    barangJadiId?: string;
+    returnedAt: string;
+    mainOutWeightGram: number;
+    byProductWeightGram: number;
+    notes?: string;
+    resultGrades?: Array<{
+        resultGradeTypeId: string;
+        weightGram: number;
+    }>;
+}
+
+export interface FinishSubmitResponse {
+    lotNumber: string;
+    barangJadi?: {
+        id: string;
+        name: string;
+    } | null;
+    resultGrades: Array<{
+        id: string;
+        name: string;
+        weightGram: number;
+    }>;
+    dryInGram: number;
+    mainOutGram: number;
+    byProductGram: number;
+    susutProsesGram: number;
+    susutHilangGram: number;
+    susutProsesPctBps: number;
+    susutHilangPctBps: number;
+    rendemenMainPctBps: number;
+    rendemenNetPctBps: number;
+    payroll: {
+        baseGram: number;
+        byProductCoefficientPercent: number;
+        rateRpPerGram: number;
+        amountRp: number;
+    };
+}
+
+export interface FinishReceiptListItem {
+    id: string;
+    workOrderItemId: string;
+    returnedAt: string;
+    noLp: string;
+    lotNumber: string;
+    barangJadi?: {
+        id: string;
+        name: string;
+    } | null;
+    resultGrades: Array<{
+        id: string;
+        name: string;
+        weightGram: number;
+    }>;
+    workerId: string;
+    workerName: string;
+    grade: string;
+    dryInGram: number;
+    mainOutWeightGram: number;
+    byProductWeightGram: number;
+    susutProsesGram: number;
+    susutHilangGram: number;
+    susutProsesPctBps: number;
+    susutHilangPctBps: number;
+    notes?: string | null;
+    payroll?: {
+        id: string;
+        rateRpPerGram: number;
+        amountRp: number;
+    } | null;
+}
+
+export interface QueryFinishReceipts {
+    page?: number;
+    limit?: number;
+    search?: string;
+    from?: string;
+    to?: string;
+    order?: 'asc' | 'desc';
+}
+
+export interface UpdateFinishReceiptPayload {
+    returnedAt?: string;
+    barangJadiId?: string;
+    mainOutWeightGram?: number;
+    byProductWeightGram?: number;
+    notes?: string;
+    resultGrades?: Array<{
+        resultGradeTypeId: string;
+        weightGram: number;
+    }>;
+}
+
+export interface UpdateFinishReceiptResponse {
+    id: string;
+    workOrderItemId: string;
+    returnedAt: string;
+    barangJadi?: {
+        id: string;
+        name: string;
+    } | null;
+    resultGrades: Array<{
+        id: string;
+        name: string;
+        weightGram: number;
+    }>;
+    mainOutWeightGram: number;
+    byProductWeightGram: number;
+    dryInGram: number;
+    susutProsesGram: number;
+    susutHilangGram: number;
+    susutProsesPctBps: number;
+    susutHilangPctBps: number;
+    rendemenMainPctBps: number;
+    rendemenNetPctBps: number;
+    notes?: string | null;
+    payroll: {
+        baseGram: number;
+        byProductCoefficientPercent: number;
+        rateRpPerGram: number;
+        amountRp: number;
+    };
+}
+
+export async function getFinishWorkItemByLp(lpCode: string): Promise<FinishWorkItemLookup> {
+    try {
+        const safeCode = encodeURIComponent(lpCode.trim());
+        const response = await fetch(`${API_BASE_URL}/api/finish/work-item/by-lp/${safeCode}`, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to fetch work item by LP: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<FinishWorkItemLookup>(json);
+    } catch (error) {
+        console.error('Error fetching finish work item:', error);
+        throw error;
+    }
+}
+
+export async function submitFinishSetoran(payload: FinishSubmitPayload): Promise<FinishSubmitResponse> {
+    try {
+        const resultGrades = Array.isArray(payload.resultGrades)
+            ? payload.resultGrades
+                .map((item) => ({
+                    resultGradeTypeId: typeof item?.resultGradeTypeId === 'string' ? item.resultGradeTypeId.trim() : '',
+                    weightGram: Math.max(0, Math.round(Number(item?.weightGram ?? 0))),
+                }))
+                .filter((item) => item.resultGradeTypeId.length > 0 && item.weightGram > 0)
+            : undefined;
+        const response = await fetch(`${API_BASE_URL}/api/finish`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                ...payload,
+                resultGrades,
+            }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to submit setoran: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<FinishSubmitResponse>(json);
+    } catch (error) {
+        console.error('Error submitting finish setoran:', error);
+        throw error;
+    }
+}
+
+export async function getFinishReceipts(query: QueryFinishReceipts = {}): Promise<PaginatedResult<FinishReceiptListItem>> {
+    try {
+        const queryString = buildQueryString({
+            page: query.page,
+            limit: query.limit,
+            search: query.search,
+            from: query.from,
+            to: query.to,
+            order: query.order,
+        });
+        const response = await fetch(`${API_BASE_URL}/api/finish/receipts${queryString}`, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to fetch finish receipts: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<PaginatedResult<FinishReceiptListItem>>(json);
+    } catch (error) {
+        console.error('Error fetching finish receipts:', error);
+        throw error;
+    }
+}
+
+export async function updateFinishReceipt(receiptId: string, payload: UpdateFinishReceiptPayload): Promise<UpdateFinishReceiptResponse> {
+    try {
+        const resultGrades = Array.isArray(payload.resultGrades)
+            ? payload.resultGrades
+                .map((item) => ({
+                    resultGradeTypeId: typeof item?.resultGradeTypeId === 'string' ? item.resultGradeTypeId.trim() : '',
+                    weightGram: Math.max(0, Math.round(Number(item?.weightGram ?? 0))),
+                }))
+                .filter((item) => item.resultGradeTypeId.length > 0 && item.weightGram > 0)
+            : undefined;
+        const response = await fetch(`${API_BASE_URL}/api/finish/receipts/${encodeURIComponent(receiptId)}`, {
+            method: 'PATCH',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                ...payload,
+                resultGrades,
+            }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to update finish receipt: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<UpdateFinishReceiptResponse>(json);
+    } catch (error) {
+        console.error('Error updating finish receipt:', error);
+        throw error;
+    }
+}
+
+export async function deleteFinishReceipt(receiptId: string): Promise<{
+    id: string;
+    workOrderItemId: string;
+    restoredToLane: string;
+    restoredLocationCode: string;
+}> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/finish/receipts/${encodeURIComponent(receiptId)}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to delete finish receipt: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<{
+            id: string;
+            workOrderItemId: string;
+            restoredToLane: string;
+            restoredLocationCode: string;
+        }>(json);
+    } catch (error) {
+        console.error('Error deleting finish receipt:', error);
+        throw error;
+    }
+}
+
+export async function completeDryQcWorkItem(workOrderItemId: string): Promise<void> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/work-items/${encodeURIComponent(workOrderItemId)}/complete-dry-qc`, {
+            method: 'POST',
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const message = Array.isArray(errorData?.message)
+                ? errorData.message.join(' ')
+                : errorData?.message;
+            throw new Error(message || `Failed to complete dry QC: ${response.statusText}`);
+        }
+    } catch (error) {
+        console.error('Error completing dry QC:', error);
+        throw error;
+    }
+}
+
