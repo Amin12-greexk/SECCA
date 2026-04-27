@@ -15,6 +15,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/lib/toast';
+import { UI_ACCESS_MODULES } from '@/lib/access-control';
+import type { UiAccessModuleKey } from '@/lib/types/auth';
 import {
   createUser,
   createWorker,
@@ -27,6 +29,23 @@ import {
 } from '@/lib/api';
 
 type RoleOption = 'baku' | 'mitra' | 'koreksi' | 'manager' | 'trainer';
+type UiAccessDraft = Partial<Record<UiAccessModuleKey, number>>;
+
+function buildUiAccessDraft(
+  uiAccesses: Array<{ moduleKey: string; level: number }> | undefined,
+): UiAccessDraft {
+  return (uiAccesses ?? []).reduce<UiAccessDraft>((acc, item) => {
+    acc[item.moduleKey as UiAccessModuleKey] = item.level;
+    return acc;
+  }, {});
+}
+
+function serializeUiAccessDraft(draft: UiAccessDraft) {
+  return Object.entries(draft)
+    .filter((entry): entry is [UiAccessModuleKey, number] => typeof entry[1] === 'number' && entry[1] > 0)
+    .map(([moduleKey, level]) => ({ moduleKey, level }))
+    .sort((left, right) => left.moduleKey.localeCompare(right.moduleKey));
+}
 
 function UsersContent() {
   const toast = useToast();
@@ -45,6 +64,8 @@ function UsersContent() {
     role: '' as RoleOption | '',
     workerId: '' as string | '',
     pin: '',
+    useCustomUiAccess: false,
+    uiAccessDraft: {} as UiAccessDraft,
   });
   const [editForm, setEditForm] = useState({
     name: '',
@@ -53,6 +74,8 @@ function UsersContent() {
     role: '' as RoleOption | '',
     workerId: '' as string | '',
     pin: '',
+    useCustomUiAccess: false,
+    uiAccessDraft: {} as UiAccessDraft,
   });
 
   const loadUsers = async () => {
@@ -113,9 +136,20 @@ function UsersContent() {
         password: form.password,
         role: form.role,
         workerId,
+        useCustomUiAccess: form.useCustomUiAccess,
+        uiAccesses: serializeUiAccessDraft(form.uiAccessDraft),
       });
       toast.success('Akun berhasil dibuat.');
-      setForm({ name: '', email: '', password: '', role: '', workerId: '', pin: '' });
+      setForm({
+        name: '',
+        email: '',
+        password: '',
+        role: '',
+        workerId: '',
+        pin: '',
+        useCustomUiAccess: false,
+        uiAccessDraft: {},
+      });
       await loadUsers();
       await loadWorkers();
     } catch (error) {
@@ -135,6 +169,8 @@ function UsersContent() {
       role: (user.role as RoleOption) ?? '',
       workerId: user.workerId ?? '',
       pin: worker?.pin ?? '',
+      useCustomUiAccess: user.useCustomUiAccess ?? false,
+      uiAccessDraft: buildUiAccessDraft(user.uiAccesses),
     });
     setEditOpen(true);
   };
@@ -169,6 +205,8 @@ function UsersContent() {
         role: editForm.role,
         password: editForm.password ? editForm.password : undefined,
         workerId,
+        useCustomUiAccess: editForm.useCustomUiAccess,
+        uiAccesses: serializeUiAccessDraft(editForm.uiAccessDraft),
       });
       toast.success('Akun berhasil diperbarui.');
       setEditOpen(false);
@@ -283,6 +321,69 @@ function UsersContent() {
                   />
                 </div>
               )}
+              <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <Label className="text-sm font-semibold text-gray-900">Akses UI per User</Label>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Aktifkan jika menu user ini ingin diatur khusus dan tidak mengikuti default role.
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={form.useCustomUiAccess}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          useCustomUiAccess: event.target.checked,
+                        }))
+                      }
+                    />
+                    Aktif
+                  </label>
+                </div>
+
+                {form.useCustomUiAccess ? (
+                  <div className="space-y-3">
+                    {UI_ACCESS_MODULES.map((module) => (
+                      <div
+                        key={module.key}
+                        className="rounded-lg border border-gray-200 bg-white p-3"
+                      >
+                        <div className="mb-2">
+                          <p className="text-sm font-medium text-gray-900">{module.label}</p>
+                          <p className="text-xs text-gray-500">{module.description}</p>
+                        </div>
+                        <select
+                          className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#059833]"
+                          value={String(form.uiAccessDraft[module.key] ?? 0)}
+                          onChange={(event) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              uiAccessDraft: {
+                                ...prev.uiAccessDraft,
+                                [module.key]: Number(event.target.value),
+                              },
+                            }))
+                          }
+                        >
+                          <option value="0">Tidak ditampilkan</option>
+                          {module.levels.map((level) => (
+                            <option key={level.level} value={String(level.level)}>
+                              Level {level.level} - {level.label}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="mt-2 text-xs text-gray-500">
+                          {module.levels.find((level) => level.level === (form.uiAccessDraft[module.key] ?? 0))
+                            ?.description ?? 'Menu ini disembunyikan.'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
               <Button className="w-full" onClick={handleCreate} disabled={saving}>
                 {saving ? 'Menyimpan...' : 'Simpan Akun'}
               </Button>
@@ -324,7 +425,14 @@ function UsersContent() {
                       <tr key={user.id} className="text-gray-700">
                         <td className="py-2 font-medium">{user.name}</td>
                         <td className="py-2">{user.email}</td>
-                        <td className="py-2 capitalize">{user.role}</td>
+                        <td className="py-2">
+                          <div className="flex flex-col">
+                            <span className="capitalize">{user.role}</span>
+                            {user.useCustomUiAccess ? (
+                              <span className="text-xs text-[#059833]">Akses UI khusus</span>
+                            ) : null}
+                          </div>
+                        </td>
                         <td className="py-2 text-right">
                           <Button variant="outline" size="sm" onClick={() => openEdit(user)}>
                             Edit
@@ -434,6 +542,69 @@ function UsersContent() {
                 />
               </div>
             )}
+            <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <Label className="text-sm font-semibold text-gray-900">Akses UI per User</Label>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Jika aktif, menu dan halaman user ini memakai akses khusus dan tidak lagi mengikuti default role.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={editForm.useCustomUiAccess}
+                    onChange={(event) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        useCustomUiAccess: event.target.checked,
+                      }))
+                    }
+                  />
+                  Aktif
+                </label>
+              </div>
+
+              {editForm.useCustomUiAccess ? (
+                <div className="space-y-3">
+                  {UI_ACCESS_MODULES.map((module) => (
+                    <div
+                      key={module.key}
+                      className="rounded-lg border border-gray-200 bg-white p-3"
+                    >
+                      <div className="mb-2">
+                        <p className="text-sm font-medium text-gray-900">{module.label}</p>
+                        <p className="text-xs text-gray-500">{module.description}</p>
+                      </div>
+                      <select
+                        className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#059833]"
+                        value={String(editForm.uiAccessDraft[module.key] ?? 0)}
+                        onChange={(event) =>
+                          setEditForm((prev) => ({
+                            ...prev,
+                            uiAccessDraft: {
+                              ...prev.uiAccessDraft,
+                              [module.key]: Number(event.target.value),
+                            },
+                          }))
+                        }
+                      >
+                        <option value="0">Tidak ditampilkan</option>
+                        {module.levels.map((level) => (
+                          <option key={level.level} value={String(level.level)}>
+                            Level {level.level} - {level.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-2 text-xs text-gray-500">
+                        {module.levels.find((level) => level.level === (editForm.uiAccessDraft[module.key] ?? 0))
+                          ?.description ?? 'Menu ini disembunyikan.'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>

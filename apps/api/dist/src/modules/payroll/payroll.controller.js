@@ -8,12 +8,16 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PayrollController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const roles_decorator_1 = require("../../auth/roles.decorator");
 const payroll_service_1 = require("./payroll.service");
+const payroll_summary_query_dto_1 = require("./dto/payroll-summary-query.dto");
 let PayrollController = class PayrollController {
     payrollService;
     constructor(payrollService) {
@@ -21,6 +25,9 @@ let PayrollController = class PayrollController {
     }
     findAll() {
         return this.payrollService.findAll();
+    }
+    getSummary(query) {
+        return this.payrollService.getSummary(query);
     }
 };
 exports.PayrollController = PayrollController;
@@ -30,6 +37,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], PayrollController.prototype, "findAll", null);
+__decorate([
+    (0, common_1.Get)("summary"),
+    __param(0, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [payroll_summary_query_dto_1.PayrollSummaryQueryDto]),
+    __metadata("design:returntype", void 0)
+], PayrollController.prototype, "getSummary", null);
 exports.PayrollController = PayrollController = __decorate([
     (0, swagger_1.ApiTags)("payroll"),
     (0, swagger_1.ApiBearerAuth)(),

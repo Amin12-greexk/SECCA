@@ -5,6 +5,7 @@ export declare class TraceabilityService {
     traceLot(lotNumber: string): Promise<{
         lotNumber: string;
         sources: {
+            sourceRawBatchNumber: string;
             supplier: {
                 id: string;
                 name: string;
@@ -14,4 +15,5 @@ export declare class TraceabilityService {
             wetAllocatedGram: number;
         }[];
     }>;
+    private resolveEffectiveRawBatch;
 }

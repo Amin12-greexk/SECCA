@@ -30,6 +30,13 @@ let AuthService = class AuthService {
                 worker: {
                     select: { pin: true },
                 },
+                uiAccesses: {
+                    select: {
+                        moduleKey: true,
+                        level: true,
+                    },
+                    orderBy: { moduleKey: "asc" },
+                },
             },
         });
         if (!user) {
@@ -94,6 +101,13 @@ let AuthService = class AuthService {
                         worker: {
                             select: { pin: true },
                         },
+                        uiAccesses: {
+                            select: {
+                                moduleKey: true,
+                                level: true,
+                            },
+                            orderBy: { moduleKey: "asc" },
+                        },
                     },
                 });
             });
@@ -128,6 +142,13 @@ let AuthService = class AuthService {
                 worker: {
                     select: { pin: true },
                 },
+                uiAccesses: {
+                    select: {
+                        moduleKey: true,
+                        level: true,
+                    },
+                    orderBy: { moduleKey: "asc" },
+                },
             },
         });
         if (!user) {
@@ -141,6 +162,8 @@ let AuthService = class AuthService {
             role: user.role.toLowerCase(),
             workerId: user.workerId ?? null,
             pin: user.worker?.pin ?? null,
+            useCustomUiAccess: user.useCustomUiAccess,
+            uiAccesses: user.uiAccesses,
         };
     }
     async changePassword(userId, dto) {
@@ -190,6 +213,8 @@ let AuthService = class AuthService {
                 role: user.role.toLowerCase(),
                 workerId: user.workerId ?? null,
                 pin: user.worker?.pin ?? null,
+                useCustomUiAccess: user.useCustomUiAccess,
+                uiAccesses: user.uiAccesses ?? [],
             },
             token,
         };

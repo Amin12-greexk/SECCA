@@ -14,12 +14,15 @@ const common_1 = require("@nestjs/common");
 const jwt_1 = require("@nestjs/jwt");
 const core_1 = require("@nestjs/core");
 const auth_constants_1 = require("./auth.constants");
+const prisma_service_1 = require("../prisma/prisma.service");
 let JwtAuthGuard = class JwtAuthGuard {
     jwtService;
     reflector;
-    constructor(jwtService, reflector) {
+    prisma;
+    constructor(jwtService, reflector, prisma) {
         this.jwtService = jwtService;
         this.reflector = reflector;
+        this.prisma = prisma;
     }
     async canActivate(context) {
         const isPublic = this.reflector.getAllAndOverride(auth_constants_1.IS_PUBLIC_KEY, [
@@ -39,7 +42,30 @@ let JwtAuthGuard = class JwtAuthGuard {
         }
         try {
             const payload = await this.jwtService.verifyAsync(token);
-            request.user = payload;
+            const appUser = await this.prisma.appUser.findUnique({
+                where: { id: payload.sub },
+                select: {
+                    id: true,
+                    role: true,
+                    useCustomUiAccess: true,
+                    uiAccesses: {
+                        select: {
+                            moduleKey: true,
+                            level: true,
+                        },
+                    },
+                },
+            });
+            if (!appUser) {
+                return false;
+            }
+            request.user = {
+                ...payload,
+                sub: appUser.id,
+                role: appUser.role.toLowerCase(),
+                useCustomUiAccess: appUser.useCustomUiAccess,
+                uiAccesses: appUser.uiAccesses,
+            };
             return true;
         }
         catch {
@@ -51,6 +77,7 @@ exports.JwtAuthGuard = JwtAuthGuard;
 exports.JwtAuthGuard = JwtAuthGuard = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [jwt_1.JwtService,
-        core_1.Reflector])
+        core_1.Reflector,
+        prisma_service_1.PrismaService])
 ], JwtAuthGuard);
 //# sourceMappingURL=jwt-auth.guard.js.map

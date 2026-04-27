@@ -3,16 +3,215 @@ import { MitraOrderRequestStatus, Prisma } from "@prisma/client";
 import { badRequest, conflict, notFound, unprocessable } from "../../common/errors";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateMitraOrderRequestDto } from "./dto/create-mitra-order-request.dto";
+import { CreateTrainerBulkOrderDto } from "./dto/create-trainer-bulk-order.dto";
 import { QueryMitraOrderRequestDto } from "./dto/query-mitra-order-request.dto";
+import { QueryTrainerWorkersDto } from "./dto/query-trainer-workers.dto";
 
 type AuthActor = {
   sub?: string;
   role?: string;
 };
 
+type WorkerCapacityStats = {
+  monthlyDryInGram: number;
+  currentWeekDryInGram: number;
+  avgWeeklyDryInGram: number;
+  weeksWithSetoran: number;
+};
+
 @Injectable()
 export class MitraOrdersService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async listTrainerWorkers(query: QueryTrainerWorkersDto, actor: AuthActor) {
+    const actorUser = await this.resolveActor(actor);
+    const actorRole = actorUser.role.toLowerCase();
+
+    let trainerId = query.trainerId ?? undefined;
+    if (actorRole === "trainer") {
+      trainerId = actorUser.id;
+    }
+
+    const workerWhere: Prisma.WorkerWhereInput = {};
+    if (trainerId && query.includeUnassigned) {
+      workerWhere.OR = [{ trainerId }, { trainerId: null }];
+    } else if (trainerId) {
+      workerWhere.trainerId = trainerId;
+    } else if (!query.includeUnassigned) {
+      workerWhere.trainerId = { not: null };
+    }
+
+    const workers = await this.prisma.worker.findMany({
+      where: workerWhere,
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        pin: true,
+        capacityGram: true,
+        trainerId: true,
+        trainer: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: [{ trainerId: "asc" }, { name: "asc" }],
+    });
+
+    if (workers.length === 0) {
+      return [];
+    }
+
+    const workerIds = workers.map((worker) => worker.id);
+    const now = new Date();
+    const monthStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0),
+    );
+    const nextMonthStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0),
+    );
+    const currentWeekStart = this.startOfWeekUtc(now);
+
+    const [activeOrders, pendingOrders, receipts] = await Promise.all([
+      this.prisma.workerActiveWorkOrder.findMany({
+        where: { workerId: { in: workerIds } },
+        select: {
+          workerId: true,
+          workOrderId: true,
+          createdAt: true,
+          workOrder: {
+            select: {
+              id: true,
+              status: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+        },
+      }),
+      this.prisma.mitraOrderRequest.findMany({
+        where: {
+          workerId: { in: workerIds },
+          status: { in: [MitraOrderRequestStatus.REQUESTED, MitraOrderRequestStatus.APPROVED] },
+        },
+        orderBy: [{ createdAt: "desc" }],
+        select: {
+          id: true,
+          workerId: true,
+          status: true,
+          requestedGram: true,
+          createdAt: true,
+          requestedBy: {
+            select: {
+              id: true,
+              name: true,
+              role: true,
+            },
+          },
+        },
+      }),
+      this.prisma.finishReceipt.findMany({
+        where: {
+          returnedAt: { gte: monthStart, lt: nextMonthStart },
+          workOrderItem: {
+            workOrder: {
+              workerId: { in: workerIds },
+            },
+          },
+        },
+        select: {
+          dryInGram: true,
+          returnedAt: true,
+          workOrderItem: {
+            select: {
+              workOrder: {
+                select: {
+                  workerId: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const activeByWorker = new Map(activeOrders.map((row) => [row.workerId, row]));
+    const pendingByWorker = new Map<string, typeof pendingOrders>();
+    pendingOrders.forEach((order) => {
+      if (!order.workerId) return;
+      const list = pendingByWorker.get(order.workerId) ?? [];
+      list.push(order);
+      pendingByWorker.set(order.workerId, list);
+    });
+    const capacityByWorker = new Map<string, WorkerCapacityStats>();
+    receipts.forEach((receipt) => {
+      const workerId = receipt.workOrderItem.workOrder.workerId;
+      const current = capacityByWorker.get(workerId) ?? {
+        monthlyDryInGram: 0,
+        currentWeekDryInGram: 0,
+        avgWeeklyDryInGram: 0,
+        weeksWithSetoran: 0,
+      };
+      current.monthlyDryInGram += receipt.dryInGram;
+      if (receipt.returnedAt >= currentWeekStart) {
+        current.currentWeekDryInGram += receipt.dryInGram;
+      }
+      const weekKey = this.startOfWeekUtc(receipt.returnedAt).toISOString();
+      const weeksSet = (current as WorkerCapacityStats & { _weeks?: Set<string> })._weeks ?? new Set<string>();
+      weeksSet.add(weekKey);
+      (current as WorkerCapacityStats & { _weeks?: Set<string> })._weeks = weeksSet;
+      capacityByWorker.set(workerId, current);
+    });
+
+    return workers.map((worker) => {
+      const activeOrder = activeByWorker.get(worker.id) ?? null;
+      const pending = pendingByWorker.get(worker.id) ?? [];
+      const latestPending = pending[0] ?? null;
+      const capacity = capacityByWorker.get(worker.id);
+      const weeksWithSetoran =
+        (capacity as WorkerCapacityStats & { _weeks?: Set<string> } | undefined)?._weeks
+          ?.size ?? 0;
+      const monthlyDryInGram = capacity?.monthlyDryInGram ?? 0;
+      const currentWeekDryInGram = capacity?.currentWeekDryInGram ?? 0;
+      const avgWeeklyDryInGram =
+        weeksWithSetoran > 0
+          ? Math.round((monthlyDryInGram / weeksWithSetoran) * 100) / 100
+          : 0;
+
+      return {
+        ...worker,
+        hasActiveWorkOrder: Boolean(activeOrder),
+        activeWorkOrder: activeOrder
+          ? {
+              id: activeOrder.workOrder.id,
+              status: activeOrder.workOrder.status,
+              linkedAt: activeOrder.createdAt,
+            }
+          : null,
+        pendingOrderCount: pending.length,
+        pendingOrder: latestPending
+          ? {
+              id: latestPending.id,
+              status: latestPending.status,
+              requestedGram: latestPending.requestedGram,
+              createdAt: latestPending.createdAt,
+              requestedBy: latestPending.requestedBy,
+            }
+          : null,
+        isOrderEligible: !activeOrder && pending.length === 0,
+        capacityStats: {
+          monthlyDryInGram,
+          currentWeekDryInGram,
+          avgWeeklyDryInGram,
+          weeksWithSetoran,
+        },
+      };
+    });
+  }
 
   async create(dto: CreateMitraOrderRequestDto, actor: AuthActor) {
     const actorUser = await this.resolveActor(actor);
@@ -71,40 +270,286 @@ export class MitraOrdersService {
       return badRequest("Target gram order harus lebih dari 0");
     }
 
-    if (actorRole === "trainer" && worker && worker.trainerId !== actorUser.id) {
+    if (
+      actorRole === "trainer" &&
+      worker &&
+      worker.trainerId &&
+      worker.trainerId !== actorUser.id
+    ) {
       return conflict("Trainer hanya boleh membuat order untuk mitra binaannya", {
         workerId: worker.id,
       });
     }
 
-    if (worker && worker.capacityGram != null && requestedGram > worker.capacityGram) {
-      return conflict("Melebihi kapasitas worker", {
-        capacityGram: worker.capacityGram,
-        requestedGram,
-      });
+    if (worker) {
+      const [activeOrder, pendingRequest] = await Promise.all([
+        this.prisma.workerActiveWorkOrder.findUnique({
+          where: { workerId: worker.id },
+          select: { workOrderId: true },
+        }),
+        this.prisma.mitraOrderRequest.findFirst({
+          where: {
+            workerId: worker.id,
+            status: {
+              in: [MitraOrderRequestStatus.REQUESTED, MitraOrderRequestStatus.APPROVED],
+            },
+          },
+          select: { id: true, status: true },
+        }),
+      ]);
+
+      if (activeOrder) {
+        return conflict("Mitra masih memiliki work order aktif", {
+          workerId: worker.id,
+          workOrderId: activeOrder.workOrderId,
+        });
+      }
+
+      if (pendingRequest) {
+        return conflict("Mitra masih memiliki order pending", {
+          workerId: worker.id,
+          requestId: pendingRequest.id,
+          status: pendingRequest.status,
+        });
+      }
     }
 
-    const request = await this.prisma.mitraOrderRequest.create({
-      data: {
-        workerId: worker?.id ?? null,
-        requestedByUserId: actorUser.id,
-        requestedGram,
-        note: dto.note?.trim() || null,
-        lines:
-          normalizedLines.length > 0
-            ? {
-                create: normalizedLines,
-              }
-            : undefined,
-      },
-      include: {
-        worker: { select: { id: true, name: true, code: true, capacityGram: true } },
-        requestedBy: { select: { id: true, name: true, role: true } },
-        lines: { orderBy: { sequence: "asc" } },
-      },
+    const request = await this.prisma.$transaction(async (tx) => {
+      if (actorRole === "trainer" && worker && !worker.trainerId) {
+        await tx.worker.update({
+          where: { id: worker.id },
+          data: { trainerId: actorUser.id },
+        });
+      }
+
+      return tx.mitraOrderRequest.create({
+        data: {
+          workerId: worker?.id ?? null,
+          requestedByUserId: actorUser.id,
+          requestedGram,
+          note: dto.note?.trim() || null,
+          lines:
+            normalizedLines.length > 0
+              ? {
+                  create: normalizedLines,
+                }
+              : undefined,
+        },
+        include: {
+          worker: { select: { id: true, name: true, code: true, capacityGram: true } },
+          requestedBy: { select: { id: true, name: true, role: true } },
+          lines: { orderBy: { sequence: "asc" } },
+        },
+      });
     });
 
     return request;
+  }
+
+  async createTrainerBulk(dto: CreateTrainerBulkOrderDto, actor: AuthActor) {
+    const actorUser = await this.resolveActor(actor);
+    const actorRole = actorUser.role.toLowerCase();
+    if (actorRole !== "trainer" && actorRole !== "manager") {
+      return conflict("Hanya trainer/manager yang boleh membuat order bulk", {
+        role: actorUser.role,
+      });
+    }
+
+    const uniqueWorkerIds = new Set(dto.assignments.map((entry) => entry.workerId));
+    if (uniqueWorkerIds.size !== dto.assignments.length) {
+      return badRequest("Duplikasi worker pada assignment bulk");
+    }
+
+    const normalizedAssignments = dto.assignments.map((entry) => {
+      const weightGram = Math.round(Number(entry.weightGram));
+      const lpCount = Math.round(Number(entry.lpCount));
+      if (!Number.isFinite(weightGram) || weightGram <= 0) {
+        return badRequest("Berat per LP tidak valid", {
+          workerId: entry.workerId,
+          weightGram: entry.weightGram,
+        });
+      }
+      if (!Number.isFinite(lpCount) || lpCount <= 0) {
+        return badRequest("Jumlah LP tidak valid", {
+          workerId: entry.workerId,
+          lpCount: entry.lpCount,
+        });
+      }
+      return {
+        workerId: entry.workerId,
+        weightGram,
+        lpCount,
+        requestedGram: weightGram * lpCount,
+      };
+    });
+
+    const workerIds = Array.from(uniqueWorkerIds);
+    const workers = await this.prisma.worker.findMany({
+      where: { id: { in: workerIds } },
+      select: {
+        id: true,
+        name: true,
+        trainerId: true,
+        capacityGram: true,
+      },
+    });
+
+    if (workers.length !== workerIds.length) {
+      const workerMap = new Set(workers.map((worker) => worker.id));
+      const missing = workerIds.filter((id) => !workerMap.has(id));
+      return notFound("Worker not found", { workerIds: missing });
+    }
+
+    if (actorRole === "trainer") {
+      const forbidden = workers.filter(
+        (worker) => worker.trainerId && worker.trainerId !== actorUser.id,
+      );
+      if (forbidden.length > 0) {
+        return conflict("Trainer hanya boleh membuat order untuk mitra binaannya", {
+          workerIds: forbidden.map((worker) => worker.id),
+        });
+      }
+    }
+
+    const [activeOrders, pendingWorkerOrders] = await Promise.all([
+      this.prisma.workerActiveWorkOrder.findMany({
+        where: { workerId: { in: workerIds } },
+        select: {
+          workerId: true,
+          workOrderId: true,
+        },
+      }),
+      this.prisma.mitraOrderRequest.findMany({
+        where: {
+          workerId: { in: workerIds },
+          status: {
+            in: [MitraOrderRequestStatus.REQUESTED, MitraOrderRequestStatus.APPROVED],
+          },
+        },
+        select: {
+          id: true,
+          workerId: true,
+          status: true,
+          requestedGram: true,
+        },
+      }),
+    ]);
+
+    if (activeOrders.length > 0) {
+      return conflict("Masih ada mitra dengan work order aktif", {
+        workers: activeOrders.map((row) => ({
+          workerId: row.workerId,
+          workOrderId: row.workOrderId,
+        })),
+      });
+    }
+
+    if (pendingWorkerOrders.length > 0) {
+      return conflict("Masih ada order mitra pending/approved", {
+        workers: pendingWorkerOrders.map((row) => ({
+          workerId: row.workerId,
+          requestId: row.id,
+          status: row.status,
+          requestedGram: row.requestedGram,
+        })),
+      });
+    }
+
+    const groupedLineMap = new Map<number, number>();
+    let totalRequestedGram = 0;
+    let totalLp = 0;
+    normalizedAssignments.forEach((assignment) => {
+      groupedLineMap.set(
+        assignment.weightGram,
+        (groupedLineMap.get(assignment.weightGram) ?? 0) + assignment.lpCount,
+      );
+      totalRequestedGram += assignment.requestedGram;
+      totalLp += assignment.lpCount;
+    });
+
+    const groupedLines = Array.from(groupedLineMap.entries())
+      .sort((left, right) => right[0] - left[0])
+      .map(([weightGram, lpCount], index) => ({
+        sequence: index + 1,
+        weightGram,
+        lpCount,
+      }));
+
+    const createIndividualRequests = dto.createIndividualRequests !== false;
+    const groupedCreatedAt = new Date();
+    const result = await this.prisma.$transaction(async (tx) => {
+      if (actorRole === "trainer") {
+        await tx.worker.updateMany({
+          where: { id: { in: workerIds }, trainerId: null },
+          data: { trainerId: actorUser.id },
+        });
+      }
+
+      const aggregateRequest = await tx.mitraOrderRequest.create({
+        data: {
+          workerId: null,
+          requestedByUserId: actorUser.id,
+          requestedGram: totalRequestedGram,
+          note: dto.note?.trim() || null,
+          createdAt: groupedCreatedAt,
+          lines: {
+            create: groupedLines,
+          },
+        },
+        include: {
+          worker: { select: { id: true, name: true, code: true, capacityGram: true } },
+          requestedBy: { select: { id: true, name: true, role: true } },
+          processedBy: { select: { id: true, name: true, role: true } },
+          lines: { orderBy: { sequence: "asc" } },
+        },
+      });
+
+      const workerRequests: typeof aggregateRequest[] = [];
+
+      if (createIndividualRequests) {
+        for (const assignment of normalizedAssignments) {
+          const workerRequest = await tx.mitraOrderRequest.create({
+            data: {
+              workerId: assignment.workerId,
+              requestedByUserId: actorUser.id,
+              requestedGram: assignment.requestedGram,
+              note: dto.note?.trim() || null,
+              createdAt: groupedCreatedAt,
+              lines: {
+                create: [
+                  {
+                    sequence: 1,
+                    weightGram: assignment.weightGram,
+                    lpCount: assignment.lpCount,
+                  },
+                ],
+              },
+            },
+            include: {
+              worker: { select: { id: true, name: true, code: true, capacityGram: true } },
+              requestedBy: { select: { id: true, name: true, role: true } },
+              processedBy: { select: { id: true, name: true, role: true } },
+              lines: { orderBy: { sequence: "asc" } },
+            },
+          });
+          workerRequests.push(workerRequest);
+        }
+      }
+
+      return {
+        aggregateRequest,
+        workerRequests,
+      };
+    });
+
+    return {
+      ...result,
+      summary: {
+        workerCount: normalizedAssignments.length,
+        totalRequestedGram,
+        totalLp,
+      },
+    };
   }
 
   async findAll(query: QueryMitraOrderRequestDto, actor: AuthActor) {
@@ -138,6 +583,10 @@ export class MitraOrdersService {
       where.requestedBy = {
         role: query.requestedByRole,
       };
+    }
+
+    if (query.aggregateOnly) {
+      where.workerId = null;
     }
 
     const limit = query.limit ?? 50;
@@ -218,34 +667,50 @@ export class MitraOrdersService {
       });
     }
 
-    if (!request.workerId) {
-      return badRequest("Order belum di-assign ke mitra");
-    }
-
     const actorRole = actorUser.role.toLowerCase();
     if (
       actorRole === "trainer" &&
       request.requestedBy.id !== actorUser.id &&
-      request.worker?.trainerId !== actorUser.id
+        request.worker?.trainerId !== actorUser.id
     ) {
       return conflict("Trainer hanya boleh memproses order mitra binaannya", {
         requestId: id,
       });
     }
+    const processedAt = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.mitraOrderRequest.update({
+        where: { id },
+        data: {
+          status: MitraOrderRequestStatus.APPROVED,
+          processedByUserId: actorUser.id,
+          processedAt,
+        },
+        include: {
+          worker: { select: { id: true, name: true, code: true, capacityGram: true } },
+          requestedBy: { select: { id: true, name: true, role: true } },
+          processedBy: { select: { id: true, name: true, role: true } },
+          lines: { orderBy: { sequence: "asc" } },
+        },
+      });
 
-    return this.prisma.mitraOrderRequest.update({
-      where: { id },
-      data: {
-        status: MitraOrderRequestStatus.APPROVED,
-        processedByUserId: actorUser.id,
-        processedAt: new Date(),
-      },
-      include: {
-        worker: { select: { id: true, name: true, code: true, capacityGram: true } },
-        requestedBy: { select: { id: true, name: true, role: true } },
-        processedBy: { select: { id: true, name: true, role: true } },
-        lines: { orderBy: { sequence: "asc" } },
-      },
+      if (!request.workerId) {
+        await tx.mitraOrderRequest.updateMany({
+          where: {
+            workerId: { not: null },
+            requestedByUserId: request.requestedByUserId,
+            status: MitraOrderRequestStatus.REQUESTED,
+            createdAt: request.createdAt,
+          },
+          data: {
+            status: MitraOrderRequestStatus.APPROVED,
+            processedByUserId: actorUser.id,
+            processedAt,
+          },
+        });
+      }
+
+      return updated;
     });
   }
 
@@ -280,20 +745,43 @@ export class MitraOrdersService {
       });
     }
 
-    return this.prisma.mitraOrderRequest.update({
-      where: { id },
-      data: {
-        status: MitraOrderRequestStatus.REJECTED,
-        rejectionReason: reason.trim() || "Ditolak",
-        processedByUserId: actorUser.id,
-        processedAt: new Date(),
-      },
-      include: {
-        worker: { select: { id: true, name: true, code: true, capacityGram: true } },
-        requestedBy: { select: { id: true, name: true, role: true } },
-        processedBy: { select: { id: true, name: true, role: true } },
-        lines: { orderBy: { sequence: "asc" } },
-      },
+    const processedAt = new Date();
+    const rejectionReason = reason.trim() || "Ditolak";
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.mitraOrderRequest.update({
+        where: { id },
+        data: {
+          status: MitraOrderRequestStatus.REJECTED,
+          rejectionReason,
+          processedByUserId: actorUser.id,
+          processedAt,
+        },
+        include: {
+          worker: { select: { id: true, name: true, code: true, capacityGram: true } },
+          requestedBy: { select: { id: true, name: true, role: true } },
+          processedBy: { select: { id: true, name: true, role: true } },
+          lines: { orderBy: { sequence: "asc" } },
+        },
+      });
+
+      if (!request.workerId) {
+        await tx.mitraOrderRequest.updateMany({
+          where: {
+            workerId: { not: null },
+            requestedByUserId: request.requestedByUserId,
+            status: MitraOrderRequestStatus.REQUESTED,
+            createdAt: request.createdAt,
+          },
+          data: {
+            status: MitraOrderRequestStatus.REJECTED,
+            rejectionReason,
+            processedByUserId: actorUser.id,
+            processedAt,
+          },
+        });
+      }
+
+      return updated;
     });
   }
 
@@ -326,37 +814,43 @@ export class MitraOrdersService {
 
     const worker = await this.prisma.worker.findUnique({
       where: { id: workerId },
-      select: { id: true, trainerId: true, capacityGram: true },
+      select: { id: true, trainerId: true },
     });
 
     if (!worker) {
       return notFound("Worker not found", { workerId });
     }
 
-    if (actorRole === "trainer" && worker.trainerId !== actorUser.id) {
+    if (
+      actorRole === "trainer" &&
+      worker.trainerId &&
+      worker.trainerId !== actorUser.id
+    ) {
       return conflict("Trainer hanya boleh assign ke mitra binaannya", {
         workerId,
       });
     }
 
-    if (worker.capacityGram != null && request.requestedGram > worker.capacityGram) {
-      return conflict("Melebihi kapasitas worker", {
-        capacityGram: worker.capacityGram,
-        requestedGram: request.requestedGram,
-      });
-    }
+    return this.prisma.$transaction(async (tx) => {
+      if (actorRole === "trainer" && !worker.trainerId) {
+        await tx.worker.update({
+          where: { id: worker.id },
+          data: { trainerId: actorUser.id },
+        });
+      }
 
-    return this.prisma.mitraOrderRequest.update({
-      where: { id },
-      data: {
-        workerId: worker.id,
-      },
-      include: {
-        worker: { select: { id: true, name: true, code: true, capacityGram: true } },
-        requestedBy: { select: { id: true, name: true, role: true } },
-        processedBy: { select: { id: true, name: true, role: true } },
-        lines: { orderBy: { sequence: "asc" } },
-      },
+      return tx.mitraOrderRequest.update({
+        where: { id },
+        data: {
+          workerId: worker.id,
+        },
+        include: {
+          worker: { select: { id: true, name: true, code: true, capacityGram: true } },
+          requestedBy: { select: { id: true, name: true, role: true } },
+          processedBy: { select: { id: true, name: true, role: true } },
+          lines: { orderBy: { sequence: "asc" } },
+        },
+      });
     });
   }
 
@@ -376,23 +870,40 @@ export class MitraOrdersService {
       });
     }
 
-    if (!request.workerId) {
-      return badRequest("Order belum di-assign ke mitra");
-    }
+    const processedAt = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.mitraOrderRequest.update({
+        where: { id },
+        data: {
+          status: MitraOrderRequestStatus.FULFILLED,
+          processedByUserId: actorUser.id,
+          processedAt,
+        },
+        include: {
+          worker: { select: { id: true, name: true, code: true, capacityGram: true } },
+          requestedBy: { select: { id: true, name: true, role: true } },
+          processedBy: { select: { id: true, name: true, role: true } },
+          lines: { orderBy: { sequence: "asc" } },
+        },
+      });
 
-    return this.prisma.mitraOrderRequest.update({
-      where: { id },
-      data: {
-        status: MitraOrderRequestStatus.FULFILLED,
-        processedByUserId: actorUser.id,
-        processedAt: new Date(),
-      },
-      include: {
-        worker: { select: { id: true, name: true, code: true, capacityGram: true } },
-        requestedBy: { select: { id: true, name: true, role: true } },
-        processedBy: { select: { id: true, name: true, role: true } },
-        lines: { orderBy: { sequence: "asc" } },
-      },
+      if (!request.workerId) {
+        await tx.mitraOrderRequest.updateMany({
+          where: {
+            workerId: { not: null },
+            requestedByUserId: request.requestedByUserId,
+            status: MitraOrderRequestStatus.APPROVED,
+            createdAt: request.createdAt,
+          },
+          data: {
+            status: MitraOrderRequestStatus.FULFILLED,
+            processedByUserId: actorUser.id,
+            processedAt,
+          },
+        });
+      }
+
+      return updated;
     });
   }
 
@@ -412,5 +923,22 @@ export class MitraOrdersService {
     }
 
     return actorUser;
+  }
+
+  private startOfWeekUtc(date: Date) {
+    const value = new Date(
+      Date.UTC(
+        date.getUTCFullYear(),
+        date.getUTCMonth(),
+        date.getUTCDate(),
+        0,
+        0,
+        0,
+        0,
+      ),
+    );
+    const day = (value.getUTCDay() + 6) % 7;
+    value.setUTCDate(value.getUTCDate() - day);
+    return value;
   }
 }

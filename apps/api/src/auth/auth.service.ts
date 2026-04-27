@@ -21,6 +21,13 @@ export class AuthService {
         worker: {
           select: { pin: true },
         },
+        uiAccesses: {
+          select: {
+            moduleKey: true,
+            level: true,
+          },
+          orderBy: { moduleKey: "asc" },
+        },
       },
     });
 
@@ -98,6 +105,13 @@ export class AuthService {
             worker: {
               select: { pin: true },
             },
+            uiAccesses: {
+              select: {
+                moduleKey: true,
+                level: true,
+              },
+              orderBy: { moduleKey: "asc" },
+            },
           },
         });
       });
@@ -132,6 +146,13 @@ export class AuthService {
         worker: {
           select: { pin: true },
         },
+        uiAccesses: {
+          select: {
+            moduleKey: true,
+            level: true,
+          },
+          orderBy: { moduleKey: "asc" },
+        },
       },
     });
 
@@ -147,6 +168,8 @@ export class AuthService {
       role: user.role.toLowerCase(),
       workerId: user.workerId ?? null,
       pin: user.worker?.pin ?? null,
+      useCustomUiAccess: user.useCustomUiAccess,
+      uiAccesses: user.uiAccesses,
     };
   }
 
@@ -196,9 +219,14 @@ export class AuthService {
     phone: string | null;
     role: UserRole;
     workerId: string | null;
+    useCustomUiAccess: boolean;
     worker?: {
       pin: string | null;
     } | null;
+    uiAccesses?: {
+      moduleKey: string;
+      level: number;
+    }[];
   }) {
     const payload = {
       sub: user.id,
@@ -216,6 +244,8 @@ export class AuthService {
         role: user.role.toLowerCase(),
         workerId: user.workerId ?? null,
         pin: user.worker?.pin ?? null,
+        useCustomUiAccess: user.useCustomUiAccess,
+        uiAccesses: user.uiAccesses ?? [],
       },
       token,
     };

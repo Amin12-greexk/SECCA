@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import PageTransition from '@/components/animations/PageTransition';
+import StaggerCards from '@/components/animations/StaggerCards';
 import LoadingCircle from '@/components/LoadingCircle';
 import { useToast } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
@@ -42,13 +44,27 @@ function WorkItemCard({
     const gradeLabel = [item.grade?.shape, item.grade?.feather, item.grade?.color]
         .filter(Boolean)
         .join(' / ');
+    const processLabel =
+        item.processState === 'DRYING'
+            ? 'Pengeringan'
+            : item.processState === 'DRYING_QC'
+                ? 'Menunggu Koreksi Kering'
+                : item.processState === 'READY_TO_SUBMIT'
+                    ? 'Siap Setor'
+                    : item.processState === 'NEXT_DAY'
+                        ? 'Besok Dikerjakan'
+                        : 'Cabut Bulu';
+    const isNextDayLane = lane === 'NEXT_DAY';
+    const canDoPrimaryAction =
+        !!onAction &&
+        (isNextDayLane || item.processState === 'IN_PROGRESS' || (!item.processState && lane === 'IN_PROGRESS'));
 
     return (
-        <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-2">
+        <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-2 card-hover">
             <div className="flex items-center justify-between">
                 <span className="font-semibold text-gray-900 text-sm">{item.lotNumber}</span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                    {item.status}
+                    {processLabel}
                 </span>
             </div>
 
@@ -56,7 +72,18 @@ function WorkItemCard({
                 <p className="text-xs text-gray-500">{gradeLabel}</p>
             )}
 
-            {onAction && (
+            {item.processState === 'DRYING' && item.dryingReadyAt && (
+                <p className="text-[11px] text-amber-700">
+                    Selesai pengeringan: {new Date(item.dryingReadyAt).toLocaleString('id-ID')}
+                </p>
+            )}
+            {item.processState === 'DRYING_QC' && (
+                <p className="text-[11px] text-blue-700">
+                    Menunggu proses koreksi kering sebelum setoran.
+                </p>
+            )}
+
+            {canDoPrimaryAction && (
                 <Button
                     size="sm"
                     className="w-full mt-1"
@@ -65,9 +92,9 @@ function WorkItemCard({
                 >
                     {actionLoading === item.id
                         ? 'Memproses...'
-                        : lane === 'NEXT_DAY'
+                        : isNextDayLane
                             ? 'Mulai'
-                            : 'Siap Diserahkan'}
+                            : 'Selesai Cabut'}
                 </Button>
             )}
         </div>
@@ -97,14 +124,14 @@ function LaneColumn({
                 : 'bg-green-50 border-green-200';
 
     return (
-        <div className={`border rounded-lg ${bgColor} flex flex-col`}>
+        <div className={`border rounded-lg ${bgColor} flex flex-col card-hover`}>
             <div className="flex items-center justify-between p-3 border-b border-inherit">
                 <h3 className="font-semibold text-sm text-gray-800">{title}</h3>
                 <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-white text-gray-700 border border-gray-200">
                     {count}
                 </span>
             </div>
-            <div className="p-3 space-y-2 flex-1 overflow-y-auto max-h-[60vh]">
+            <StaggerCards className="p-3 space-y-2 flex-1 overflow-y-auto max-h-[60vh]" triggerKey={`${lane}-${count}`}>
                 {items.length === 0 && (
                     <p className="text-xs text-gray-400 text-center py-4">Tidak ada item</p>
                 )}
@@ -117,7 +144,7 @@ function LaneColumn({
                         actionLoading={actionLoading}
                     />
                 ))}
-            </div>
+            </StaggerCards>
         </div>
     );
 }
@@ -140,7 +167,9 @@ function TrainerBoardContent() {
         getWorkers()
             .then((list) => {
                 if (user?.role === 'trainer') {
-                    setWorkers(list.filter((w) => w.trainerId === user.id));
+                    const mine = list.filter((w) => w.trainerId === user.id);
+                    const unassigned = list.filter((w) => !w.trainerId);
+                    setWorkers([...mine, ...unassigned.filter((w) => w.trainerId !== user.id)]);
                 } else {
                     setWorkers(list);
                 }
@@ -148,6 +177,16 @@ function TrainerBoardContent() {
             .catch((err) => toast.error(err.message))
             .finally(() => setLoadingWorkers(false));
     }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (!selectedWorkerId && workers.length > 0) {
+            setSelectedWorkerId(workers[0].id);
+            return;
+        }
+        if (selectedWorkerId && !workers.some((worker) => worker.id === selectedWorkerId)) {
+            setSelectedWorkerId(workers[0]?.id ?? '');
+        }
+    }, [selectedWorkerId, workers]);
 
     // Load board
     const fetchBoard = useCallback(async () => {
@@ -188,7 +227,7 @@ function TrainerBoardContent() {
         setActionLoading(id);
         try {
             await markWorkItemReady(id);
-            toast.success('Item siap diserahkan');
+            toast.success('Item masuk proses pengeringan (maksimal 10 jam)');
             fetchBoard();
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : 'Gagal menandai item');
@@ -200,7 +239,7 @@ function TrainerBoardContent() {
     if (!user) return null;
 
     return (
-        <div className="space-y-6">
+        <PageTransition className="space-y-6">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
@@ -269,7 +308,7 @@ function TrainerBoardContent() {
 
             {/* Active work order summary */}
             {!loading && board?.activeWorkOrder && (
-                <div className="bg-white border border-gray-200 rounded-lg p-4 flex flex-wrap items-center gap-4 text-sm">
+                <div className="bg-white border border-gray-200 rounded-lg p-4 flex flex-wrap items-center gap-4 text-sm card-hover">
                     <div>
                         <span className="text-gray-500">Work Order:</span>{' '}
                         <span className="font-medium text-gray-900">{board.activeWorkOrder.id.slice(0, 8)}...</span>
@@ -303,7 +342,7 @@ function TrainerBoardContent() {
                         actionLoading={actionLoading}
                     />
                     <LaneColumn
-                        title="Siap Diserahkan"
+                        title="Siap Setor"
                         count={board.counts.READY_TO_SUBMIT}
                         items={board.lanes.READY_TO_SUBMIT}
                         lane="READY_TO_SUBMIT"
@@ -311,7 +350,7 @@ function TrainerBoardContent() {
                     />
                 </div>
             )}
-        </div>
+        </PageTransition>
     );
 }
 

@@ -75,6 +75,7 @@ let BakuService = BakuService_1 = class BakuService {
     }
     async findAll() {
         const items = await this.prisma.rawBatch.findMany({
+            where: { mergedIntoRawBatchId: null },
             include: { supplier: true },
             orderBy: { createdAt: "desc" },
         });
@@ -85,8 +86,8 @@ let BakuService = BakuService_1 = class BakuService {
         const { page, limit, skip } = this.resolvePagination(query);
         const activeOnly = query.activeOnly ?? true;
         const where = activeOnly
-            ? { wetWeightGram: { gt: 0 } }
-            : undefined;
+            ? { mergedIntoRawBatchId: null, wetWeightGram: { gt: 0 } }
+            : { mergedIntoRawBatchId: null };
         const [total, items] = await Promise.all([
             this.prisma.rawBatch.count({ where }),
             this.prisma.rawBatch.findMany({
@@ -108,13 +109,14 @@ let BakuService = BakuService_1 = class BakuService {
         };
     }
     async findByCardId(cardId) {
-        const rawBatch = await this.prisma.rawBatch.findUnique({
+        const sourceBatch = await this.prisma.rawBatch.findUnique({
             where: { cardId },
             include: { supplier: true },
         });
-        if (!rawBatch) {
+        if (!sourceBatch) {
             return (0, errors_1.notFound)("Raw batch not found", { cardId });
         }
+        const rawBatch = await this.resolveEffectiveRawBatch(sourceBatch.id);
         const usedTotal = await this.prisma.pecahBonEntry.aggregate({
             where: { rawBatchId: rawBatch.id },
             _sum: { initialWeightGram: true },
@@ -230,7 +232,7 @@ let BakuService = BakuService_1 = class BakuService {
                     remainingWetWeightGram: { increment: lotWetWeightGram },
                 },
                 create: {
-                    rawBatchId,
+                    rawBatchId: entry.rawBatchId,
                     gradeId: dto.gradeId,
                     wetWeightGram: lotWetWeightGram,
                     remainingWetWeightGram: lotWetWeightGram,
@@ -252,7 +254,10 @@ let BakuService = BakuService_1 = class BakuService {
                     remaining: gradedStock.remainingWetWeightGram,
                 });
             }
-            const location = await this.getPreSaleLocation(tx);
+            const autoAssignment = await this.consumeApprovedMitraOrderLine(tx, lotWetWeightGram);
+            const location = autoAssignment
+                ? await this.getOrCreateWorkerLocation(tx, autoAssignment.workerId)
+                : await this.getPreSaleLocation(tx);
             const { lotNumber } = await this.numberingService.nextLotNumber(tx, new Date());
             const dryWeightLocked = (0, weight_1.roundDryWeight)(lotWetWeightGram, moistureBps);
             const lot = await tx.productionLot.create({
@@ -265,7 +270,7 @@ let BakuService = BakuService_1 = class BakuService {
                     wetWeightGram: lotWetWeightGram,
                     dryWeightGramLocked: dryWeightLocked,
                     moistureBps,
-                    status: client_1.LotStatus.AVAILABLE,
+                    status: autoAssignment ? client_1.LotStatus.IN_PROGRESS : client_1.LotStatus.AVAILABLE,
                     locationId: location.id,
                 },
             });
@@ -281,8 +286,21 @@ let BakuService = BakuService_1 = class BakuService {
                 fromLocationId: null,
                 toLocationId: location.id,
                 movementType: client_1.MovementType.IN,
-                note: "Create lot from pecah bon",
+                note: autoAssignment
+                    ? `Auto assign lot dari template order mitra (${autoAssignment.orderRequestId})`
+                    : "Create lot from pecah bon",
             });
+            if (autoAssignment) {
+                const workOrderId = await this.getOrCreateWorkerWorkOrder(tx, autoAssignment.workerId);
+                await tx.workOrderItem.create({
+                    data: {
+                        workOrderId,
+                        lotId: lot.id,
+                        status: client_1.WorkOrderItemStatus.IN_PROGRESS,
+                        lane: client_1.WorkLane.NEXT_DAY,
+                    },
+                });
+            }
             await tx.rawBatch.update({
                 where: { id: rawBatchId },
                 data: {
@@ -378,12 +396,6 @@ let BakuService = BakuService_1 = class BakuService {
                     include: { workItem: true, sources: true },
                 })
                 : null;
-            if (lot && (lot.status !== client_1.LotStatus.AVAILABLE || lot.workItem)) {
-                return (0, errors_1.conflict)("LP sudah diproses, tidak bisa diedit", {
-                    lotId: lot.id,
-                    status: lot.status,
-                });
-            }
             if (entry.gradeId !== dto.gradeId) {
                 const oldStockUpdate = await tx.rawBatchGradeStock.updateMany({
                     where: {
@@ -503,6 +515,59 @@ let BakuService = BakuService_1 = class BakuService {
             return updatedEntry;
         });
     }
+    async deletePecahBonEntry(id) {
+        const entry = await this.prisma.pecahBonEntry.findUnique({
+            where: { id },
+            include: { rawBatch: true },
+        });
+        if (!entry) {
+            return (0, errors_1.notFound)("Pecah Bon not found", { id });
+        }
+        const year = new Date(entry.pecahBonDate).getUTCFullYear();
+        const lpWeightGram = Math.round(entry.initialWeightGram);
+        await this.prisma.$transaction(async (tx) => {
+            await tx.rawBatch.update({
+                where: { id: entry.rawBatchId },
+                data: {
+                    wetWeightGram: { increment: entry.initialWeightGram },
+                },
+            });
+            await tx.rawBatchGradeStock.updateMany({
+                where: {
+                    rawBatchId: entry.rawBatchId,
+                    gradeId: entry.gradeId,
+                },
+                data: {
+                    wetWeightGram: { decrement: lpWeightGram },
+                },
+            });
+            if (entry.pecahBonId) {
+                const lot = await tx.productionLot.findFirst({
+                    where: { externalId: entry.pecahBonId },
+                    select: { id: true },
+                });
+                if (lot) {
+                    const workOrderItems = await tx.workOrderItem.findMany({
+                        where: { lotId: lot.id },
+                        select: { workOrderId: true },
+                    });
+                    const workOrderIds = workOrderItems.map((wi) => wi.workOrderId);
+                    if (workOrderIds.length > 0) {
+                        await tx.workerActiveWorkOrder.deleteMany({
+                            where: { workOrderId: { in: workOrderIds } },
+                        });
+                    }
+                    await tx.workOrderItem.deleteMany({ where: { lotId: lot.id } });
+                    await tx.inventoryMovement.deleteMany({ where: { lotId: lot.id } });
+                    await tx.lotSource.deleteMany({ where: { lotId: lot.id } });
+                    await tx.productionLot.delete({ where: { id: lot.id } });
+                }
+            }
+            await tx.pecahBonEntry.delete({ where: { id } });
+            await this.forceSyncSequence(tx, `PB:${year}`, () => this.getMaxPecahBonSequenceByYear(tx, year));
+        });
+        return { success: true };
+    }
     async updateRawBatch(rawBatchId, dto) {
         const rawBatch = await this.prisma.rawBatch.findUnique({
             where: { id: rawBatchId },
@@ -516,29 +581,6 @@ let BakuService = BakuService_1 = class BakuService {
             });
             if (!supplier) {
                 return (0, errors_1.notFound)("Supplier not found", { supplierId: dto.supplierId });
-            }
-        }
-        if (dto.batchNumber && dto.batchNumber !== rawBatch.batchNumber) {
-            const existing = await this.prisma.rawBatch.findUnique({
-                where: { batchNumber: dto.batchNumber },
-                select: { id: true },
-            });
-            if (existing) {
-                return (0, errors_1.conflict)("Batch number already exists", {
-                    batchNumber: dto.batchNumber,
-                });
-            }
-        }
-        const wantsWeightChange = dto.invoiceWeightGram !== undefined ||
-            dto.wetWeightGram !== undefined ||
-            dto.moisturePercent !== undefined;
-        if (wantsWeightChange) {
-            const [pecahBonCount, gradeStockCount] = await Promise.all([
-                this.prisma.pecahBonEntry.count({ where: { rawBatchId } }),
-                this.prisma.rawBatchGradeStock.count({ where: { rawBatchId } }),
-            ]);
-            if (pecahBonCount > 0 || gradeStockCount > 0) {
-                return (0, errors_1.badRequest)("Berat atau kadar air tidak bisa diubah karena batch sudah dipakai.", { rawBatchId, pecahBonCount, gradeStockCount });
             }
         }
         const data = {};
@@ -562,15 +604,236 @@ let BakuService = BakuService_1 = class BakuService {
             const trimmed = dto.notes.trim();
             data.notes = trimmed === "" ? null : trimmed;
         }
-        return this.prisma.rawBatch.update({
-            where: { id: rawBatchId },
-            data,
-            include: { supplier: true },
+        try {
+            return await this.prisma.$transaction(async (tx) => {
+                if (dto.batchNumber && dto.batchNumber !== rawBatch.batchNumber) {
+                    const existing = await tx.rawBatch.findFirst({
+                        where: {
+                            batchNumber: dto.batchNumber,
+                            id: { not: rawBatchId },
+                        },
+                        select: {
+                            id: true,
+                            batchNumber: true,
+                            mergedIntoRawBatchId: true,
+                        },
+                    });
+                    if (existing) {
+                        if (!existing.mergedIntoRawBatchId) {
+                            return (0, errors_1.conflict)("Batch number already exists", {
+                                batchNumber: dto.batchNumber,
+                            });
+                        }
+                        await tx.rawBatch.update({
+                            where: { id: existing.id },
+                            data: {
+                                batchNumber: this.buildArchivedMergedSourceBatchNumber(existing.batchNumber, existing.id),
+                            },
+                        });
+                    }
+                }
+                const updated = await tx.rawBatch.update({
+                    where: { id: rawBatchId },
+                    data,
+                    include: { supplier: true },
+                });
+                if (dto.updateExistingEntries && dto.moisturePercent !== undefined) {
+                    const newMoistureBps = Math.round(dto.moisturePercent * 100);
+                    const entries = await tx.pecahBonEntry.findMany({
+                        where: { rawBatchId },
+                        select: { id: true, initialWeightGram: true, pecahBonId: true },
+                    });
+                    for (const entry of entries) {
+                        const newDryWeight = (0, weight_1.roundDryWeight)(entry.initialWeightGram, newMoistureBps);
+                        await tx.pecahBonEntry.update({
+                            where: { id: entry.id },
+                            data: {
+                                moisturePercent: dto.moisturePercent,
+                                dryWeightGram: newDryWeight,
+                            },
+                        });
+                        if (entry.pecahBonId) {
+                            await tx.productionLot.updateMany({
+                                where: { externalId: entry.pecahBonId },
+                                data: {
+                                    moistureBps: newMoistureBps,
+                                    dryWeightGramLocked: newDryWeight,
+                                },
+                            });
+                        }
+                    }
+                }
+                return updated;
+            });
+        }
+        catch (error) {
+            if (error instanceof client_1.Prisma.PrismaClientKnownRequestError &&
+                error.code === "P2002" &&
+                dto.batchNumber &&
+                dto.batchNumber !== rawBatch.batchNumber) {
+                return (0, errors_1.conflict)("Batch number already exists", {
+                    batchNumber: dto.batchNumber,
+                });
+            }
+            throw error;
+        }
+    }
+    async deleteRawBatch(id) {
+        const rawBatch = await this.prisma.rawBatch.findUnique({
+            where: { id },
+            include: {
+                pecahBonEntries: {
+                    select: { pecahBonId: true },
+                },
+            },
+        });
+        if (!rawBatch) {
+            return (0, errors_1.notFound)("Raw batch not found", { id });
+        }
+        const pecahBonIds = rawBatch.pecahBonEntries
+            .map((e) => e.pecahBonId)
+            .filter((id) => !!id);
+        const date = new Date(rawBatch.createdAt);
+        const year = date.getUTCFullYear();
+        const month = date.getUTCMonth();
+        await this.prisma.$transaction(async (tx) => {
+            if (pecahBonIds.length > 0) {
+                const lots = await tx.productionLot.findMany({
+                    where: { externalId: { in: pecahBonIds } },
+                    select: { id: true },
+                });
+                const lotIds = lots.map((l) => l.id);
+                if (lotIds.length > 0) {
+                    const workOrderItems = await tx.workOrderItem.findMany({
+                        where: { lotId: { in: lotIds } },
+                        select: { workOrderId: true },
+                    });
+                    const workOrderIds = workOrderItems.map((wi) => wi.workOrderId);
+                    if (workOrderIds.length > 0) {
+                        await tx.workerActiveWorkOrder.deleteMany({
+                            where: { workOrderId: { in: workOrderIds } },
+                        });
+                    }
+                    await tx.workOrderItem.deleteMany({ where: { lotId: { in: lotIds } } });
+                    await tx.inventoryMovement.deleteMany({
+                        where: { lotId: { in: lotIds } },
+                    });
+                    await tx.lotSource.deleteMany({ where: { lotId: { in: lotIds } } });
+                    await tx.productionLot.deleteMany({ where: { id: { in: lotIds } } });
+                }
+            }
+            await tx.rawBatchGradeStock.deleteMany({ where: { rawBatchId: id } });
+            await tx.pecahBonEntry.deleteMany({ where: { rawBatchId: id } });
+            await tx.rawBatch.delete({ where: { id } });
+            await this.forceSyncSequence(tx, `PB:${year}`, () => this.getMaxPecahBonSequenceByYear(tx, year));
+            await this.forceSyncSequence(tx, `RBY:${year}`, () => this.getMaxRawBatchSequenceByYear(tx, year));
+            const monthCode = String(month + 1).padStart(2, "0");
+            await this.forceSyncSequence(tx, `RBC:${year}:${monthCode}`, () => this.getMaxRawCardSequenceByMonth(tx, year, month));
+        });
+        return { success: true };
+    }
+    async forceSyncSequence(tx, key, maxSequenceResolver) {
+        const maxSequence = await maxSequenceResolver();
+        await tx.numberSequence.upsert({
+            where: { key },
+            update: { current: maxSequence },
+            create: { key, current: maxSequence },
         });
     }
+    async mergeRawBatches(dto) {
+        if (!dto.confirmSupplier ||
+            !dto.confirmFeatherCondition ||
+            !dto.confirmMoisturePercent ||
+            !dto.confirmMerge) {
+            return (0, errors_1.badRequest)("Semua konfirmasi merge harus disetujui terlebih dahulu.");
+        }
+        const sourceRawBatchIds = [...new Set(dto.sourceRawBatchIds)];
+        if (sourceRawBatchIds.length !== dto.sourceRawBatchIds.length) {
+            return (0, errors_1.badRequest)("ID batch sumber duplikat.");
+        }
+        const supplier = await this.prisma.supplier.findUnique({
+            where: { id: dto.supplierId },
+            select: { id: true },
+        });
+        if (!supplier) {
+            return (0, errors_1.notFound)("Supplier not found", { supplierId: dto.supplierId });
+        }
+        const createdAt = new Date();
+        const mergedBatch = await this.prisma.$transaction(async (tx) => {
+            const sourceBatches = await tx.rawBatch.findMany({
+                where: { id: { in: sourceRawBatchIds } },
+                include: { supplier: true },
+            });
+            if (sourceBatches.length !== sourceRawBatchIds.length) {
+                const existingIds = new Set(sourceBatches.map((item) => item.id));
+                const missingIds = sourceRawBatchIds.filter((item) => !existingIds.has(item));
+                return (0, errors_1.notFound)("Raw batch not found", { rawBatchIds: missingIds });
+            }
+            const sourceMap = new Map(sourceBatches.map((item) => [item.id, item]));
+            const orderedSources = sourceRawBatchIds.map((item) => sourceMap.get(item));
+            const alreadyMerged = orderedSources.find((item) => item.mergedIntoRawBatchId);
+            if (alreadyMerged) {
+                return (0, errors_1.conflict)("Ada batch sumber yang sudah digabung sebelumnya.", {
+                    rawBatchId: alreadyMerged.id,
+                    batchNumber: alreadyMerged.batchNumber,
+                });
+            }
+            const invalidWeight = orderedSources.filter((item) => item.wetWeightGram <= 0);
+            if (invalidWeight.length > 0) {
+                return (0, errors_1.conflict)("Ada batch sumber tanpa sisa gram.", {
+                    batchNumbers: invalidWeight.map((item) => item.batchNumber),
+                });
+            }
+            const activeGradeStocks = await tx.rawBatchGradeStock.findMany({
+                where: {
+                    rawBatchId: { in: sourceRawBatchIds },
+                    remainingWetWeightGram: { gt: 0 },
+                },
+                select: { rawBatchId: true },
+            });
+            if (activeGradeStocks.length > 0) {
+                const blockedIds = [...new Set(activeGradeStocks.map((item) => item.rawBatchId))];
+                return (0, errors_1.conflict)("Batch sumber masih punya stok grading aktif.", {
+                    rawBatchIds: blockedIds,
+                });
+            }
+            const totalWetWeightGram = this.roundToTwoDecimals(orderedSources.reduce((sum, item) => sum + item.wetWeightGram, 0));
+            if (totalWetWeightGram <= 0) {
+                return (0, errors_1.badRequest)("Total sisa gram dari batch sumber harus lebih dari 0.");
+            }
+            const { batchNumber, cardId } = await this.generateIdentifiers(tx, createdAt);
+            const mergedNotes = this.composeMergeNotes(dto.notes, orderedSources.map((item) => item.batchNumber));
+            const createdBatch = await tx.rawBatch.create({
+                data: {
+                    batchNumber,
+                    cardId,
+                    supplierId: dto.supplierId,
+                    featherCondition: dto.featherCondition.trim(),
+                    invoiceWeightGram: totalWetWeightGram,
+                    wetWeightGram: totalWetWeightGram,
+                    moisturePercent: this.roundToTwoDecimals(dto.moisturePercent),
+                    notes: mergedNotes,
+                    createdAt,
+                },
+                include: { supplier: true },
+            });
+            await tx.rawBatch.updateMany({
+                where: { id: { in: sourceRawBatchIds } },
+                data: {
+                    wetWeightGram: 0,
+                    mergedIntoRawBatchId: createdBatch.id,
+                    mergedAt: createdAt,
+                },
+            });
+            return createdBatch;
+        });
+        this.logger.log(`Raw batches merged into ${mergedBatch.batchNumber} from ${sourceRawBatchIds.length} sources`);
+        return this.mapRawBatch(mergedBatch, 0);
+    }
     async getPecahBonEntries(rawBatchId) {
+        const { familyIds } = await this.getMergedFamilyRawBatchIds(rawBatchId);
         const entries = await this.prisma.pecahBonEntry.findMany({
-            where: { rawBatchId },
+            where: { rawBatchId: { in: familyIds } },
             include: {
                 grade: true,
                 featherGrade: true,
@@ -581,8 +844,9 @@ let BakuService = BakuService_1 = class BakuService {
         return entries;
     }
     async getPecahBonEntriesPaginated(rawBatchId, query) {
+        const { familyIds } = await this.getMergedFamilyRawBatchIds(rawBatchId);
         const { page, limit, skip } = this.resolvePagination(query);
-        const where = { rawBatchId };
+        const where = { rawBatchId: { in: familyIds } };
         const [total, items] = await Promise.all([
             this.prisma.pecahBonEntry.count({ where }),
             this.prisma.pecahBonEntry.findMany({
@@ -593,6 +857,67 @@ let BakuService = BakuService_1 = class BakuService {
                     colorGrade: true,
                 },
                 orderBy: { createdAt: "desc" },
+                skip,
+                take: limit,
+            }),
+        ]);
+        return {
+            items,
+            page,
+            limit,
+            total,
+            totalPages: Math.max(1, Math.ceil(total / limit)),
+        };
+    }
+    async getPecahBonHistory(query) {
+        const page = query.page ?? 1;
+        const limit = query.limit ?? 20;
+        const order = query.order === "desc" ? "desc" : "asc";
+        const skip = (page - 1) * limit;
+        const where = {};
+        const from = query.from ? new Date(query.from) : null;
+        const to = query.to ? new Date(query.to) : null;
+        if (from) {
+            from.setHours(0, 0, 0, 0);
+        }
+        if (to) {
+            to.setHours(23, 59, 59, 999);
+        }
+        if (from && to && from.getTime() > to.getTime()) {
+            return (0, errors_1.badRequest)("Rentang tanggal tidak valid (from > to)", {
+                from: query.from,
+                to: query.to,
+            });
+        }
+        if (from || to) {
+            where.pecahBonDate = {};
+            if (from)
+                where.pecahBonDate.gte = from;
+            if (to)
+                where.pecahBonDate.lte = to;
+        }
+        const search = query.search?.trim();
+        if (search) {
+            where.OR = [
+                { pecahBonId: { contains: search, mode: "insensitive" } },
+                { featherCondition: { contains: search, mode: "insensitive" } },
+                { rawBatch: { batchNumber: { contains: search, mode: "insensitive" } } },
+                { grade: { code: { contains: search, mode: "insensitive" } } },
+                { featherGrade: { code: { contains: search, mode: "insensitive" } } },
+                { colorGrade: { code: { contains: search, mode: "insensitive" } } },
+            ];
+        }
+        const [total, items] = await Promise.all([
+            this.prisma.pecahBonEntry.count({ where }),
+            this.prisma.pecahBonEntry.findMany({
+                where,
+                include: {
+                    rawBatch: { select: { id: true, batchNumber: true } },
+                    grade: { select: { id: true, code: true, name: true, type: true } },
+                    featherGrade: { select: { id: true, code: true, name: true, type: true } },
+                    colorGrade: { select: { id: true, code: true, name: true, type: true } },
+                },
+                orderBy: [{ pecahBonDate: order }, { createdAt: order }],
                 skip,
                 take: limit,
             }),
@@ -656,11 +981,47 @@ let BakuService = BakuService_1 = class BakuService {
     }
     async nextPecahBonSequence(tx, year) {
         const key = `PB:${year}`;
+        return this.nextSequenceWithMaxSync(tx, key, () => this.getMaxPecahBonSequenceByYear(tx, year));
+    }
+    async generateIdentifiers(tx, at) {
+        const year = at.getUTCFullYear();
+        const month = at.getUTCMonth();
+        const [yearSequence, monthSequence] = await Promise.all([
+            this.nextRawBatchSequence(tx, year),
+            this.nextRawCardSequence(tx, year, month),
+        ]);
+        const yearShort = String(year).slice(-2);
+        const monthCode = String(month + 1).padStart(2, "0");
+        const batchSequence = String(yearSequence).padStart(4, "0");
+        const cardSequence = String(monthSequence).padStart(3, "0");
+        const batchNumber = `K${batchSequence}-TEI-${yearShort}`;
+        const cardId = `R-${yearShort}${monthCode}-${cardSequence}`;
+        return { batchNumber, cardId };
+    }
+    async nextRawBatchSequence(tx, year) {
+        const key = `RBY:${year}`;
+        return this.nextSequenceWithMaxSync(tx, key, () => this.getMaxRawBatchSequenceByYear(tx, year));
+    }
+    async nextRawCardSequence(tx, year, month) {
+        const monthCode = String(month + 1).padStart(2, "0");
+        const key = `RBC:${year}:${monthCode}`;
+        return this.nextSequenceWithMaxSync(tx, key, () => this.getMaxRawCardSequenceByMonth(tx, year, month));
+    }
+    async nextSequenceWithMaxSync(tx, key, maxSequenceResolver) {
+        const maxSequence = await maxSequenceResolver();
         const existing = await tx.numberSequence.findUnique({
             where: { key },
             select: { current: true },
         });
         if (existing) {
+            if (existing.current < maxSequence) {
+                const synced = await tx.numberSequence.update({
+                    where: { key },
+                    data: { current: maxSequence + 1 },
+                    select: { current: true },
+                });
+                return synced.current;
+            }
             const updated = await tx.numberSequence.update({
                 where: { key },
                 data: { current: { increment: 1 } },
@@ -668,59 +1029,94 @@ let BakuService = BakuService_1 = class BakuService {
             });
             return updated.current;
         }
-        const startOfYear = new Date(Date.UTC(year, 0, 1));
-        const endOfYear = new Date(Date.UTC(year + 1, 0, 1));
-        const count = await tx.pecahBonEntry.count({
-            where: {
-                pecahBonDate: {
-                    gte: startOfYear,
-                    lt: endOfYear,
-                },
-            },
-        });
         try {
             const created = await tx.numberSequence.create({
-                data: { key, current: count + 1 },
+                data: { key, current: maxSequence + 1 },
                 select: { current: true },
             });
             return created.current;
         }
         catch (error) {
-            if (error instanceof client_1.Prisma.PrismaClientKnownRequestError) {
-                if (error.code === "P2002") {
-                    const updated = await tx.numberSequence.update({
+            if (error instanceof client_1.Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+                const latest = await tx.numberSequence.findUnique({
+                    where: { key },
+                    select: { current: true },
+                });
+                if (latest && latest.current < maxSequence) {
+                    const synced = await tx.numberSequence.update({
                         where: { key },
-                        data: { current: { increment: 1 } },
+                        data: { current: maxSequence + 1 },
                         select: { current: true },
                     });
-                    return updated.current;
+                    return synced.current;
                 }
+                const updated = await tx.numberSequence.update({
+                    where: { key },
+                    data: { current: { increment: 1 } },
+                    select: { current: true },
+                });
+                return updated.current;
             }
             throw error;
         }
     }
-    async generateIdentifiers(tx, at) {
-        const year = at.getUTCFullYear();
-        const month = at.getUTCMonth();
-        const yearStart = new Date(Date.UTC(year, 0, 1));
-        const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
-        const monthStart = new Date(Date.UTC(year, month, 1));
-        const monthEnd = new Date(Date.UTC(year, month + 1, 1));
-        const [yearCount, monthCount] = await Promise.all([
-            tx.rawBatch.count({
-                where: { createdAt: { gte: yearStart, lt: yearEnd } },
-            }),
-            tx.rawBatch.count({
-                where: { createdAt: { gte: monthStart, lt: monthEnd } },
-            }),
-        ]);
+    async getMaxPecahBonSequenceByYear(tx, year) {
+        const yearShort = String(year).slice(-2);
+        const rows = await tx.pecahBonEntry.findMany({
+            where: { pecahBonId: { endsWith: `-${yearShort}` } },
+            select: { pecahBonId: true },
+        });
+        let maxSequence = 0;
+        for (const row of rows) {
+            if (!row.pecahBonId)
+                continue;
+            const match = row.pecahBonId.match(/^TEI-(\d+)-\d{2}$/);
+            if (!match)
+                continue;
+            const value = Number(match[1]);
+            if (Number.isFinite(value) && value > maxSequence) {
+                maxSequence = value;
+            }
+        }
+        return maxSequence;
+    }
+    async getMaxRawBatchSequenceByYear(tx, year) {
+        const yearShort = String(year).slice(-2);
+        const rows = await tx.rawBatch.findMany({
+            where: { batchNumber: { endsWith: `-TEI-${yearShort}` } },
+            select: { batchNumber: true },
+        });
+        let maxSequence = 0;
+        for (const row of rows) {
+            const match = row.batchNumber.match(/^K(\d+)-TEI-\d{2}$/);
+            if (!match)
+                continue;
+            const value = Number(match[1]);
+            if (Number.isFinite(value) && value > maxSequence) {
+                maxSequence = value;
+            }
+        }
+        return maxSequence;
+    }
+    async getMaxRawCardSequenceByMonth(tx, year, month) {
         const yearShort = String(year).slice(-2);
         const monthCode = String(month + 1).padStart(2, "0");
-        const batchSequence = String(yearCount + 1).padStart(4, "0");
-        const cardSequence = String(monthCount + 1).padStart(3, "0");
-        const batchNumber = `K${batchSequence}-TEI-${yearShort}`;
-        const cardId = `R-${yearShort}${monthCode}-${cardSequence}`;
-        return { batchNumber, cardId };
+        const prefix = `R-${yearShort}${monthCode}-`;
+        const rows = await tx.rawBatch.findMany({
+            where: { cardId: { startsWith: prefix } },
+            select: { cardId: true },
+        });
+        let maxSequence = 0;
+        for (const row of rows) {
+            const match = row.cardId.match(/^R-\d{4}-(\d+)$/);
+            if (!match)
+                continue;
+            const value = Number(match[1]);
+            if (Number.isFinite(value) && value > maxSequence) {
+                maxSequence = value;
+            }
+        }
+        return maxSequence;
     }
     roundToTwoDecimals(value) {
         return Math.round(value * 100) / 100;
@@ -742,10 +1138,14 @@ let BakuService = BakuService_1 = class BakuService {
     }
     mapRawBatch(rawBatch, usedWeightGram) {
         return {
+            id: rawBatch.id,
             originalWetWeightGram: this.roundToTwoDecimals(rawBatch.wetWeightGram + usedWeightGram),
             rawBatchId: rawBatch.id,
             batchNumber: rawBatch.batchNumber,
             cardId: rawBatch.cardId,
+            mergedIntoRawBatchId: rawBatch.mergedIntoRawBatchId,
+            mergedAt: rawBatch.mergedAt,
+            isMergedSource: !!rawBatch.mergedIntoRawBatchId,
             supplier: {
                 id: rawBatch.supplier.id,
                 name: rawBatch.supplier.name,
@@ -759,6 +1159,197 @@ let BakuService = BakuService_1 = class BakuService {
             createdAt: rawBatch.createdAt,
             updatedAt: rawBatch.updatedAt,
         };
+    }
+    composeMergeNotes(notes, sourceBatchNumbers) {
+        const sourceLabel = `Gabungan dari: ${sourceBatchNumbers.join(", ")}`;
+        const trimmed = notes?.trim();
+        if (!trimmed) {
+            return sourceLabel;
+        }
+        return `${trimmed}\n${sourceLabel}`;
+    }
+    buildArchivedMergedSourceBatchNumber(batchNumber, rawBatchId) {
+        const suffix = rawBatchId.replace(/-/g, "").slice(0, 8).toUpperCase();
+        return `${batchNumber}#MERGED#${suffix}`;
+    }
+    async resolveEffectiveRawBatch(rawBatchId) {
+        const visited = new Set();
+        let currentId = rawBatchId;
+        while (true) {
+            if (visited.has(currentId)) {
+                return (0, errors_1.conflict)("Siklus merge batch terdeteksi", { rawBatchId });
+            }
+            visited.add(currentId);
+            const current = await this.prisma.rawBatch.findUnique({
+                where: { id: currentId },
+                include: { supplier: true },
+            });
+            if (!current) {
+                return (0, errors_1.notFound)("Raw batch not found", { rawBatchId: currentId });
+            }
+            if (!current.mergedIntoRawBatchId) {
+                return current;
+            }
+            currentId = current.mergedIntoRawBatchId;
+        }
+    }
+    async getMergedFamilyRawBatchIds(rawBatchId) {
+        const effectiveRawBatch = await this.resolveEffectiveRawBatch(rawBatchId);
+        const visited = new Set([effectiveRawBatch.id]);
+        const queue = [effectiveRawBatch.id];
+        while (queue.length > 0) {
+            const parentId = queue.shift();
+            if (!parentId)
+                break;
+            const mergedSources = await this.prisma.rawBatch.findMany({
+                where: { mergedIntoRawBatchId: parentId },
+                select: { id: true },
+            });
+            for (const source of mergedSources) {
+                if (visited.has(source.id))
+                    continue;
+                visited.add(source.id);
+                queue.push(source.id);
+            }
+        }
+        return {
+            effectiveRawBatchId: effectiveRawBatch.id,
+            familyIds: Array.from(visited),
+        };
+    }
+    async consumeApprovedMitraOrderLine(tx, lotWeightGram) {
+        while (true) {
+            const line = await tx.mitraOrderRequestLine.findFirst({
+                where: {
+                    weightGram: lotWeightGram,
+                    lpCount: { gt: 0 },
+                    orderRequest: {
+                        status: client_1.MitraOrderRequestStatus.APPROVED,
+                        workerId: { not: null },
+                    },
+                },
+                orderBy: [
+                    { orderRequest: { createdAt: "asc" } },
+                    { updatedAt: "asc" },
+                    { id: "asc" },
+                ],
+                include: {
+                    orderRequest: {
+                        select: {
+                            id: true,
+                            workerId: true,
+                        },
+                    },
+                },
+            });
+            if (!line?.orderRequest.workerId) {
+                return null;
+            }
+            const locked = await tx.mitraOrderRequestLine.updateMany({
+                where: {
+                    id: line.id,
+                    lpCount: { gt: 0 },
+                },
+                data: {
+                    lpCount: { decrement: 1 },
+                },
+            });
+            if (locked.count === 0) {
+                continue;
+            }
+            const request = await tx.mitraOrderRequest.findUnique({
+                where: { id: line.orderRequest.id },
+                select: { requestedGram: true },
+            });
+            if (!request) {
+                return null;
+            }
+            await tx.mitraOrderRequest.update({
+                where: { id: line.orderRequest.id },
+                data: {
+                    requestedGram: Math.max(0, request.requestedGram - lotWeightGram),
+                },
+            });
+            const remainingLines = await tx.mitraOrderRequestLine.count({
+                where: {
+                    orderRequestId: line.orderRequest.id,
+                    lpCount: { gt: 0 },
+                },
+            });
+            if (remainingLines === 0) {
+                await tx.mitraOrderRequest.update({
+                    where: { id: line.orderRequest.id },
+                    data: {
+                        status: client_1.MitraOrderRequestStatus.FULFILLED,
+                        processedAt: new Date(),
+                    },
+                });
+            }
+            return {
+                orderRequestId: line.orderRequest.id,
+                workerId: line.orderRequest.workerId,
+            };
+        }
+    }
+    async getOrCreateWorkerLocation(tx, workerId) {
+        const worker = await tx.worker.findUnique({
+            where: { id: workerId },
+            select: { id: true, name: true },
+        });
+        if (!worker) {
+            throw new Error(`Worker not found for auto assignment: ${workerId}`);
+        }
+        return tx.rackLocation.upsert({
+            where: { workerId: worker.id },
+            update: {
+                code: (0, constants_1.workerRackCode)(worker.id),
+                name: `Rak Mitra - ${worker.name}`,
+                type: client_1.RackType.WORKER,
+            },
+            create: {
+                code: (0, constants_1.workerRackCode)(worker.id),
+                name: `Rak Mitra - ${worker.name}`,
+                type: client_1.RackType.WORKER,
+                workerId: worker.id,
+            },
+        });
+    }
+    async getOrCreateWorkerWorkOrder(tx, workerId) {
+        const active = await tx.workerActiveWorkOrder.findUnique({
+            where: { workerId },
+            select: { workOrderId: true },
+        });
+        if (active) {
+            return active.workOrderId;
+        }
+        const workOrder = await tx.workOrder.create({
+            data: {
+                workerId,
+                status: client_1.WorkOrderStatus.IN_PROGRESS,
+            },
+        });
+        try {
+            await tx.workerActiveWorkOrder.create({
+                data: {
+                    workerId,
+                    workOrderId: workOrder.id,
+                },
+            });
+        }
+        catch (error) {
+            if (error instanceof client_1.Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+                const concurrentActive = await tx.workerActiveWorkOrder.findUnique({
+                    where: { workerId },
+                    select: { workOrderId: true },
+                });
+                if (concurrentActive) {
+                    await tx.workOrder.delete({ where: { id: workOrder.id } });
+                    return concurrentActive.workOrderId;
+                }
+            }
+            throw error;
+        }
+        return workOrder.id;
     }
     async getPreSaleLocation(tx) {
         return tx.rackLocation.upsert({

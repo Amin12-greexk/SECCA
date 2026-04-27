@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const roles_decorator_1 = require("../../auth/roles.decorator");
 const create_location_dto_1 = require("./dto/create-location.dto");
+const find_location_lots_query_dto_1 = require("./dto/find-location-lots-query.dto");
 const locations_service_1 = require("./locations.service");
 let LocationsController = class LocationsController {
     locationsService;
@@ -31,6 +32,9 @@ let LocationsController = class LocationsController {
     }
     findLotsByCode(code) {
         return this.locationsService.findLotsByCode(code);
+    }
+    findLotsByCodePaginated(code, query) {
+        return this.locationsService.findLotsByCodePaginated(code, query);
     }
     findLots(id) {
         return this.locationsService.findLots(id);
@@ -58,6 +62,14 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], LocationsController.prototype, "findLotsByCode", null);
 __decorate([
+    (0, common_1.Get)("code/:code/lots/paginated"),
+    __param(0, (0, common_1.Param)("code")),
+    __param(1, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, find_location_lots_query_dto_1.FindLocationLotsQueryDto]),
+    __metadata("design:returntype", void 0)
+], LocationsController.prototype, "findLotsByCodePaginated", null);
+__decorate([
     (0, common_1.Get)(":id/lots"),
     __param(0, (0, common_1.Param)("id")),
     __metadata("design:type", Function),
@@ -67,7 +79,7 @@ __decorate([
 exports.LocationsController = LocationsController = __decorate([
     (0, swagger_1.ApiTags)("locations"),
     (0, swagger_1.ApiBearerAuth)(),
-    (0, roles_decorator_1.Roles)("manager", "baku", "mitra", "koreksi"),
+    (0, roles_decorator_1.Roles)("manager", "baku", "mitra", "koreksi", "trainer"),
     (0, common_1.Controller)("locations"),
     __metadata("design:paramtypes", [locations_service_1.LocationsService])
 ], LocationsController);

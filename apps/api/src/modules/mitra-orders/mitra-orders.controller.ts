@@ -3,7 +3,9 @@ import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../auth/roles.decorator";
 import { AssignMitraOrderRequestWorkerDto } from "./dto/assign-mitra-order-request-worker.dto";
 import { CreateMitraOrderRequestDto } from "./dto/create-mitra-order-request.dto";
+import { CreateTrainerBulkOrderDto } from "./dto/create-trainer-bulk-order.dto";
 import { QueryMitraOrderRequestDto } from "./dto/query-mitra-order-request.dto";
+import { QueryTrainerWorkersDto } from "./dto/query-trainer-workers.dto";
 import { RejectMitraOrderRequestDto } from "./dto/reject-mitra-order-request.dto";
 import { MitraOrdersService } from "./mitra-orders.service";
 
@@ -22,6 +24,24 @@ export class MitraOrdersController {
     @Req() req: { user?: ReqUser },
   ) {
     return this.mitraOrdersService.create(dto, req.user ?? {});
+  }
+
+  @Post("requests/trainer-bulk")
+  @Roles("trainer", "manager")
+  createTrainerBulk(
+    @Body() dto: CreateTrainerBulkOrderDto,
+    @Req() req: { user?: ReqUser },
+  ) {
+    return this.mitraOrdersService.createTrainerBulk(dto, req.user ?? {});
+  }
+
+  @Get("trainer/workers")
+  @Roles("trainer", "manager", "baku", "koreksi")
+  listTrainerWorkers(
+    @Query() query: QueryTrainerWorkersDto,
+    @Req() req: { user?: ReqUser },
+  ) {
+    return this.mitraOrdersService.listTrainerWorkers(query, req.user ?? {});
   }
 
   @Get("requests")

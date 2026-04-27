@@ -1,5 +1,22 @@
 export type UserRole = 'baku' | 'mitra' | 'koreksi' | 'manager' | 'trainer';
 
+export type UiAccessModuleKey =
+    | 'dashboard'
+    | 'baku'
+    | 'stock'
+    | 'mitra_management'
+    | 'mitra'
+    | 'trainer_orders'
+    | 'koreksi'
+    | 'admin'
+    | 'settings'
+    | 'reports';
+
+export interface UiAccessEntry {
+    moduleKey: UiAccessModuleKey | string;
+    level: number;
+}
+
 export interface User {
     id: string;
     name: string;
@@ -8,6 +25,8 @@ export interface User {
     pin?: string | null;
     role: UserRole;
     workerId?: string | null;
+    useCustomUiAccess?: boolean;
+    uiAccesses?: UiAccessEntry[];
 }
 
 export interface LoginRequest {
@@ -27,4 +46,5 @@ export interface AuthContextType {
     logout: () => void;
     isAuthenticated: boolean;
     hasRole: (roles: UserRole | UserRole[]) => boolean;
+    hasModuleAccess: (moduleKey: UiAccessModuleKey, minLevel?: number) => boolean;
 }

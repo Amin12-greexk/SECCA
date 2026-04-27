@@ -5,6 +5,7 @@ export declare class TraceabilityController {
     trace(lotNumber: string): Promise<{
         lotNumber: string;
         sources: {
+            sourceRawBatchNumber: string;
             supplier: {
                 id: string;
                 name: string;

@@ -29,6 +29,8 @@ const workers_module_1 = require("./modules/workers/workers.module");
 const users_module_1 = require("./modules/users/users.module");
 const analytics_module_1 = require("./modules/analytics/analytics.module");
 const mitra_orders_module_1 = require("./modules/mitra-orders/mitra-orders.module");
+const attendance_module_1 = require("./modules/attendance/attendance.module");
+const barang_jadi_module_1 = require("./modules/barang-jadi/barang-jadi.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -54,6 +56,8 @@ exports.AppModule = AppModule = __decorate([
             users_module_1.UsersModule,
             analytics_module_1.AnalyticsModule,
             mitra_orders_module_1.MitraOrdersModule,
+            attendance_module_1.AttendanceModule,
+            barang_jadi_module_1.BarangJadiModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

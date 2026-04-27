@@ -64,22 +64,38 @@ enum GradeType {
 }
 
 model AppUser {
-  id           String   @id @default(uuid())
-  name         String
-  email        String   @unique
-  phone        String?  @unique
-  passwordHash String
-  role         UserRole
-  workerId     String?  @unique
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                String         @id @default(uuid())
+  name              String
+  email             String         @unique
+  phone             String?        @unique
+  passwordHash      String
+  role              UserRole
+  workerId          String?        @unique
+  useCustomUiAccess Boolean        @default(false)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
-  worker            Worker? @relation("UserWorker", fields: [workerId], references: [id])
-  supervisedWorkers Worker[] @relation("WorkerTrainer")
-  mitraOrderRequests MitraOrderRequest[] @relation("MitraOrderRequester")
+  worker              Worker?           @relation("UserWorker", fields: [workerId], references: [id])
+  supervisedWorkers   Worker[]          @relation("WorkerTrainer")
+  mitraOrderRequests  MitraOrderRequest[] @relation("MitraOrderRequester")
   mitraOrderProcessed MitraOrderRequest[] @relation("MitraOrderProcessor")
+  uiAccesses          UserUiAccess[]
 
   @@index([role])
+}
+
+model UserUiAccess {
+  id        String   @id @default(uuid())
+  userId    String
+  moduleKey String
+  level     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user AppUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, moduleKey])
+  @@index([userId])
 }
 
 model Supplier {
@@ -157,6 +173,61 @@ model PecahBonPreset {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model BarangJadi {
+  id        String          @id @default(uuid())
+  name      String          @unique
+  byProductKeys String[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  byProducts BarangJadiByProduct[]
+  resultGrades BarangJadiResultGrade[]
+  finishReceipts FinishReceipt[]
+}
+
+model ByProductType {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  barangJadis BarangJadiByProduct[]
+}
+
+model BarangJadiByProduct {
+  barangJadiId    String
+  byProductTypeId String
+  createdAt       DateTime @default(now())
+
+  barangJadi    BarangJadi   @relation(fields: [barangJadiId], references: [id], onDelete: Cascade)
+  byProductType ByProductType @relation(fields: [byProductTypeId], references: [id], onDelete: Restrict)
+
+  @@id([barangJadiId, byProductTypeId])
+  @@index([byProductTypeId])
+}
+
+model BarangJadiGradeType {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  barangJadis    BarangJadiResultGrade[]
+  finishReceipts FinishReceiptResultGrade[]
+}
+
+model BarangJadiResultGrade {
+  barangJadiId      String
+  resultGradeTypeId String
+  createdAt         DateTime @default(now())
+
+  barangJadi      BarangJadi         @relation(fields: [barangJadiId], references: [id], onDelete: Cascade)
+  resultGradeType BarangJadiGradeType @relation(fields: [resultGradeTypeId], references: [id], onDelete: Restrict)
+
+  @@id([barangJadiId, resultGradeTypeId])
+  @@index([resultGradeTypeId])
 }
 
 model RackLocation {
@@ -371,6 +442,9 @@ model WorkOrderItem {
   lane        WorkLane             @default(IN_PROGRESS)
   startedAt   DateTime?
   readyAt     DateTime?
+  dryingStartedAt DateTime?
+  dryingReadyAt   DateTime?
+  dryCheckedAt    DateTime?
   canceledAt  DateTime?
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
@@ -379,6 +453,8 @@ model WorkOrderItem {
   lot           ProductionLot @relation(fields: [lotId], references: [id])
   finishReceipt FinishReceipt?
   payrollEntry  PayrollEntry?
+
+  @@index([dryingReadyAt])
 }
 
 model WorkerActiveWorkOrder {
@@ -394,6 +470,7 @@ model WorkerActiveWorkOrder {
 model FinishReceipt {
   id                String   @id @default(uuid())
   workOrderItemId   String   @unique
+  barangJadiId      String?
   returnedAt        DateTime
   mainOutWeightGram Int
   byProductWeightGram Int
@@ -406,7 +483,26 @@ model FinishReceipt {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  barangJadi   BarangJadi?   @relation(fields: [barangJadiId], references: [id])
   workOrderItem WorkOrderItem @relation(fields: [workOrderItemId], references: [id])
+  resultGrades FinishReceiptResultGrade[]
+
+  @@index([barangJadiId])
+}
+
+model FinishReceiptResultGrade {
+  id                String   @id @default(uuid())
+  finishReceiptId   String
+  resultGradeTypeId String
+  weightGram        Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  finishReceipt   FinishReceipt      @relation(fields: [finishReceiptId], references: [id], onDelete: Cascade)
+  resultGradeType BarangJadiGradeType @relation(fields: [resultGradeTypeId], references: [id], onDelete: Restrict)
+
+  @@unique([finishReceiptId, resultGradeTypeId])
+  @@index([resultGradeTypeId])
 }
 
 model PayrollEntry {

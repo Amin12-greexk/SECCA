@@ -247,7 +247,13 @@ let LotsService = class LotsService {
         return this.prisma.$transaction(async (tx) => {
             const lot = await tx.productionLot.findUnique({
                 where: { id: lotId },
-                include: { location: true, grade: true },
+                include: {
+                    location: true,
+                    grade: true,
+                    workItem: {
+                        select: { id: true, status: true },
+                    },
+                },
             });
             if (!lot) {
                 return (0, errors_1.notFound)("Lot not found", { lotId });
@@ -262,10 +268,28 @@ let LotsService = class LotsService {
                     location: toLocation.code,
                 });
             }
+            const fromCode = lot.location.code;
+            const manualRackCodes = [
+                constants_1.LOCATION_CODES.PRE_SALE,
+                constants_1.LOCATION_CODES.MITRA_ORDER,
+            ];
+            if (!manualRackCodes.includes(fromCode) ||
+                !manualRackCodes.includes(toLocation.code)) {
+                return (0, errors_1.conflict)("Perpindahan manual hanya boleh antara Rak Sementara dan Rak Mitra Order", {
+                    lotNumber: lot.lotNumber,
+                    fromLocationCode: fromCode,
+                    toLocationCode: toLocation.code,
+                });
+            }
+            if (lot.workItem?.status === client_1.WorkOrderItemStatus.IN_PROGRESS) {
+                return (0, errors_1.conflict)("Lot sudah masuk work order aktif", {
+                    lotNumber: lot.lotNumber,
+                });
+            }
             const nextStatus = toLocation.code === constants_1.LOCATION_CODES.PRE_SALE
                 ? client_1.LotStatus.AVAILABLE
                 : toLocation.code === constants_1.LOCATION_CODES.MITRA_ORDER
-                    ? client_1.LotStatus.IN_PROGRESS
+                    ? client_1.LotStatus.AVAILABLE
                     : lot.status;
             const updated = await tx.productionLot.update({
                 where: { id: lot.id },

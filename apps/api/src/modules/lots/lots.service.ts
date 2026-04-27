@@ -1,5 +1,11 @@
 import { Injectable } from "@nestjs/common";
-import { LotStatus, MovementType, Prisma, RackType } from "@prisma/client";
+import {
+  LotStatus,
+  MovementType,
+  Prisma,
+  RackType,
+  WorkOrderItemStatus,
+} from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
 import { NumberingService } from "../../common/numbering/numbering.service";
@@ -300,7 +306,13 @@ export class LotsService {
     return this.prisma.$transaction(async (tx) => {
       const lot = await tx.productionLot.findUnique({
         where: { id: lotId },
-        include: { location: true, grade: true },
+        include: {
+          location: true,
+          grade: true,
+          workItem: {
+            select: { id: true, status: true },
+          },
+        },
       });
 
       if (!lot) {
@@ -320,11 +332,36 @@ export class LotsService {
         });
       }
 
+      const fromCode = lot.location.code;
+      const manualRackCodes: string[] = [
+        LOCATION_CODES.PRE_SALE,
+        LOCATION_CODES.MITRA_ORDER,
+      ];
+      if (
+        !manualRackCodes.includes(fromCode) ||
+        !manualRackCodes.includes(toLocation.code)
+      ) {
+        return conflict(
+          "Perpindahan manual hanya boleh antara Rak Sementara dan Rak Mitra Order",
+          {
+            lotNumber: lot.lotNumber,
+            fromLocationCode: fromCode,
+            toLocationCode: toLocation.code,
+          },
+        );
+      }
+
+      if (lot.workItem?.status === WorkOrderItemStatus.IN_PROGRESS) {
+        return conflict("Lot sudah masuk work order aktif", {
+          lotNumber: lot.lotNumber,
+        });
+      }
+
       const nextStatus =
         toLocation.code === LOCATION_CODES.PRE_SALE
           ? LotStatus.AVAILABLE
           : toLocation.code === LOCATION_CODES.MITRA_ORDER
-            ? LotStatus.IN_PROGRESS
+            ? LotStatus.AVAILABLE
             : lot.status;
 
       const updated = await tx.productionLot.update({

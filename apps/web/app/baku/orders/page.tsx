@@ -284,7 +284,7 @@ function BakuOrdersContent() {
                                             )}
                                             {!request.workerId && (
                                                 <p className="text-sm font-medium text-amber-700">
-                                                    Belum ada mitra yang di-assign oleh trainer.
+                                                    Order agregat trainer. Assign LP ke mitra dilakukan setelah LP dipindah ke Rak Order Mitra.
                                                 </p>
                                             )}
                                         </div>
@@ -310,9 +310,9 @@ function BakuOrdersContent() {
                                                 <Button
                                                     size="sm"
                                                     onClick={() => handleApprove(request)}
-                                                    disabled={isBusy || !request.workerId}
+                                                    disabled={isBusy}
                                                 >
-                                                    {isBusy ? 'Memproses...' : request.workerId ? 'Approve' : 'Assign dulu'}
+                                                    {isBusy ? 'Memproses...' : 'Approve'}
                                                 </Button>
                                                 <Button
                                                     size="sm"

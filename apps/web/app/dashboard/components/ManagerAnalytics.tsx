@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { LineChart } from '@mui/x-charts/LineChart';
+import { PieChart } from '@mui/x-charts/PieChart';
 import {
     getManagerGradeUsage,
     getManagerCapacity,
@@ -75,130 +77,56 @@ const DONUT_COLORS = [
 
 /* ─── SVG Area Chart ──────────────────────────────────────────── */
 
-function AreaChart({ data, height = 220 }: {
+function AreaChart({ data, height = 300 }: {
     data: { label: string; value: number; sublabel?: string }[];
     height?: number;
 }) {
-    const animationKey = data.map((d) => `${d.label}:${d.value}`).join('|');
-    const [isAnimated, setIsAnimated] = useState(false);
-
-    const W = 860;
-    const H = height;
-    const padL = 52, padR = 18, padT = 20, padB = 54;
-    const chartW = W - padL - padR;
-    const chartH = H - padT - padB;
-
-    const maxVal = Math.max(...data.map((d) => d.value), 1);
-    const niceMax = Math.ceil(maxVal / 5) * 5 || 5;
-    const gridLines = 4;
-
-    const points = data.map((d, i) => ({
-        x: padL + (data.length === 1 ? chartW / 2 : (i / (data.length - 1)) * chartW),
-        y: padT + chartH - (d.value / niceMax) * chartH,
-        ...d,
-    }));
-
-    const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
-    const areaPath = `${linePath} L${points[points.length - 1].x},${padT + chartH} L${points[0].x},${padT + chartH} Z`;
-    const lineLength = points.reduce((sum, p, i) => {
-        if (i === 0) return 0;
-        const prev = points[i - 1];
-        return sum + Math.hypot(p.x - prev.x, p.y - prev.y);
-    }, 0);
-
-    useEffect(() => {
-        setIsAnimated(false);
-        const rafId = window.requestAnimationFrame(() => setIsAnimated(true));
-        return () => window.cancelAnimationFrame(rafId);
-    }, [animationKey]);
-
     if (data.length === 0) return null;
 
     return (
-        <div
-            className="w-full overflow-x-auto rounded-lg border border-gray-100 bg-gradient-to-b from-white to-green-50/40 p-2"
-            style={{
-                opacity: isAnimated ? 1 : 0.6,
-                transform: `translateY(${isAnimated ? 0 : 6}px)`,
-                transition: 'opacity 350ms ease, transform 350ms ease',
-            }}
-        >
-            <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 540 }}>
-                <defs>
-                    <linearGradient id="manager-area-fill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#10b981" stopOpacity="0.26" />
-                        <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
-                    </linearGradient>
-                    <linearGradient id="manager-line-fill" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor="#059669" />
-                        <stop offset="100%" stopColor="#0ea5e9" />
-                    </linearGradient>
-                </defs>
-
-                {/* Grid */}
-                {Array.from({ length: gridLines + 1 }).map((_, i) => {
-                    const y = padT + (i / gridLines) * chartH;
-                    const val = niceMax - (i / gridLines) * niceMax;
-                    return (
-                        <g key={i}>
-                            <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="#e5e7eb" strokeWidth="1" strokeDasharray={i === gridLines ? "0" : "4 4"} />
-                            <text x={padL - 8} y={y + 4} textAnchor="end" className="text-[10px]" fill="#9ca3af" fontSize="10">{fmt(val)}</text>
-                        </g>
-                    );
-                })}
-
-                {/* Area */}
-                <path
-                    d={areaPath}
-                    fill="url(#manager-area-fill)"
-                    style={{
-                        opacity: isAnimated ? 1 : 0,
-                        transition: 'opacity 550ms ease 120ms',
-                    }}
-                />
-
-                {/* Line */}
-                <path
-                    d={linePath}
-                    fill="none"
-                    stroke="url(#manager-line-fill)"
-                    strokeWidth="3"
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                    strokeDasharray={lineLength}
-                    strokeDashoffset={isAnimated ? 0 : lineLength}
-                    style={{ transition: 'stroke-dashoffset 700ms cubic-bezier(0.22, 1, 0.36, 1)' }}
-                />
-
-                {/* Data points + labels */}
-                {points.map((p, i) => (
-                    <g
-                        key={i}
-                        style={{
-                            opacity: isAnimated ? 1 : 0,
-                            transform: `translateY(${isAnimated ? 0 : 6}px)`,
-                            transition: `opacity 320ms ease ${200 + (i * 40)}ms, transform 320ms ease ${200 + (i * 40)}ms`,
-                        }}
-                    >
-                        <circle cx={p.x} cy={p.y} r="4.5" fill="#fff" stroke="#059669" strokeWidth="2" />
-                        <text x={p.x} y={p.y - 10} textAnchor="middle" fill="#059669" fontSize="10" fontWeight="600">
-                            {fmt(p.value, 1)}
-                        </text>
-                        {/* X-axis labels */}
-                        {(data.length <= 8 || i % 2 === 0 || i === data.length - 1) && (
-                            <text
-                                x={p.x}
-                                y={padT + chartH + 18}
-                                textAnchor="middle"
-                                fill="#6b7280"
-                                fontSize="9"
-                            >
-                                {p.label}
-                            </text>
-                        )}
-                    </g>
-                ))}
-            </svg>
+        <div className="w-full rounded-lg border border-gray-100 bg-gradient-to-b from-white to-green-50/40 p-2">
+            <LineChart
+                height={height}
+                margin={{ top: 24, right: 20, bottom: 54, left: 64 }}
+                xAxis={[
+                    {
+                        scaleType: 'point',
+                        data: data.map((point) => point.label),
+                        tickLabelStyle: { fontSize: 10, fill: '#6b7280' },
+                    },
+                ]}
+                yAxis={[
+                    {
+                        min: 0,
+                        tickLabelStyle: { fontSize: 10, fill: '#9ca3af' },
+                        valueFormatter: (value: number | null) => fmt(Number(value ?? 0)),
+                    },
+                ]}
+                series={[
+                    {
+                        id: 'weekly-total',
+                        label: 'Total Gram',
+                        data: data.map((point) => point.value),
+                        valueFormatter: (value) => `${fmt(Number(value ?? 0), 1)} gr`,
+                        area: true,
+                        color: '#059833',
+                        curve: 'monotoneX',
+                        showMark: true,
+                    },
+                ]}
+                sx={{
+                    '& .MuiAreaElement-root': {
+                        fill: 'rgba(5, 152, 51, 0.18)',
+                    },
+                    '& .MuiLineElement-root': {
+                        strokeWidth: 3,
+                    },
+                    '& .MuiMarkElement-root': {
+                        stroke: '#059833',
+                        fill: '#fff',
+                    },
+                }}
+            />
         </div>
     );
 }
@@ -210,15 +138,7 @@ function DonutChart({ rows, total, title }: {
     total: number;
     title: string;
 }) {
-    const size = 230;
-    const cx = size / 2, cy = size / 2;
-    const r = 78;
-    const stroke = 28;
-    const circumference = 2 * Math.PI * r;
     const animatedTotal = useAnimatedNumber(total, 650);
-    const [isAnimated, setIsAnimated] = useState(false);
-    const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-    const [tooltip, setTooltip] = useState<{ x: number; y: number; index: number } | null>(null);
 
     const normalizedRows = useMemo(() => {
         if (rows.length === 0 || total <= 0) return [];
@@ -231,7 +151,7 @@ function DonutChart({ rows, total, title }: {
         return [
             ...head,
             {
-                key: "Lainnya",
+                key: 'Lainnya',
                 gram: Math.round(otherGram * 100) / 100,
                 percentage: Math.round((otherGram / total) * 10000) / 100,
                 lpCount: otherLp,
@@ -239,135 +159,64 @@ function DonutChart({ rows, total, title }: {
         ];
     }, [rows, total]);
 
-    const segments = useMemo(() => {
-        if (normalizedRows.length === 0 || total <= 0) return [];
-        let currentOffset = 0;
-        return normalizedRows.map((row, i) => {
-            const fraction = row.gram / total;
-            const dash = Math.max(fraction * circumference, 0);
-            const segment = {
+    const segments = useMemo(
+        () =>
+            normalizedRows.map((row, index) => ({
                 ...row,
-                color: DONUT_COLORS[i % DONUT_COLORS.length],
-                dash,
-                offset: currentOffset,
-            };
-            currentOffset -= dash;
-            return segment;
-        });
-    }, [normalizedRows, total, circumference]);
-
-    const segmentKey = normalizedRows.map((row) => `${row.key}:${row.gram}`).join('|');
-
-    useEffect(() => {
-        setIsAnimated(false);
-        const rafId = window.requestAnimationFrame(() => setIsAnimated(true));
-        return () => window.cancelAnimationFrame(rafId);
-    }, [segmentKey, total]);
-
-    const hideTooltip = () => {
-        setHoveredIndex(null);
-        setTooltip(null);
-    };
-
-    const updateTooltip = (index: number, event: ReactMouseEvent<SVGCircleElement>) => {
-        const bounds = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
-        if (!bounds) return;
-        setHoveredIndex(index);
-        setTooltip({
-            index,
-            x: event.clientX - bounds.left,
-            y: event.clientY - bounds.top,
-        });
-    };
+                id: index,
+                value: row.gram,
+                label: row.key,
+                color: DONUT_COLORS[index % DONUT_COLORS.length],
+            })),
+        [normalizedRows],
+    );
 
     return (
         <div className="flex flex-col items-center">
-            {title ? <p className="text-sm font-semibold text-gray-700 mb-2">{title}</p> : null}
+            {title ? <p className="mb-2 text-sm font-semibold text-gray-700">{title}</p> : null}
             {rows.length === 0 ? (
-                <div className="flex items-center justify-center h-[230px] text-sm text-gray-400">
+                <div className="flex h-[230px] items-center justify-center text-sm text-gray-400">
                     Tidak ada data
                 </div>
             ) : (
                 <>
                     <div className="relative">
-                        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-                            <circle
-                                cx={cx}
-                                cy={cy}
-                                r={r}
-                                fill="none"
-                                stroke="#ecfdf5"
-                                strokeWidth={stroke}
-                            />
-                            {segments.map((segment, i) => {
-                                const isHovered = hoveredIndex === i;
-                                return (
-                                    <g
-                                        key={i}
-                                        transform={`rotate(-90 ${cx} ${cy})`}
-                                        style={{
-                                            transformOrigin: `${cx}px ${cy}px`,
-                                            transform: isHovered ? 'scale(1.035)' : 'scale(1)',
-                                            filter: isHovered ? 'drop-shadow(0 3px 10px rgba(15, 23, 42, 0.16))' : 'none',
-                                            transition: 'transform 180ms ease, filter 180ms ease',
-                                        }}
-                                    >
-                                        <circle
-                                            cx={cx}
-                                            cy={cy}
-                                            r={r}
-                                            fill="none"
-                                            stroke={segment.color}
-                                            strokeWidth={isHovered ? stroke + 2 : stroke}
-                                            strokeLinecap="butt"
-                                            strokeDasharray={isAnimated ? `${segment.dash} ${circumference}` : `0 ${circumference}`}
-                                            strokeDashoffset={isAnimated ? segment.offset : 0}
-                                            onMouseEnter={(event) => updateTooltip(i, event)}
-                                            onMouseMove={(event) => updateTooltip(i, event)}
-                                            onMouseLeave={hideTooltip}
-                                            style={{
-                                                cursor: 'pointer',
-                                                transition: `stroke-dasharray 650ms cubic-bezier(0.22, 1, 0.36, 1) ${i * 50}ms, stroke-dashoffset 650ms cubic-bezier(0.22, 1, 0.36, 1) ${i * 50}ms, stroke-width 180ms ease`,
-                                            }}
-                                        />
-                                    </g>
-                                );
-                            })}
-                            {/* Center text */}
-                            <text x={cx} y={cy - 10} textAnchor="middle" fill="#111827" fontSize="16" fontWeight="700">
-                                {fmt(animatedTotal, 0)}
-                            </text>
-                            <text x={cx} y={cy + 8} textAnchor="middle" fill="#6b7280" fontSize="10">
-                                Total periode
-                            </text>
-                            <text x={cx} y={cy + 22} textAnchor="middle" fill="#9ca3af" fontSize="9">
-                                gram
-                            </text>
-                        </svg>
-
-                        {tooltip && segments[tooltip.index] ? (
-                            <div
-                                className="pointer-events-none absolute z-20 min-w-[180px] rounded-lg border border-gray-800 bg-gray-900/95 px-3 py-2 text-left text-xs text-white shadow-xl"
-                                style={{
-                                    left: `${Math.min(Math.max(tooltip.x + 12, 8), size - 190)}px`,
-                                    top: `${Math.min(Math.max(tooltip.y - 12, 8), size - 92)}px`,
-                                }}
-                            >
-                                <p className="font-semibold leading-tight">{segments[tooltip.index].key}</p>
-                                <p className="mt-1 text-[11px] text-gray-200">
-                                    {fmt(segments[tooltip.index].gram, 1)} gr · {segments[tooltip.index].lpCount} LP
-                                </p>
-                                <p className="text-[11px] text-emerald-300">
-                                    {segments[tooltip.index].percentage.toFixed(1)}%
-                                </p>
-                            </div>
-                        ) : null}
+                        <PieChart
+                            height={250}
+                            series={[
+                                {
+                                    data: segments,
+                                    innerRadius: 70,
+                                    outerRadius: 108,
+                                    paddingAngle: 1.6,
+                                    cornerRadius: 5,
+                                    highlighted: { additionalRadius: 6 },
+                                    faded: { color: 'rgba(107, 114, 128, 0.15)' },
+                                    valueFormatter: (item) => {
+                                        const row = segments.find((segment) => segment.id === item.id);
+                                        if (!row) return '';
+                                        return `${fmt(row.gram, 1)} gr - ${row.lpCount} LP - ${row.percentage.toFixed(1)}%`;
+                                    },
+                                },
+                            ]}
+                            hideLegend
+                            sx={{
+                                '& .MuiChartsTooltip-paper': {
+                                    borderRadius: '10px',
+                                    border: '1px solid rgba(17, 24, 39, 0.08)',
+                                },
+                            }}
+                        />
+                        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                            <p className="text-lg font-bold text-gray-900">{fmt(animatedTotal, 0)}</p>
+                            <p className="text-[10px] text-gray-500">Total periode</p>
+                            <p className="text-[10px] text-gray-400">gram</p>
+                        </div>
                     </div>
 
-                    {/* Legend */}
                     <div className="mt-2 w-full max-w-[420px] space-y-2">
-                        {segments.map((segment, i) => (
-                            <div key={i} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 text-xs">
+                        {segments.map((segment) => (
+                            <div key={segment.key} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 text-xs">
                                 <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: segment.color }} />
                                 <div className="min-w-0">
                                     <div className="truncate text-gray-700">{segment.key}</div>
@@ -375,9 +224,9 @@ function DonutChart({ rows, total, title }: {
                                         <div
                                             className="h-full rounded-full"
                                             style={{
-                                                width: `${Math.min(isAnimated ? segment.percentage : 0, 100)}%`,
+                                                width: `${Math.min(segment.percentage, 100)}%`,
                                                 backgroundColor: segment.color,
-                                                transition: `width 500ms ease ${120 + (i * 60)}ms`,
+                                                transition: 'width 450ms ease',
                                             }}
                                         />
                                     </div>
@@ -392,7 +241,7 @@ function DonutChart({ rows, total, title }: {
     );
 }
 
-/* ─── Main Component ──────────────────────────────────────────── */
+/* --- Main Component -------------------------------------------- */
 
 export default function ManagerAnalytics() {
     const defaults = getDefaultRange();

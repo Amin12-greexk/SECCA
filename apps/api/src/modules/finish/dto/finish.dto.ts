@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsDateString, IsInt, IsOptional, IsString, IsUUID, Min } from "class-validator";
+import { Type } from "class-transformer";
+import { IsArray, IsDateString, IsInt, IsOptional, IsString, IsUUID, Min, ValidateNested } from "class-validator";
+import { FinishResultGradeEntryDto } from "./finish-result-grade-entry.dto";
 
 export class FinishDto {
   @ApiProperty()
@@ -17,6 +19,11 @@ export class FinishDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsUUID()
+  barangJadiId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsInt()
   @Min(0)
   byProductWeightGram?: number;
@@ -25,4 +32,11 @@ export class FinishDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({ type: [FinishResultGradeEntryDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => FinishResultGradeEntryDto)
+  resultGrades?: FinishResultGradeEntryDto[];
 }

@@ -14,6 +14,8 @@ import { LOCATION_CODES } from "../../common/constants";
 
 @Injectable()
 export class WorkItemsService {
+  private static readonly DRYING_HOURS = 10;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly movementService: InventoryMovementService,
@@ -68,11 +70,73 @@ export class WorkItemsService {
       });
     }
 
+    if (item.dryingStartedAt) {
+      return conflict("Item sudah masuk proses pengeringan", {
+        workOrderItemId: itemId,
+        dryingStartedAt: item.dryingStartedAt,
+      });
+    }
+
+    const now = new Date();
+    const dryingReadyAt = new Date(
+      now.getTime() + WorkItemsService.DRYING_HOURS * 60 * 60 * 1000,
+    );
+
+    return this.prisma.workOrderItem.update({
+      where: { id: itemId },
+      data: {
+        lane: WorkLane.IN_PROGRESS,
+        readyAt: now,
+        dryingStartedAt: now,
+        dryingReadyAt,
+        dryCheckedAt: null,
+      },
+    });
+  }
+
+  async completeDryQc(itemId: string) {
+    const item = await this.prisma.workOrderItem.findUnique({
+      where: { id: itemId },
+    });
+
+    if (!item) {
+      return notFound("Work order item not found", { workOrderItemId: itemId });
+    }
+
+    if (item.status !== WorkOrderItemStatus.IN_PROGRESS) {
+      return conflict("Work order item tidak aktif", { workOrderItemId: itemId });
+    }
+
+    if (!item.dryingStartedAt || !item.dryingReadyAt) {
+      return conflict("Item belum masuk proses pengeringan", {
+        workOrderItemId: itemId,
+      });
+    }
+
+    if (item.dryCheckedAt) {
+      return conflict("Koreksi kering sudah selesai", {
+        workOrderItemId: itemId,
+        dryCheckedAt: item.dryCheckedAt,
+      });
+    }
+
+    const now = new Date();
+    if (now.getTime() < item.dryingReadyAt.getTime()) {
+      const remainingMinutes = Math.ceil(
+        (item.dryingReadyAt.getTime() - now.getTime()) / (60 * 1000),
+      );
+      return conflict("Waktu pengeringan belum terpenuhi", {
+        workOrderItemId: itemId,
+        dryingReadyAt: item.dryingReadyAt,
+        remainingMinutes,
+      });
+    }
+
     return this.prisma.workOrderItem.update({
       where: { id: itemId },
       data: {
         lane: WorkLane.READY_TO_SUBMIT,
-        readyAt: new Date(),
+        dryCheckedAt: now,
       },
     });
   }

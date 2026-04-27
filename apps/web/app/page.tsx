@@ -6,18 +6,19 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { gsap } from 'gsap';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { getDefaultAuthorizedPath } from '@/lib/access-control';
 
 export default function Home() {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!loading && isAuthenticated) {
-      router.push('/dashboard');
+      router.push(getDefaultAuthorizedPath(user));
     }
-  }, [isAuthenticated, loading, router]);
+  }, [isAuthenticated, loading, router, user]);
 
   useEffect(() => {
     if (loading || isAuthenticated || !contentRef.current) return;

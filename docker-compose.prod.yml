@@ -33,6 +33,9 @@ services:
       APP_JWT_SECRET: ${APP_JWT_SECRET:-change-me}
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-secca_prod}?schema=public}
       REDIS_URL: redis://redis:6379
+      ABSEN_API_URL: ${ABSEN_API_URL:-}
+      ABSEN_API_TOKEN: ${ABSEN_API_TOKEN:-}
+      ABSEN_API_TIMEOUT_MS: ${ABSEN_API_TIMEOUT_MS:-10000}
     depends_on:
       db:
         condition: service_healthy

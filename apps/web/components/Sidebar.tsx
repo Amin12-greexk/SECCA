@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { useSidebar } from '@/lib/context/SidebarContext';
 import type { UserRole } from '@/lib/types/auth';
 import { gsap } from 'gsap';
+import type { UiAccessModuleKey } from '@/lib/types/auth';
 
 interface MenuItem {
     name: string;
@@ -15,6 +16,28 @@ interface MenuItem {
     roles: UserRole[];
     children?: MenuItem[];
 }
+
+const MENU_ACCESS_REQUIREMENTS: Record<string, { moduleKey: UiAccessModuleKey; minLevel: number }> = {
+    Dashboard: { moduleKey: 'dashboard', minLevel: 1 },
+    'Terima Baku': { moduleKey: 'baku', minLevel: 1 },
+    'Tambah Grading': { moduleKey: 'baku', minLevel: 2 },
+    'Tambah Supplier': { moduleKey: 'baku', minLevel: 3 },
+    'Data Stock': { moduleKey: 'stock', minLevel: 1 },
+    Rak: { moduleKey: 'stock', minLevel: 2 },
+    'Daftar Mitra': { moduleKey: 'mitra_management', minLevel: 1 },
+    'Tambah Mitra': { moduleKey: 'mitra_management', minLevel: 2 },
+    'Pekerjaan Mitra': { moduleKey: 'mitra', minLevel: 1 },
+    'Order Lp untuk mitra': { moduleKey: 'trainer_orders', minLevel: 1 },
+    'Board Mitra': { moduleKey: 'trainer_orders', minLevel: 2 },
+    'Data Koreksi': { moduleKey: 'koreksi', minLevel: 1 },
+    'Barang Jadi': { moduleKey: 'koreksi', minLevel: 2 },
+    'Riwayat Koreksi': { moduleKey: 'koreksi', minLevel: 3 },
+    Laporan: { moduleKey: 'reports', minLevel: 1 },
+    Pengaturan: { moduleKey: 'settings', minLevel: 1 },
+    'Manajemen Data': { moduleKey: 'admin', minLevel: 1 },
+    'Manajemen Akun': { moduleKey: 'admin', minLevel: 2 },
+    'Assign Pengawas': { moduleKey: 'admin', minLevel: 3 },
+};
 
 const menuItems: MenuItem[] = [
     // Dashboard - untuk semua role KECUALI baku
@@ -134,7 +157,7 @@ const menuItems: MenuItem[] = [
         roles: ['mitra'],
     },
     {
-        name: 'Pengawas',
+        name: 'Order Mitra',
         icon: (
             <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                 <path d="M12 4l8 4-8 4-8-4 8-4z" />
@@ -144,22 +167,11 @@ const menuItems: MenuItem[] = [
         roles: ['trainer', 'manager'],
         children: [
             {
-                name: 'Order Mitra',
+                name: 'Order Lp untuk mitra',
                 href: '/trainer/orders',
                 icon: (
                     <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                         <path d="M12 5v14m7-7H5" />
-                    </svg>
-                ),
-                roles: ['trainer', 'manager'],
-            },
-            {
-                name: 'Assign Mitra',
-                href: '/trainer/assign',
-                icon: (
-                    <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                        <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                        <path d="M12 14v7m0 0l-3-3m3 3l3-3" />
                     </svg>
                 ),
                 roles: ['trainer', 'manager'],
@@ -183,6 +195,16 @@ const menuItems: MenuItem[] = [
         icon: (
             <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                 <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+        ),
+        roles: ['koreksi', 'manager'],
+    },
+    {
+        name: 'Barang Jadi',
+        href: '/koreksi/barang-jadi',
+        icon: (
+            <svg className="w-5 h-5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
         ),
         roles: ['koreksi', 'manager'],
@@ -250,6 +272,20 @@ const menuItems: MenuItem[] = [
                 ),
                 roles: ['manager'],
             },
+            {
+                name: 'Assign Pengawas',
+                href: '/admin/mitra-pengawas',
+                icon: (
+                    <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                        <path d="M17 20h5v-2a3 3 0 00-5.356-1.857" />
+                        <path d="M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857" />
+                        <path d="M7 20H2v-2a3 3 0 015.356-1.857" />
+                        <path d="M7 20v-2c0-.656.126-1.283.356-1.857" />
+                        <path d="M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                ),
+                roles: ['manager'],
+            },
         ],
     },
 ];
@@ -271,7 +307,7 @@ function Tooltip({ children, label, show }: { children: React.ReactNode; label: 
 
 export default function Sidebar() {
     const pathname = usePathname();
-    const { user } = useAuth();
+    const { user, hasModuleAccess } = useAuth();
     const { isCollapsed, isMobileOpen, isMobile, toggleSidebar, closeMobileMenu } = useSidebar();
     const [openMenus, setOpenMenus] = useState<string[]>([]);
     const navRef = useRef<HTMLElement>(null);
@@ -298,10 +334,20 @@ export default function Sidebar() {
 
     if (!user) return null;
 
-    // Filter menu items based on user role
-    const visibleMenuItems = menuItems.filter((item) =>
-        item.roles.includes(user.role as UserRole)
-    );
+    const isMenuVisible = (item: MenuItem): boolean => {
+        if (item.children && item.children.length > 0) {
+            return item.children.some((child) => isMenuVisible(child));
+        }
+
+        const accessRequirement = MENU_ACCESS_REQUIREMENTS[item.name];
+        if (accessRequirement) {
+            return hasModuleAccess(accessRequirement.moduleKey, accessRequirement.minLevel);
+        }
+
+        return item.roles.includes(user.role as UserRole);
+    };
+
+    const visibleMenuItems = menuItems.filter((item) => isMenuVisible(item));
 
     const toggleMenu = (menuName: string) => {
         setOpenMenus((prev) =>
@@ -383,7 +429,7 @@ export default function Sidebar() {
                     {isOpen && (!isCollapsed || isMobile) && (
                         <div className="mt-1 ml-4 pl-4 border-l-2 border-gray-100 space-y-1">
                             {(item.children ?? [])
-                                .filter((child) => child.roles.includes(user.role as UserRole))
+                                .filter((child) => isMenuVisible(child))
                                 .map((child, childIndex) => renderMenuItem(child, true, childIndex))}
                         </div>
                     )}

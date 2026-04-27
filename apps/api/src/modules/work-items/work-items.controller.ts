@@ -22,6 +22,13 @@ export class WorkItemsController {
     return this.workItemsService.markReady(id);
   }
 
+  @Post(":id/complete-dry-qc")
+  @ApiParam({ name: "id" })
+  @Roles("koreksi", "manager", "baku", "trainer")
+  completeDryQc(@Param("id") id: string) {
+    return this.workItemsService.completeDryQc(id);
+  }
+
   @Post(":id/cancel")
   @ApiParam({ name: "id" })
   cancel(@Param("id") id: string) {

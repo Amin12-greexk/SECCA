@@ -20,6 +20,8 @@ import { WorkersModule } from "./modules/workers/workers.module";
 import { UsersModule } from "./modules/users/users.module";
 import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { MitraOrdersModule } from "./modules/mitra-orders/mitra-orders.module";
+import { AttendanceModule } from "./modules/attendance/attendance.module";
+import { BarangJadiModule } from "./modules/barang-jadi/barang-jadi.module";
 
 @Module({
   imports: [
@@ -42,6 +44,8 @@ import { MitraOrdersModule } from "./modules/mitra-orders/mitra-orders.module";
     UsersModule,
     AnalyticsModule,
     MitraOrdersModule,
+    AttendanceModule,
+    BarangJadiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

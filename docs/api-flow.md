@@ -159,6 +159,17 @@ Authorization: Bearer <jwt>
 ```
 Hasil: perhitungan susut + payroll entry otomatis.
 
+Ringkasan rendemen/susut/pembayaran:
+```json
+GET /api/payroll/summary?from=2026-02-01&to=2026-02-29
+Authorization: Bearer <jwt>
+```
+Opsional filter 1 mitra:
+```json
+GET /api/payroll/summary?from=2026-02-01&to=2026-02-29&workerId=<uuid-worker>
+Authorization: Bearer <jwt>
+```
+
 ## 8) Traceability
 ```json
 GET /api/lots/{lotNumber}/trace

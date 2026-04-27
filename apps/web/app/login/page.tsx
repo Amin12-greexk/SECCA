@@ -9,6 +9,7 @@ import { useLogoReveal, useSequenceReveal } from '@/hooks/useMotion';
 import AmbientBlobs from '@/components/animations/AmbientBlobs';
 import LoadingCircle from '@/components/LoadingCircle';
 import Alert from '@/components/Alert';
+import { getDefaultAuthorizedPath } from '@/lib/access-control';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
@@ -20,15 +21,15 @@ export default function LoginPage() {
 
     const containerRef = useRef<HTMLDivElement>(null);
     const logoRef = useRef<HTMLDivElement>(null);
-    const { login, isAuthenticated } = useAuth();
+    const { login, isAuthenticated, user } = useAuth();
     const router = useRouter();
 
     // Redirect if already authenticated
     useEffect(() => {
         if (isAuthenticated) {
-            router.push('/dashboard');
+            router.push(getDefaultAuthorizedPath(user));
         }
-    }, [isAuthenticated, router]);
+    }, [isAuthenticated, router, user]);
 
     // Logo entrance
     useLogoReveal(logoRef, { delay: 0.1, duration: 0.7 });

@@ -4,6 +4,7 @@ import { conflict, badRequest, notFound } from "../../common/errors";
 import { LOCATION_CODES, workerRackCode } from "../../common/constants";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateLocationDto } from "./dto/create-location.dto";
+import { FindLocationLotsQueryDto } from "./dto/find-location-lots-query.dto";
 
 @Injectable()
 export class LocationsService {
@@ -134,7 +135,27 @@ export class LocationsService {
 
     const lots = await this.prisma.productionLot.findMany({
       where: { locationId },
-      include: { grade: true },
+      include: {
+        grade: true,
+        featherGrade: true,
+        colorGrade: true,
+        workItem: {
+          select: {
+            id: true,
+            status: true,
+            lane: true,
+            workOrder: {
+              select: {
+                id: true,
+                workerId: true,
+                worker: {
+                  select: { id: true, name: true, code: true },
+                },
+              },
+            },
+          },
+        },
+      },
       orderBy: { createdAt: "asc" },
     });
 
@@ -149,13 +170,153 @@ export class LocationsService {
 
     const lots = await this.prisma.productionLot.findMany({
       where: { locationId: location.id },
-      include: { grade: true },
+      include: {
+        grade: true,
+        featherGrade: true,
+        colorGrade: true,
+        workItem: {
+          select: {
+            id: true,
+            status: true,
+            lane: true,
+            workOrder: {
+              select: {
+                id: true,
+                workerId: true,
+                worker: {
+                  select: { id: true, name: true, code: true },
+                },
+              },
+            },
+          },
+        },
+      },
       orderBy: { createdAt: "asc" },
     });
 
     return {
       location,
       lots,
+    };
+  }
+
+  async findLotsByCodePaginated(code: string, query: FindLocationLotsQueryDto) {
+    const location = await this.ensureLocationByCode(code);
+
+    const limit = query.limit ?? 100;
+    const requestedPage = query.page ?? 1;
+    const page = Math.max(1, requestedPage);
+    const search = query.search?.trim();
+
+    const where: Prisma.ProductionLotWhereInput = {
+      locationId: location.id,
+    };
+
+    if (search) {
+      where.OR = [
+        { lotNumber: { contains: search, mode: "insensitive" } },
+        { externalId: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    if (query.gradeId) {
+      where.gradeId = query.gradeId;
+    }
+
+    if (query.printed === "printed") {
+      where.printedAt = { not: null };
+    }
+
+    if (query.printed === "unprinted") {
+      where.printedAt = null;
+    }
+
+    const [total, aggregate] = await this.prisma.$transaction([
+      this.prisma.productionLot.count({ where }),
+      this.prisma.productionLot.aggregate({
+        where,
+        _sum: { wetWeightGram: true },
+      }),
+    ]);
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const safePage = Math.min(page, totalPages);
+    const skip = (safePage - 1) * limit;
+
+    const lots = await this.prisma.productionLot.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        lotNumber: true,
+        externalId: true,
+        gradeId: true,
+        featherGradeId: true,
+        colorGradeId: true,
+        wetWeightGram: true,
+        dryWeightGramLocked: true,
+        moistureBps: true,
+        status: true,
+        locationId: true,
+        printedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        grade: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            type: true,
+          },
+        },
+        featherGrade: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            type: true,
+          },
+        },
+        colorGrade: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            type: true,
+          },
+        },
+        workItem: {
+          select: {
+            id: true,
+            status: true,
+            lane: true,
+            workOrder: {
+              select: {
+                id: true,
+                workerId: true,
+                worker: {
+                  select: {
+                    id: true,
+                    name: true,
+                    code: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return {
+      location,
+      lots,
+      page: safePage,
+      limit,
+      total,
+      totalPages,
+      totalWetWeightGram: aggregate._sum.wetWeightGram ?? 0,
     };
   }
 

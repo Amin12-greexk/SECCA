@@ -16,6 +16,7 @@ exports.WorkOrdersController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const roles_decorator_1 = require("../../auth/roles.decorator");
+const assign_from_mitra_order_dto_1 = require("./dto/assign-from-mitra-order.dto");
 const create_work_order_dto_1 = require("./dto/create-work-order.dto");
 const work_orders_service_1 = require("./work-orders.service");
 let WorkOrdersController = class WorkOrdersController {
@@ -25,6 +26,9 @@ let WorkOrdersController = class WorkOrdersController {
     }
     create(dto) {
         return this.workOrdersService.create(dto);
+    }
+    assignFromMitraOrder(dto) {
+        return this.workOrdersService.assignFromMitraOrder(dto);
     }
     board(workerId) {
         return this.workOrdersService.board(workerId);
@@ -41,6 +45,14 @@ __decorate([
     __metadata("design:paramtypes", [create_work_order_dto_1.CreateWorkOrderDto]),
     __metadata("design:returntype", void 0)
 ], WorkOrdersController.prototype, "create", null);
+__decorate([
+    (0, common_1.Post)("assign-from-mitra-order"),
+    (0, roles_decorator_1.Roles)("trainer", "manager", "baku"),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [assign_from_mitra_order_dto_1.AssignFromMitraOrderDto]),
+    __metadata("design:returntype", void 0)
+], WorkOrdersController.prototype, "assignFromMitraOrder", null);
 __decorate([
     (0, common_1.Get)("board"),
     __param(0, (0, common_1.Query)("workerId")),

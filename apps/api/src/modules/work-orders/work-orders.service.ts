@@ -272,15 +272,15 @@ export class WorkOrdersService {
     };
 
     items.forEach((item) => {
-      const dryingStartedAt = item.dryingStartedAt ?? item.readyAt;
-      const dryingReadyAt = item.dryingReadyAt;
+      const startedAt = item.startedAt ?? item.readyAt;
+      const readyAt = item.readyAt;
       const processState =
         item.lane === WorkLane.NEXT_DAY
           ? "NEXT_DAY"
           : item.lane === WorkLane.READY_TO_SUBMIT
             ? "READY_TO_SUBMIT"
-            : dryingStartedAt
-              ? dryingReadyAt && dryingReadyAt.getTime() <= Date.now()
+            : startedAt
+              ? readyAt && readyAt.getTime() <= Date.now()
                 ? "DRYING_QC"
                 : "DRYING"
               : "IN_PROGRESS";
@@ -292,8 +292,8 @@ export class WorkOrdersService {
         lane: item.lane,
         status: item.status,
         processState,
-        dryingStartedAt,
-        dryingReadyAt,
+        startedAt,
+        readyAt,
         grade: {
           shape: item.lot.grade?.code ?? null,
           feather: item.lot.featherGrade?.code ?? null,

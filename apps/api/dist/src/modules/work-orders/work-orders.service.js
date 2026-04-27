@@ -23,12 +23,39 @@ let WorkOrdersService = class WorkOrdersService {
         this.prisma = prisma;
         this.movementService = movementService;
     }
+    async assignFromMitraOrder(dto) {
+        const uniqueLotIds = new Set(dto.lotIds);
+        if (uniqueLotIds.size !== dto.lotIds.length) {
+            return (0, errors_1.badRequest)("Duplicate lotIds in request");
+        }
+        const lots = await this.prisma.productionLot.findMany({
+            where: { id: { in: dto.lotIds } },
+            include: { location: true },
+        });
+        const lotById = new Map(lots.map((lot) => [lot.id, lot]));
+        if (lotById.size !== dto.lotIds.length) {
+            const missingLotIds = dto.lotIds.filter((lotId) => !lotById.has(lotId));
+            return (0, errors_1.notFound)("Lot not found", { lotIds: missingLotIds });
+        }
+        const invalidLocationLot = lots.find((lot) => lot.location.code !== constants_1.LOCATION_CODES.MITRA_ORDER);
+        if (invalidLocationLot) {
+            return (0, errors_1.conflict)("Lot harus berada di Rak Mitra Order", {
+                lotNumber: invalidLocationLot.lotNumber,
+                location: invalidLocationLot.location.code,
+            });
+        }
+        return this.create({
+            workerId: dto.workerId,
+            lotNumbers: lots.map((lot) => lot.lotNumber),
+            lane: client_1.WorkLane.NEXT_DAY,
+        });
+    }
     async create(dto) {
         const uniqueLotNumbers = new Set(dto.lotNumbers);
         if (uniqueLotNumbers.size !== dto.lotNumbers.length) {
             return (0, errors_1.badRequest)("Duplicate lot numbers in request");
         }
-        const requestedLane = dto.lane ?? client_1.WorkLane.IN_PROGRESS;
+        const requestedLane = dto.lane ?? client_1.WorkLane.NEXT_DAY;
         if (requestedLane === client_1.WorkLane.READY_TO_SUBMIT) {
             return (0, errors_1.badRequest)("Lane READY_TO_SUBMIT tidak valid untuk order baru");
         }
@@ -39,15 +66,6 @@ let WorkOrdersService = class WorkOrdersService {
             if (!worker) {
                 return (0, errors_1.notFound)("Worker not found", { workerId: dto.workerId });
             }
-            const preSaleLocation = await tx.rackLocation.upsert({
-                where: { code: constants_1.LOCATION_CODES.PRE_SALE },
-                update: { name: "Rak Sementara", type: client_1.RackType.PRE_SALE },
-                create: {
-                    code: constants_1.LOCATION_CODES.PRE_SALE,
-                    name: "Rak Sementara",
-                    type: client_1.RackType.PRE_SALE,
-                },
-            });
             const workerLocation = await tx.rackLocation.upsert({
                 where: { workerId: worker.id },
                 update: {
@@ -71,16 +89,13 @@ let WorkOrdersService = class WorkOrdersService {
                 const missing = dto.lotNumbers.filter((lot) => !lotMap.has(lot));
                 return (0, errors_1.notFound)("Lot not found", { lotNumbers: missing });
             }
-            const totalWeight = lots.reduce((sum, lot) => sum + lot.wetWeightGram, 0);
-            if (worker.capacityGram != null && totalWeight > worker.capacityGram) {
-                return (0, errors_1.conflict)("Melebihi kapasitas worker", {
-                    capacityGram: worker.capacityGram,
-                    totalWeightGram: totalWeight,
-                });
-            }
             for (const lot of lots) {
-                if (lot.status !== client_1.LotStatus.AVAILABLE ||
-                    lot.location.code !== constants_1.LOCATION_CODES.PRE_SALE) {
+                const fromPreSale = lot.location.code === constants_1.LOCATION_CODES.PRE_SALE &&
+                    lot.status === client_1.LotStatus.AVAILABLE;
+                const fromMitraOrderPool = lot.location.code === constants_1.LOCATION_CODES.MITRA_ORDER &&
+                    (lot.status === client_1.LotStatus.AVAILABLE ||
+                        lot.status === client_1.LotStatus.IN_PROGRESS);
+                if (!fromPreSale && !fromMitraOrderPool) {
                     return (0, errors_1.conflict)("Lot is not available for ordering", {
                         lotNumber: lot.lotNumber,
                         status: lot.status,
@@ -88,27 +103,36 @@ let WorkOrdersService = class WorkOrdersService {
                     });
                 }
             }
-            const workOrder = await tx.workOrder.create({
-                data: {
-                    workerId: worker.id,
-                    status: client_1.WorkOrderStatus.IN_PROGRESS,
-                },
+            const activeRecord = await tx.workerActiveWorkOrder.findUnique({
+                where: { workerId: worker.id },
             });
-            try {
+            let workOrderId;
+            if (activeRecord) {
+                workOrderId = activeRecord.workOrderId;
+                const existingItems = await tx.workOrderItem.findMany({
+                    where: { workOrderId, lane: requestedLane, status: client_1.WorkOrderItemStatus.IN_PROGRESS },
+                });
+                if (existingItems.length > 0) {
+                    return (0, errors_1.conflict)(`Pekerja sudah memiliki item di lane ${requestedLane}`, {
+                        workerId: worker.id,
+                        lane: requestedLane,
+                    });
+                }
+            }
+            else {
+                const workOrder = await tx.workOrder.create({
+                    data: {
+                        workerId: worker.id,
+                        status: client_1.WorkOrderStatus.IN_PROGRESS,
+                    },
+                });
+                workOrderId = workOrder.id;
                 await tx.workerActiveWorkOrder.create({
                     data: {
                         workerId: worker.id,
-                        workOrderId: workOrder.id,
+                        workOrderId: workOrderId,
                     },
                 });
-            }
-            catch (error) {
-                if (error instanceof client_1.Prisma.PrismaClientKnownRequestError) {
-                    if (error.code === "P2002") {
-                        return (0, errors_1.conflict)("WORK_NOT_FINISHED", { workerId: worker.id });
-                    }
-                }
-                throw error;
             }
             const items = [];
             for (const lot of lots) {
@@ -122,7 +146,7 @@ let WorkOrdersService = class WorkOrdersService {
                 try {
                     const workOrderItem = await tx.workOrderItem.create({
                         data: {
-                            workOrderId: workOrder.id,
+                            workOrderId: workOrderId,
                             lotId: lot.id,
                             status: client_1.WorkOrderItemStatus.IN_PROGRESS,
                             lane: requestedLane,
@@ -131,7 +155,7 @@ let WorkOrdersService = class WorkOrdersService {
                     });
                     await this.movementService.record(tx, {
                         lotId: lot.id,
-                        fromLocationId: preSaleLocation.id,
+                        fromLocationId: lot.locationId,
                         toLocationId: workerLocation.id,
                         movementType: client_1.MovementType.MOVE,
                         note: "Order to worker",
@@ -152,8 +176,8 @@ let WorkOrdersService = class WorkOrdersService {
                 }
             }
             return {
-                workOrderId: workOrder.id,
-                status: workOrder.status,
+                workOrderId: workOrderId,
+                status: client_1.WorkOrderStatus.IN_PROGRESS,
                 lane: requestedLane,
                 items,
             };
@@ -193,6 +217,7 @@ let WorkOrdersService = class WorkOrdersService {
                 lot: {
                     select: {
                         lotNumber: true,
+                        externalId: true,
                         grade: { select: { code: true } },
                         featherGrade: { select: { code: true } },
                         colorGrade: { select: { code: true } },
@@ -207,11 +232,26 @@ let WorkOrdersService = class WorkOrdersService {
             READY_TO_SUBMIT: [],
         };
         items.forEach((item) => {
+            const startedAt = item.startedAt ?? item.readyAt;
+            const readyAt = item.readyAt;
+            const processState = item.lane === client_1.WorkLane.NEXT_DAY
+                ? "NEXT_DAY"
+                : item.lane === client_1.WorkLane.READY_TO_SUBMIT
+                    ? "READY_TO_SUBMIT"
+                    : startedAt
+                        ? readyAt && readyAt.getTime() <= Date.now()
+                            ? "DRYING_QC"
+                            : "DRYING"
+                        : "IN_PROGRESS";
             const entry = {
                 id: item.id,
-                lotNumber: item.lot.lotNumber,
+                lotNumber: item.lot.externalId ?? item.lot.lotNumber,
+                originalLotNumber: item.lot.lotNumber,
                 lane: item.lane,
                 status: item.status,
+                processState,
+                startedAt,
+                readyAt,
                 grade: {
                     shape: item.lot.grade?.code ?? null,
                     feather: item.lot.featherGrade?.code ?? null,

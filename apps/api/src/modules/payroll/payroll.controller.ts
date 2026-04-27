@@ -1,7 +1,8 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, Query } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../auth/roles.decorator";
 import { PayrollService } from "./payroll.service";
+import { PayrollSummaryQueryDto } from "./dto/payroll-summary-query.dto";
 
 @ApiTags("payroll")
 @ApiBearerAuth()
@@ -13,5 +14,10 @@ export class PayrollController {
   @Get()
   findAll() {
     return this.payrollService.findAll();
+  }
+
+  @Get("summary")
+  getSummary(@Query() query: PayrollSummaryQueryDto) {
+    return this.payrollService.getSummary(query);
   }
 }

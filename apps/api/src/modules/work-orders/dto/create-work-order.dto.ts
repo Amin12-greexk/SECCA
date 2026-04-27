@@ -13,7 +13,7 @@ export class CreateWorkOrderDto {
   @IsString({ each: true })
   lotNumbers: string[];
 
-  @ApiPropertyOptional({ enum: WorkLane, description: "Default: IN_PROGRESS" })
+  @ApiPropertyOptional({ enum: WorkLane, description: "Default: NEXT_DAY" })
   @IsOptional()
   @IsEnum(WorkLane)
   lane?: WorkLane;

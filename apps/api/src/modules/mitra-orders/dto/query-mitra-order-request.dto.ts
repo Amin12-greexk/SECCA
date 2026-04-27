@@ -1,7 +1,15 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
 import { MitraOrderRequestStatus, UserRole } from "@prisma/client";
 import { Transform } from "class-transformer";
-import { IsEnum, IsInt, IsOptional, IsUUID, Max, Min } from "class-validator";
+import {
+  IsBoolean,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsUUID,
+  Max,
+  Min,
+} from "class-validator";
 
 export class QueryMitraOrderRequestDto {
   @ApiPropertyOptional()
@@ -18,6 +26,20 @@ export class QueryMitraOrderRequestDto {
   @IsOptional()
   @IsEnum(UserRole)
   requestedByRole?: UserRole;
+
+  @ApiPropertyOptional({
+    default: false,
+    description: "Hanya ambil request template agregat (workerId = null)",
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === "") return undefined;
+    if (typeof value === "boolean") return value;
+    const normalized = String(value).toLowerCase();
+    return normalized === "true" || normalized === "1";
+  })
+  @IsBoolean()
+  aggregateOnly?: boolean = false;
 
   @ApiPropertyOptional({ default: 50, minimum: 1, maximum: 200 })
   @IsOptional()

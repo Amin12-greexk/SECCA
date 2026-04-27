@@ -3,7 +3,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { login as apiLogin, logout as apiLogout, getProfile } from '@/lib/api';
-import type { User, UserRole } from '@/lib/types/auth';
+import type { UiAccessModuleKey, User, UserRole } from '@/lib/types/auth';
+import { getDefaultAuthorizedPath, hasModuleAccess as canUseModuleAccess } from '@/lib/access-control';
 
 interface AuthContextType {
     user: User | null;
@@ -12,6 +13,7 @@ interface AuthContextType {
     logout: () => void;
     isAuthenticated: boolean;
     hasRole: (roles: UserRole | UserRole[]) => boolean;
+    hasModuleAccess: (moduleKey: UiAccessModuleKey, minLevel?: number) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -73,11 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(response.user as User);
 
             // Redirect based on role
-            if (response.user.role === 'baku') {
-                router.push('/baku/receive');
-            } else {
-                router.push('/dashboard');
-            }
+            router.push(getDefaultAuthorizedPath(response.user as User));
         } catch (error) {
             console.error('Login error:', error);
             throw error;
@@ -106,6 +104,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return roleArray.includes(user.role as UserRole);
     }, [user]);
 
+    const hasModuleAccess = useCallback(
+        (moduleKey: UiAccessModuleKey, minLevel = 1) =>
+            canUseModuleAccess(user, moduleKey, minLevel),
+        [user],
+    );
+
     const value: AuthContextType = {
         user,
         loading,
@@ -113,6 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         isAuthenticated: !!user,
         hasRole,
+        hasModuleAccess,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

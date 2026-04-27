@@ -13,6 +13,7 @@ exports.RolesGuard = void 0;
 const common_1 = require("@nestjs/common");
 const core_1 = require("@nestjs/core");
 const auth_constants_1 = require("./auth.constants");
+const ui_access_constants_1 = require("./ui-access.constants");
 let RolesGuard = class RolesGuard {
     reflector;
     constructor(reflector) {
@@ -30,7 +31,18 @@ let RolesGuard = class RolesGuard {
         }
         const roles = user.roles ?? (user.role ? [user.role] : []);
         const normalizedRoles = roles.map((role) => role.toLowerCase());
-        return requiredRoles.some((role) => normalizedRoles.includes(role.toLowerCase()));
+        if (requiredRoles.some((role) => normalizedRoles.includes(role.toLowerCase()))) {
+            return true;
+        }
+        const path = request.raw?.url ??
+            request.url ??
+            "";
+        const method = request.method;
+        const accessRequirement = (0, ui_access_constants_1.getApiAccessRequirement)(path, method);
+        if (!accessRequirement) {
+            return false;
+        }
+        return accessRequirement.anyOf.some((requirement) => (0, ui_access_constants_1.hasExplicitUiAccess)(user, requirement.moduleKey, requirement.minLevel));
     }
 };
 exports.RolesGuard = RolesGuard;

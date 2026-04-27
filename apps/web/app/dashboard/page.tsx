@@ -4,25 +4,30 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { useAuth } from '@/lib/auth/AuthContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import PageTransition from '@/components/animations/PageTransition';
 import { useToast } from '@/lib/toast';
 import { getWorkerWeeklyStats, type WorkerWeeklyStatsResponse } from '@/lib/api';
 import ManagerAnalytics from './components/ManagerAnalytics';
 
 function DashboardContent() {
-    const { user } = useAuth();
+    const { user, hasModuleAccess } = useAuth();
     const toast = useToast();
     const containerRef = useRef<HTMLDivElement>(null);
     const [weeklyStats, setWeeklyStats] = useState<WorkerWeeklyStatsResponse | null>(null);
     const [statsLoading, setStatsLoading] = useState(false);
 
     useEffect(() => {
-        if (containerRef.current) {
-            gsap.fromTo(
-                containerRef.current.children,
-                { opacity: 0, y: 20 },
-                { opacity: 1, y: 0, duration: 0.6, stagger: 0.1, ease: 'power2.out' }
-            );
-        }
+        if (!containerRef.current) return;
+        const reducedMotion =
+            typeof window !== 'undefined' &&
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reducedMotion) return;
+
+        gsap.fromTo(
+            containerRef.current.children,
+            { opacity: 0, y: 20 },
+            { opacity: 1, y: 0, duration: 0.6, stagger: 0.1, ease: 'power2.out' }
+        );
     }, []);
 
     const loadWeeklyStats = async (workerId: string) => {
@@ -52,7 +57,7 @@ function DashboardContent() {
             case 'koreksi':
                 return 'Data koreksi sementara hanya menampilkan detail lp (ttd AMIN)';
             case 'trainer':
-                return 'Atur order mitra sesuai kapasitas';
+                return 'Atur order mitra berdasarkan capaian setoran aktual';
             case 'manager':
                 return 'Monitor Baku, kapasitas mitra dan juga kapasitas mingguan';
             default:
@@ -72,6 +77,7 @@ function DashboardContent() {
             case 'koreksi':
                 return [
                     { name: 'Data Koreksi', href: '/koreksi/data', icon: '✏️' },
+                    { name: 'Barang Jadi', href: '/koreksi/barang-jadi', icon: '📦' },
                     { name: 'Riwayat Koreksi', href: '/koreksi/history', icon: '📝' },
                 ];
             case 'manager':
@@ -157,7 +163,7 @@ function DashboardContent() {
                         {user.workerId && !statsLoading && weeklyStats && (
                             <div className="mt-5 space-y-5">
                                 <div className="grid gap-3 sm:grid-cols-3">
-                                    <div className="rounded-lg border border-gray-200 p-4">
+                                    <div className="rounded-lg border border-gray-200 p-4 card-hover">
                                         <p className="text-xs text-gray-500">Minggu Ini</p>
                                         <p className="text-2xl font-semibold text-gray-900">
                                             {formatNumber(weeklySummary?.current?.totalDryInGram ?? 0)} gr
@@ -166,7 +172,7 @@ function DashboardContent() {
                                             {weeklySummary?.current?.items ?? 0} item selesai
                                         </p>
                                     </div>
-                                    <div className="rounded-lg border border-gray-200 p-4">
+                                    <div className="rounded-lg border border-gray-200 p-4 card-hover">
                                         <p className="text-xs text-gray-500">Minggu Lalu</p>
                                         <p className="text-2xl font-semibold text-gray-900">
                                             {formatNumber(weeklySummary?.previous?.totalDryInGram ?? 0)} gr
@@ -175,7 +181,7 @@ function DashboardContent() {
                                             {weeklySummary?.previous?.items ?? 0} item selesai
                                         </p>
                                     </div>
-                                    <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                                    <div className="rounded-lg border border-green-200 bg-green-50 p-4 card-hover">
                                         <p className="text-xs text-green-700">Perubahan</p>
                                         <p className="text-2xl font-semibold text-green-900">
                                             {weeklySummary?.deltaLabel ?? 'Stabil'}
@@ -197,10 +203,10 @@ function DashboardContent() {
                                                 Math.round((week.totalDryInGram / max) * 100)
                                             );
                                             return (
-                                                <div key={week.weekStart} className="flex flex-1 flex-col items-center">
+                                        <div key={week.weekStart} className="flex flex-1 flex-col items-center">
                                                     <div className="flex h-24 w-full items-end rounded-md bg-green-100">
                                                         <div
-                                                            className="w-full rounded-md bg-green-500"
+                                                            className="w-full rounded-md bg-green-500 origin-bottom animate-bar-grow"
                                                             style={{ height: `${height}%` }}
                                                         />
                                                     </div>
@@ -246,10 +252,10 @@ function DashboardContent() {
                     <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {quickActions.map((action) => (
-                            <a
+                                <a
                                 key={action.href}
                                 href={action.href}
-                                className="bg-white border border-gray-200 rounded-lg p-6 hover:border-green-500 hover:shadow-md transition-all group"
+                                className="bg-white border border-gray-200 rounded-lg p-6 hover:border-green-500 hover:shadow-md transition-all group card-hover"
                             >
                                 <div className="text-4xl mb-3">{action.icon}</div>
                                 <h3 className="font-medium text-gray-900 group-hover:text-green-600 transition-colors">
@@ -261,7 +267,7 @@ function DashboardContent() {
                 </div>
             ) : null}
 
-            {user.role === 'manager' && (
+            {hasModuleAccess('dashboard', 2) && (
                 <ManagerAnalytics />
             )}
 

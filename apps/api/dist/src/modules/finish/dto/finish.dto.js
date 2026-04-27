@@ -11,13 +11,17 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.FinishDto = void 0;
 const swagger_1 = require("@nestjs/swagger");
+const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
+const finish_result_grade_entry_dto_1 = require("./finish-result-grade-entry.dto");
 class FinishDto {
     workOrderItemId;
     returnedAt;
     mainOutWeightGram;
+    barangJadiId;
     byProductWeightGram;
     notes;
+    resultGrades;
 }
 exports.FinishDto = FinishDto;
 __decorate([
@@ -39,6 +43,12 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiPropertyOptional)(),
     (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], FinishDto.prototype, "barangJadiId", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)(),
+    (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsInt)(),
     (0, class_validator_1.Min)(0),
     __metadata("design:type", Number)
@@ -49,4 +59,12 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], FinishDto.prototype, "notes", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ type: [finish_result_grade_entry_dto_1.FinishResultGradeEntryDto] }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => finish_result_grade_entry_dto_1.FinishResultGradeEntryDto),
+    __metadata("design:type", Array)
+], FinishDto.prototype, "resultGrades", void 0);
 //# sourceMappingURL=finish.dto.js.map

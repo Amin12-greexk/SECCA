@@ -22,6 +22,8 @@ const update_pecah_bon_dto_1 = require("./dto/update-pecah-bon.dto");
 const update_raw_batch_dto_1 = require("./dto/update-raw-batch.dto");
 const raw_batch_page_query_dto_1 = require("./dto/raw-batch-page-query.dto");
 const pecah_bon_page_query_dto_1 = require("./dto/pecah-bon-page-query.dto");
+const pecah_bon_history_query_dto_1 = require("./dto/pecah-bon-history-query.dto");
+const merge_raw_batches_dto_1 = require("./dto/merge-raw-batches.dto");
 const baku_service_1 = require("./baku.service");
 let BakuController = class BakuController {
     bakuService;
@@ -36,6 +38,9 @@ let BakuController = class BakuController {
     }
     findAllPaginated(query) {
         return this.bakuService.findAllPaginated(query);
+    }
+    getPecahBonHistory(query) {
+        return this.bakuService.getPecahBonHistory(query);
     }
     findPecahBonById(pecahBonId) {
         return this.bakuService.findPecahBonById(pecahBonId);
@@ -52,8 +57,17 @@ let BakuController = class BakuController {
     updateRawBatch(id, dto) {
         return this.bakuService.updateRawBatch(id, dto);
     }
+    deleteRawBatch(id) {
+        return this.bakuService.deleteRawBatch(id);
+    }
+    mergeRawBatches(dto) {
+        return this.bakuService.mergeRawBatches(dto);
+    }
     markPecahBonPrinted(id) {
         return this.bakuService.markPecahBonPrinted(id);
+    }
+    deletePecahBonEntry(id) {
+        return this.bakuService.deletePecahBonEntry(id);
     }
     getPecahBonEntries(id) {
         return this.bakuService.getPecahBonEntries(id);
@@ -83,6 +97,13 @@ __decorate([
     __metadata("design:paramtypes", [raw_batch_page_query_dto_1.RawBatchPageQueryDto]),
     __metadata("design:returntype", void 0)
 ], BakuController.prototype, "findAllPaginated", null);
+__decorate([
+    (0, common_1.Get)("pecah-bon/history"),
+    __param(0, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [pecah_bon_history_query_dto_1.PecahBonHistoryQueryDto]),
+    __metadata("design:returntype", void 0)
+], BakuController.prototype, "getPecahBonHistory", null);
 __decorate([
     (0, common_1.Get)("pecah-bon/:pecahBonId"),
     (0, swagger_1.ApiParam)({ name: "pecahBonId" }),
@@ -127,6 +148,23 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], BakuController.prototype, "updateRawBatch", null);
 __decorate([
+    (0, common_1.Delete)("raw-batch/:id"),
+    (0, swagger_1.ApiParam)({ name: "id" }),
+    (0, roles_decorator_1.Roles)("manager", "baku"),
+    __param(0, (0, common_1.Param)("id")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], BakuController.prototype, "deleteRawBatch", null);
+__decorate([
+    (0, common_1.Post)("raw-batch/merge"),
+    (0, roles_decorator_1.Roles)("manager", "baku"),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [merge_raw_batches_dto_1.MergeRawBatchesDto]),
+    __metadata("design:returntype", void 0)
+], BakuController.prototype, "mergeRawBatches", null);
+__decorate([
     (0, common_1.Post)("pecah-bon-entry/:id/printed"),
     (0, swagger_1.ApiParam)({ name: "id" }),
     __param(0, (0, common_1.Param)("id")),
@@ -134,6 +172,15 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], BakuController.prototype, "markPecahBonPrinted", null);
+__decorate([
+    (0, common_1.Delete)("pecah-bon/:id"),
+    (0, swagger_1.ApiParam)({ name: "id" }),
+    (0, roles_decorator_1.Roles)("manager", "baku"),
+    __param(0, (0, common_1.Param)("id")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], BakuController.prototype, "deletePecahBonEntry", null);
 __decorate([
     (0, common_1.Get)(":id/pecah-bon"),
     (0, swagger_1.ApiParam)({ name: "id" }),

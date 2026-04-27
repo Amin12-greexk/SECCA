@@ -1,3 +1,4 @@
+import { AssignFromMitraOrderDto } from "./dto/assign-from-mitra-order.dto";
 import { CreateWorkOrderDto } from "./dto/create-work-order.dto";
 import { WorkOrdersService } from "./work-orders.service";
 export declare class WorkOrdersController {
@@ -5,7 +6,17 @@ export declare class WorkOrdersController {
     constructor(workOrdersService: WorkOrdersService);
     create(dto: CreateWorkOrderDto): Promise<{
         workOrderId: string;
-        status: import("@prisma/client").$Enums.WorkOrderStatus;
+        status: "IN_PROGRESS";
+        lane: "IN_PROGRESS" | "NEXT_DAY";
+        items: {
+            workOrderItemId: string;
+            lotNumber: string;
+            lane: import("@prisma/client").WorkLane;
+        }[];
+    }>;
+    assignFromMitraOrder(dto: AssignFromMitraOrderDto): Promise<{
+        workOrderId: string;
+        status: "IN_PROGRESS";
         lane: "IN_PROGRESS" | "NEXT_DAY";
         items: {
             workOrderItemId: string;

@@ -15,6 +15,11 @@ export declare class AuthService {
             role: string;
             workerId: string | null;
             pin: string | null;
+            useCustomUiAccess: boolean;
+            uiAccesses: {
+                moduleKey: string;
+                level: number;
+            }[];
         };
         token: string;
     }>;
@@ -27,6 +32,11 @@ export declare class AuthService {
             role: string;
             workerId: string | null;
             pin: string | null;
+            useCustomUiAccess: boolean;
+            uiAccesses: {
+                moduleKey: string;
+                level: number;
+            }[];
         };
         token: string;
     }>;
@@ -38,6 +48,11 @@ export declare class AuthService {
         role: string;
         workerId: string | null;
         pin: string | null;
+        useCustomUiAccess: boolean;
+        uiAccesses: {
+            moduleKey: string;
+            level: number;
+        }[];
     }>;
     changePassword(userId: string, dto: ChangePasswordDto): Promise<{
         ok: boolean;

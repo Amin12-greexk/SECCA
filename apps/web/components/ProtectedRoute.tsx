@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import LoadingCircle from '@/components/LoadingCircle';
 import type { UserRole } from '@/lib/types/auth';
+import { canAccessPath, getRouteAccessRequirement } from '@/lib/access-control';
 
 interface ProtectedRouteProps {
     children: React.ReactNode;
@@ -14,6 +15,15 @@ interface ProtectedRouteProps {
 export default function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
     const { user, loading, isAuthenticated } = useAuth();
     const router = useRouter();
+    const pathname = usePathname();
+
+    const routeRequirement = getRouteAccessRequirement(pathname);
+    const hasRouteAccess = isAuthenticated && !!user && canAccessPath(user, pathname);
+    const hasRoleAccess =
+        !allowedRoles || allowedRoles.length === 0
+            ? true
+            : allowedRoles.includes(user?.role as UserRole);
+    const hasPermission = routeRequirement ? hasRouteAccess : hasRoleAccess;
 
     useEffect(() => {
         if (!loading) {
@@ -23,17 +33,12 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
                 return;
             }
 
-            // Check role if allowedRoles specified
-            if (allowedRoles && allowedRoles.length > 0) {
-                const hasPermission = allowedRoles.includes(user?.role as UserRole);
-
-                if (!hasPermission) {
-                    router.push('/unauthorized');
-                    return;
-                }
+            if (!hasPermission) {
+                router.push('/unauthorized');
+                return;
             }
         }
-    }, [loading, isAuthenticated, user, allowedRoles, router]);
+    }, [hasPermission, isAuthenticated, loading, router]);
 
     // Show loading while checking auth
     if (loading) {
@@ -49,11 +54,8 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
         return null;
     }
 
-    if (allowedRoles && allowedRoles.length > 0) {
-        const hasPermission = allowedRoles.includes(user?.role as UserRole);
-        if (!hasPermission) {
-            return null;
-        }
+    if (!hasPermission) {
+        return null;
     }
 
     // Authenticated and has permission -> render children

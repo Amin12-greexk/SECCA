@@ -1,14 +1,25 @@
 import { WorkLane } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
+import { AssignFromMitraOrderDto } from "./dto/assign-from-mitra-order.dto";
 import { CreateWorkOrderDto } from "./dto/create-work-order.dto";
 export declare class WorkOrdersService {
     private readonly prisma;
     private readonly movementService;
     constructor(prisma: PrismaService, movementService: InventoryMovementService);
+    assignFromMitraOrder(dto: AssignFromMitraOrderDto): Promise<{
+        workOrderId: string;
+        status: "IN_PROGRESS";
+        lane: "IN_PROGRESS" | "NEXT_DAY";
+        items: {
+            workOrderItemId: string;
+            lotNumber: string;
+            lane: WorkLane;
+        }[];
+    }>;
     create(dto: CreateWorkOrderDto): Promise<{
         workOrderId: string;
-        status: import("@prisma/client").$Enums.WorkOrderStatus;
+        status: "IN_PROGRESS";
         lane: "IN_PROGRESS" | "NEXT_DAY";
         items: {
             workOrderItemId: string;

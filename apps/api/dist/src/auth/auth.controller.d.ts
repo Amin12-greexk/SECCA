@@ -14,6 +14,11 @@ export declare class AuthController {
             role: string;
             workerId: string | null;
             pin: string | null;
+            useCustomUiAccess: boolean;
+            uiAccesses: {
+                moduleKey: string;
+                level: number;
+            }[];
         };
         token: string;
     }>;
@@ -26,6 +31,11 @@ export declare class AuthController {
             role: string;
             workerId: string | null;
             pin: string | null;
+            useCustomUiAccess: boolean;
+            uiAccesses: {
+                moduleKey: string;
+                level: number;
+            }[];
         };
         token: string;
     }>;
@@ -41,6 +51,11 @@ export declare class AuthController {
         role: string;
         workerId: string | null;
         pin: string | null;
+        useCustomUiAccess: boolean;
+        uiAccesses: {
+            moduleKey: string;
+            level: number;
+        }[];
     }>;
     changePassword(req: {
         user?: {

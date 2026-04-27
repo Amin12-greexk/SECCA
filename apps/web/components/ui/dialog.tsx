@@ -16,7 +16,9 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out",
+      "fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm",
+      "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-200",
+      "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-150",
       className,
     )}
     {...props}
@@ -33,7 +35,14 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-[60] w-[95vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 rounded-lg bg-white p-6 shadow-lg",
+        // Mobile: anchored to bottom, slide up
+        "fixed inset-x-0 bottom-0 z-[60] flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white p-6 shadow-2xl",
+        "data-[state=open]:animate-[slide-up-mobile_0.3s_ease-out] data-[state=open]:fade-in-0",
+        "data-[state=closed]:animate-[slide-down-mobile_0.2s_ease-in] data-[state=closed]:fade-out-0",
+        // Desktop: centered dialog with zoom
+        "sm:inset-auto sm:left-[50%] sm:top-[50%] sm:bottom-auto sm:max-h-[90vh] sm:w-[95vw] sm:max-w-4xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl",
+        "sm:data-[state=open]:animate-in sm:data-[state=open]:zoom-in-[0.97] sm:data-[state=open]:duration-200",
+        "sm:data-[state=closed]:animate-out sm:data-[state=closed]:zoom-out-[0.97] sm:data-[state=closed]:duration-150",
         className,
       )}
       {...props}

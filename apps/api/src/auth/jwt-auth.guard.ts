@@ -2,12 +2,14 @@ import { CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { Reflector } from "@nestjs/core";
 import { IS_PUBLIC_KEY } from "./auth.constants";
+import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly jwtService: JwtService,
     private readonly reflector: Reflector,
+    private readonly prisma: PrismaService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -31,7 +33,32 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       const payload = await this.jwtService.verifyAsync(token);
-      request.user = payload;
+      const appUser = await this.prisma.appUser.findUnique({
+        where: { id: payload.sub },
+        select: {
+          id: true,
+          role: true,
+          useCustomUiAccess: true,
+          uiAccesses: {
+            select: {
+              moduleKey: true,
+              level: true,
+            },
+          },
+        },
+      });
+
+      if (!appUser) {
+        return false;
+      }
+
+      request.user = {
+        ...payload,
+        sub: appUser.id,
+        role: appUser.role.toLowerCase(),
+        useCustomUiAccess: appUser.useCustomUiAccess,
+        uiAccesses: appUser.uiAccesses,
+      };
       return true;
     } catch {
       return false;
