@@ -37,6 +37,7 @@ import {
     getMitraOrderRequests,
     updatePecahBonEntry,
     markPecahBonPrinted,
+    deletePecahBonEntry,
     type RawBatch,
     type Grade,
     type MitraOrderRequest,
@@ -164,6 +165,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     const [yearSuffix, setYearSuffix] = useState(String(new Date().getFullYear()).slice(-2));
     const [searchLoading, setSearchLoading] = useState(false);
     const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
+    const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
 
     // Multi-entry state for bulk pecah bon
     const [multiEntries, setMultiEntries] = useState<MultiEntryRow[]>([]);
@@ -749,12 +751,14 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                     ? getMitraOrderRequests({
                         status: 'APPROVED',
                         requestedByRole: 'TRAINER',
+                        aggregateOnly: true,
                         limit: 200,
                     })
                     : Promise.resolve(trainerOrderTemplates),
                 getMitraOrderRequests({
                     status: 'REQUESTED',
                     requestedByRole: 'TRAINER',
+                    aggregateOnly: true,
                     limit: 200,
                 }),
             ]);
@@ -897,6 +901,35 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
             featherCondition: entry.featherCondition ?? '',
         });
         setEditOpen(true);
+    };
+
+    const handleDeleteEntry = async (entry: PecahBonEntry) => {
+        const confirmText = `Apakah Anda yakin ingin menghapus LP ${entry.pecahBonId ?? 'ini'}? Berat (${formatNumber(entry.initialWeightGram)} gr) akan dikembalikan ke sisa berat kartu induk.`;
+        if (!window.confirm(confirmText)) return;
+
+        setDeleteLoading(entry.id);
+        try {
+            await deletePecahBonEntry(entry.id);
+            toast.success(`LP ${entry.pecahBonId ?? ''} berhasil dihapus.`);
+
+            // Refresh the batch and its entries
+            setRawBatches((prev) =>
+                prev.map((batch) => {
+                    if (batch.id !== entry.rawBatchId) return batch;
+                    return {
+                        ...batch,
+                        wetWeightGram: batch.wetWeightGram + entry.initialWeightGram,
+                        pecahBonEntries: batch.pecahBonEntries?.filter((e) => e.id !== entry.id),
+                        entriesTotal: (batch.entriesTotal ?? 0) > 0 ? (batch.entriesTotal ?? 0) - 1 : 0,
+                    };
+                })
+            );
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Gagal menghapus LP.';
+            toast.error(message);
+        } finally {
+            setDeleteLoading(null);
+        }
     };
 
     const handleEditSave = async () => {
@@ -1600,6 +1633,8 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
             maximumFractionDigits: fractionDigits,
         }).format(value);
 
+    const setoranDryInGram = setoranContext?.entry.dryWeightGram ?? 0;
+
     const todayFormatted = new Intl.DateTimeFormat('id-ID', {
         day: '2-digit',
         month: 'long',
@@ -1988,11 +2023,25 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                                                                                             <Button
                                                                                                 size="sm"
                                                                                                 variant="outline"
+                                                                                                onClick={() => handleDeleteEntry(entry)}
+                                                                                                disabled={deleteLoading === entry.id}
+                                                                                                className="h-8 px-2 border-red-500 text-red-700 hover:bg-red-50"
+                                                                                                title="Hapus LP"
+                                                                                            >
+                                                                                                {deleteLoading === entry.id ? (
+                                                                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                                                                ) : (
+                                                                                                    <Trash2 className="h-3 w-3" />
+                                                                                                )}
+                                                                                            </Button>
+                                                                                            <Button
+                                                                                                size="sm"
+                                                                                                variant="outline"
                                                                                                 onClick={() => openSetoranDialog(batch, entry)}
                                                                                                 disabled={!entry.pecahBonId}
                                                                                                 className="h-8 px-2 border-sky-500 text-sky-700 hover:bg-sky-50"
                                                                                             >
-                                                                                                Setoran
+                                                                                                Cetak Setoran
                                                                                             </Button>
                                                                                         </div>
                                                                                     </td>
@@ -2632,65 +2681,79 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
 
             {/* Setoran Print Dialog */}
             <Dialog open={setoranOpen} onOpenChange={setSetoranOpen}>
-                <DialogContent className="max-w-5xl">
+                <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Preview Setoran</DialogTitle>
                         <DialogDescription>
-                            Setoran siap dicetak ke printer Blueprint Lite 80D1 (lebar 72mm).
+                            BAKU hanya menyiapkan dan mencetak setoran. Input setoran dikerjakan di menu Koreksi.
                         </DialogDescription>
                     </DialogHeader>
 
                     {setoranContext && (
-                        <div className="grid gap-6 md:grid-cols-[1fr_280px]">
-                            <div className="flex items-start justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4">
-                                <div
-                                    className="bg-white p-3 text-black"
-                                    style={{ width: '72mm', fontFamily: 'Arial, Helvetica, sans-serif' }}
-                                    dangerouslySetInnerHTML={{
-                                        __html: buildSetoranPrintData(setoranContext.batch, setoranContext.entry)
-                                            .filter((item) => item.type === 'text' && item.raw)
-                                            .map((item) => item.value)
-                                            .join(''),
-                                    }}
-                                />
+                        <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
+                            <div className="space-y-3">
+                                <div className="flex items-start justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 p-3">
+                                    <div
+                                        className="bg-white p-3 text-black"
+                                        style={{ width: '72mm', fontFamily: 'Arial, Helvetica, sans-serif' }}
+                                        dangerouslySetInnerHTML={{
+                                            __html: buildSetoranPrintData(setoranContext.batch, setoranContext.entry)
+                                                .filter((item) => item.type === 'text' && item.raw)
+                                                .map((item) => item.value)
+                                                .join(''),
+                                        }}
+                                    />
+                                </div>
+                                <Button
+                                    className="w-full"
+                                    onClick={() => handlePrintSetoran(setoranContext.batch, setoranContext.entry)}
+                                >
+                                    <Printer className="h-4 w-4" />
+                                    Cetak Setoran
+                                </Button>
                             </div>
                             <div className="space-y-4">
-                                <div className="rounded-lg border border-gray-200 p-4 text-sm text-gray-700">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-gray-500">ID Pecah Bon</span>
-                                        <span className="font-semibold">
-                                            {setoranContext.entry.pecahBonId ?? '-'}
-                                        </span>
-                                    </div>
-                                    <div className="mt-2 flex items-center justify-between">
-                                        <span className="text-gray-500">Batch</span>
-                                        <span className="font-semibold">{setoranContext.batch.batchNumber}</span>
-                                    </div>
-                                    <div className="mt-2 flex items-center justify-between">
-                                        <span className="text-gray-500">Grade</span>
-                                        <span className="font-semibold">
-                                            {`${setoranContext.entry.grade?.code ?? '-'} / ${setoranContext.entry.featherGrade?.code ?? '-'} / ${setoranContext.entry.colorGrade?.code ?? '-'}`}
-                                        </span>
-                                    </div>
-                                    <div className="mt-2 flex items-center justify-between">
-                                        <span className="text-gray-500">Keping</span>
-                                        <span className="font-semibold">{setoranContext.entry.pieceCount}</span>
-                                    </div>
-                                    <div className="mt-2 flex items-center justify-between">
-                                        <span className="text-gray-500">Berat</span>
-                                        <span className="font-semibold">
-                                            {formatNumber(setoranContext.entry.initialWeightGram)} gr
-                                        </span>
-                                    </div>
-                                    <div className="mt-2 flex items-center justify-between">
-                                        <span className="text-gray-500">Kadar Air</span>
-                                        <span className="font-semibold">
-                                            {formatNumber(setoranContext.entry.moisturePercent, 1)}%
-                                        </span>
+                                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Detail Setoran (Read-Only)</p>
+                                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                        <div>
+                                            <p className="text-xs text-emerald-700">No LP</p>
+                                            <p className="text-sm font-semibold text-emerald-900">
+                                                {setoranContext.entry.pecahBonId ?? '-'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-emerald-700">Tanggal</p>
+                                            <p className="text-sm font-semibold text-emerald-900">
+                                                {formatDate(setoranContext.entry.pecahBonDate)}
+                                            </p>
+                                        </div>
+                                        <div className="sm:col-span-2">
+                                            <p className="text-xs text-emerald-700">Grade</p>
+                                            <p className="text-sm font-semibold text-emerald-900">
+                                                {`${setoranContext.entry.grade?.code ?? '-'} / ${setoranContext.entry.featherGrade?.code ?? '-'} / ${setoranContext.entry.colorGrade?.code ?? '-'}`}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
-
-                                <DialogFooter>
+                                <div className="rounded-lg border border-gray-200 p-4">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Ringkasan Berat</p>
+                                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                                        <div>
+                                            <p className="text-xs text-gray-500">Berat Basah</p>
+                                            <p className="text-base font-semibold text-gray-900">{formatNumber(setoranContext.entry.initialWeightGram, 2)} gr</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-gray-500">Kadar Air</p>
+                                            <p className="text-base font-semibold text-gray-900">{formatNumber(setoranContext.entry.moisturePercent, 1)}%</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-gray-500">Berat Kering</p>
+                                            <p className="text-base font-semibold text-emerald-700">{formatNumber(setoranDryInGram, 2)} gr</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <DialogFooter className="flex-wrap gap-2">
                                     <Button variant="outline" onClick={() => setSetoranOpen(false)}>
                                         Tutup
                                     </Button>

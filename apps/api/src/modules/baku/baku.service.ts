@@ -628,6 +628,78 @@ export class BakuService {
     });
   }
 
+  async deletePecahBonEntry(id: string) {
+    const entry = await this.prisma.pecahBonEntry.findUnique({
+      where: { id },
+      include: { rawBatch: true },
+    });
+
+    if (!entry) {
+      return notFound("Pecah Bon not found", { id });
+    }
+
+    const year = new Date(entry.pecahBonDate).getUTCFullYear();
+    const lpWeightGram = Math.round(entry.initialWeightGram);
+
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Restore weight to RawBatch
+      await tx.rawBatch.update({
+        where: { id: entry.rawBatchId },
+        data: {
+          wetWeightGram: { increment: entry.initialWeightGram },
+        },
+      });
+
+      // 2. Reduce allocated weight from Grade Stock
+      await tx.rawBatchGradeStock.updateMany({
+        where: {
+          rawBatchId: entry.rawBatchId,
+          gradeId: entry.gradeId,
+        },
+        data: {
+          wetWeightGram: { decrement: lpWeightGram },
+        },
+      });
+
+      // 3. Find and cleanup ProductionLot and related data
+      if (entry.pecahBonId) {
+        const lot = await tx.productionLot.findFirst({
+          where: { externalId: entry.pecahBonId },
+          select: { id: true },
+        });
+
+        if (lot) {
+          const workOrderItems = await tx.workOrderItem.findMany({
+            where: { lotId: lot.id },
+            select: { workOrderId: true },
+          });
+          const workOrderIds = workOrderItems.map((wi) => wi.workOrderId);
+
+          if (workOrderIds.length > 0) {
+            await tx.workerActiveWorkOrder.deleteMany({
+              where: { workOrderId: { in: workOrderIds } },
+            });
+          }
+
+          await tx.workOrderItem.deleteMany({ where: { lotId: lot.id } });
+          await tx.inventoryMovement.deleteMany({ where: { lotId: lot.id } });
+          await tx.lotSource.deleteMany({ where: { lotId: lot.id } });
+          await tx.productionLot.delete({ where: { id: lot.id } });
+        }
+      }
+
+      // 4. Delete the PecahBonEntry itself
+      await tx.pecahBonEntry.delete({ where: { id } });
+
+      // 5. Sync sequences
+      await this.forceSyncSequence(tx, `PB:${year}`, () =>
+        this.getMaxPecahBonSequenceByYear(tx, year),
+      );
+    });
+
+    return { success: true };
+  }
+
   async updateRawBatch(rawBatchId: string, dto: UpdateRawBatchDto) {
     const rawBatch = await this.prisma.rawBatch.findUnique({
       where: { id: rawBatchId },

@@ -87,6 +87,13 @@ export class BakuController {
     return this.bakuService.markPecahBonPrinted(id);
   }
 
+  @Delete("pecah-bon/:id")
+  @ApiParam({ name: "id" })
+  @Roles("manager", "baku")
+  deletePecahBonEntry(@Param("id") id: string) {
+    return this.bakuService.deletePecahBonEntry(id);
+  }
+
   @Get(":id/pecah-bon")
   @ApiParam({ name: "id" })
   getPecahBonEntries(@Param("id") id: string) {

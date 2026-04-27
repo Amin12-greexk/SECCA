@@ -1763,6 +1763,23 @@ export async function updatePecahBonEntry(entryId: string, data: PecahBonUpdateR
     }
 }
 
+export async function deletePecahBonEntry(entryId: string): Promise<void> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/baku/pecah-bon/${entryId}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Gagal menghapus LP: ${response.statusText}`);
+        }
+    } catch (error) {
+        console.error('Error deleting pecah bon entry:', error);
+        throw error;
+    }
+}
+
 export async function markPecahBonPrinted(entryId: string): Promise<ProductionLot> {
     const response = await fetch(`${API_BASE_URL}/api/baku/pecah-bon-entry/${entryId}/printed`, {
         method: 'POST',
