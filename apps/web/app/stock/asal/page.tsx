@@ -438,6 +438,7 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
             wetWeightGram?: number;
             moisturePercent?: number;
             notes?: string;
+            updateExistingEntries?: boolean;
         } = {};
 
         if (trimmedBatch && trimmedBatch !== editBatch.batchNumber) {
