@@ -259,9 +259,6 @@ export class WorkOrdersService {
             grade: { select: { code: true } },
             featherGrade: { select: { code: true } },
             colorGrade: { select: { code: true } },
-            readyAt: true,
-            dryingStartedAt: true,
-            dryingReadyAt: true,
           },
         },
       },
@@ -275,8 +272,8 @@ export class WorkOrdersService {
     };
 
     items.forEach((item) => {
-      const dryingStartedAt = item.lot.dryingStartedAt ?? item.lot.readyAt;
-      const dryingReadyAt = item.lot.dryingReadyAt;
+      const dryingStartedAt = item.dryingStartedAt ?? item.readyAt;
+      const dryingReadyAt = item.dryingReadyAt;
       const processState =
         item.lane === WorkLane.NEXT_DAY
           ? "NEXT_DAY"
