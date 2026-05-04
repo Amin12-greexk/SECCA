@@ -227,28 +227,26 @@ export declare class BakuService {
         success: boolean;
     }>;
     updateRawBatch(rawBatchId: string, dto: UpdateRawBatchDto): Promise<{
+        id: string;
+        originalWetWeightGram: number;
+        rawBatchId: string;
+        batchNumber: string;
+        cardId: string;
+        mergedIntoRawBatchId: string | null;
+        mergedAt: Date | null;
+        isMergedSource: boolean;
         supplier: {
             id: string;
-            phone: string | null;
             name: string;
-            createdAt: Date;
-            updatedAt: Date;
             code: string | null;
         };
-    } & {
-        id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        supplierId: string;
         featherCondition: string;
         invoiceWeightGram: number;
         wetWeightGram: number;
         moisturePercent: number;
         notes: string | null;
-        batchNumber: string;
-        cardId: string;
-        mergedIntoRawBatchId: string | null;
-        mergedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     deleteRawBatch(id: string): Promise<{
         success: boolean;

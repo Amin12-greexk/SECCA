@@ -91,9 +91,7 @@ function DashboardContent() {
         }
     };
 
-    if (!user) return null;
-
-    const quickActions = getQuickActions(user.role);
+    const quickActions = user ? getQuickActions(user.role) : [];
     const formatNumber = (value: number, fractionDigits = 0) =>
         new Intl.NumberFormat('id-ID', {
             minimumFractionDigits: fractionDigits,
@@ -116,6 +114,8 @@ function DashboardContent() {
             delta === 0 ? 'Stabil' : delta > 0 ? `+${formatNumber(delta)} gr` : `${formatNumber(delta)} gr`;
         return { current, previous, delta, deltaLabel };
     }, [weeklyStats]);
+
+    if (!user) return null;
 
     return (
         <div ref={containerRef} className="space-y-6">

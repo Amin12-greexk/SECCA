@@ -728,9 +728,8 @@ export class BakuService {
     if (dto.invoiceWeightGram !== undefined) {
       data.invoiceWeightGram = this.roundToTwoDecimals(dto.invoiceWeightGram);
     }
-    if (dto.wetWeightGram !== undefined) {
-      data.wetWeightGram = this.roundToTwoDecimals(dto.wetWeightGram);
-    }
+    
+    // moisturePercent and notes are handled below or added to data
     if (dto.moisturePercent !== undefined) {
       data.moisturePercent = this.roundToTwoDecimals(dto.moisturePercent);
     }
@@ -741,6 +740,25 @@ export class BakuService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+        // Handle wetWeightGram update (Arrival Weight)
+        if (dto.wetWeightGram !== undefined) {
+          const usedTotal = await tx.pecahBonEntry.aggregate({
+            where: { rawBatchId },
+            _sum: { initialWeightGram: true },
+          });
+          const usedWeight = usedTotal._sum.initialWeightGram ?? 0;
+          const newArrivalWeight = this.roundToTwoDecimals(dto.wetWeightGram);
+          const newRemainingWeight = this.roundToTwoDecimals(newArrivalWeight - usedWeight);
+
+          if (newRemainingWeight < 0) {
+            return badRequest("Berat kedatangan baru tidak boleh kurang dari berat yang sudah di pecah bon", {
+              usedWeight,
+              newArrivalWeight,
+            });
+          }
+          data.wetWeightGram = newRemainingWeight;
+        }
+
         if (dto.batchNumber && dto.batchNumber !== rawBatch.batchNumber) {
           const existing = await tx.rawBatch.findFirst({
             where: {
@@ -813,7 +831,12 @@ export class BakuService {
           }
         }
 
-        return updated;
+        const finalUsedTotal = await tx.pecahBonEntry.aggregate({
+          where: { rawBatchId },
+          _sum: { initialWeightGram: true },
+        });
+
+        return this.mapRawBatch(updated, finalUsedTotal._sum.initialWeightGram ?? 0);
       });
     } catch (error) {
       if (

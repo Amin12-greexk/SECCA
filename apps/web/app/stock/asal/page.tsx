@@ -311,12 +311,13 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
 
     const openEditDialog = (batch: RawBatch) => {
         setEditBatch(batch);
+        const arrivalWeight = batch.originalWetWeightGram ?? batch.wetWeightGram;
         setEditValues({
             batchNumber: batch.batchNumber ?? '',
             supplierId: batch.supplier?.id ?? batch.supplierId ?? '',
             featherCondition: batch.featherCondition ?? '',
             invoiceWeightGram: batch.invoiceWeightGram?.toString() ?? '',
-            wetWeightGram: batch.wetWeightGram?.toString() ?? '',
+            wetWeightGram: arrivalWeight?.toString() ?? '',
             moisturePercent: batch.moisturePercent?.toString() ?? '',
             notes: batch.notes ?? '',
         });
@@ -471,7 +472,10 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
         }
 
         if (invoice !== editBatch.invoiceWeightGram) payload.invoiceWeightGram = invoice;
-        if (wet !== editBatch.wetWeightGram) payload.wetWeightGram = wet;
+        
+        const currentArrivalWeight = editBatch.originalWetWeightGram ?? editBatch.wetWeightGram;
+        if (Math.abs(wet - currentArrivalWeight) > 0.0001) payload.wetWeightGram = wet;
+        
         if (moisture !== editBatch.moisturePercent) payload.moisturePercent = moisture;
 
         if (trimmedNotes !== (editBatch.notes ?? '')) {

@@ -16,21 +16,25 @@ const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 const SIDEBAR_COLLAPSED_KEY = 'secca_sidebar_collapsed';
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+            return saved !== null ? JSON.parse(saved) : false;
+        }
+        return false;
+    });
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
 
     // Initialize from localStorage and handle responsive
     useEffect(() => {
-        // Check localStorage for saved preference
-        const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-        if (saved !== null) {
-            setIsCollapsed(JSON.parse(saved));
-        }
-
         // Handle responsive detection
         const checkMobile = () => {
-            setIsMobile(window.innerWidth < 768);
+            const mobile = window.innerWidth < 768;
+            setIsMobile(mobile);
+            if (!mobile) {
+                setIsMobileOpen(false);
+            }
         };
 
         checkMobile();
@@ -43,15 +47,8 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
         localStorage.setItem(SIDEBAR_COLLAPSED_KEY, JSON.stringify(isCollapsed));
     }, [isCollapsed]);
 
-    // Close mobile menu on resize to desktop
-    useEffect(() => {
-        if (!isMobile && isMobileOpen) {
-            setIsMobileOpen(false);
-        }
-    }, [isMobile, isMobileOpen]);
-
     const toggleSidebar = () => {
-        setIsCollapsed((prev) => !prev);
+        setIsCollapsed((prev: boolean) => !prev);
     };
 
     const toggleMobileMenu = () => {
