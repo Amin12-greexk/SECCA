@@ -9,10 +9,10 @@ WORKDIR /app
 
 FROM base AS deps
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/api/package.json apps/api/package.json
+COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/.npmrc apps/api/package.json apps/api/
 
-RUN pnpm install --filter api... --frozen-lockfile
+RUN pnpm install --filter api... --frozen-lockfile --config.dangerouslyAllowAllBuilds=true
 
 FROM base AS build
 
