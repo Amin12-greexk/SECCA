@@ -58,6 +58,30 @@ const pecahBonSchema = z.object({
 
 type PecahBonFormValues = z.infer<typeof pecahBonSchema>;
 
+const PECAH_BON_FINAL_REMAINING_MIN_GRAM = 35;
+const PECAH_BON_FINAL_SPLIT_TARGET_GRAM = 50;
+const PECAH_BON_FINAL_SPLIT_TOLERANCE_GRAM = 5;
+
+function isWithinPecahBonFinalSplitTolerance(remainingWeightGram: number, requestedWeightGram: number) {
+    const roundedRemaining = Math.round(remainingWeightGram);
+    const deficit = Math.round((requestedWeightGram - remainingWeightGram) * 100) / 100;
+
+    return (
+        roundedRemaining >= PECAH_BON_FINAL_REMAINING_MIN_GRAM &&
+        roundedRemaining <= PECAH_BON_FINAL_SPLIT_TARGET_GRAM &&
+        Math.round(requestedWeightGram) === PECAH_BON_FINAL_SPLIT_TARGET_GRAM &&
+        deficit > 0 &&
+        deficit < PECAH_BON_FINAL_SPLIT_TOLERANCE_GRAM
+    );
+}
+
+function exceedsRemainingBeyondPecahBonTolerance(requestedWeightGram: number, remainingWeightGram: number) {
+    return (
+        requestedWeightGram > remainingWeightGram &&
+        !isWithinPecahBonFinalSplitTolerance(remainingWeightGram, requestedWeightGram)
+    );
+}
+
 // Pagination constant for entries display
 const ENTRIES_PER_PAGE = 20;
 const BATCHES_PER_PAGE = 20;
@@ -1503,7 +1527,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     const onSubmit = async (values: PecahBonFormValues) => {
         if (!selectedBatch) return;
 
-        if (values.initialWeightGram > selectedBatch.wetWeightGram) {
+        if (exceedsRemainingBeyondPecahBonTolerance(values.initialWeightGram, selectedBatch.wetWeightGram)) {
             toast.error(
                 `Berat awal (${formatNumber(values.initialWeightGram)}) melebihi sisa berat batch (${formatNumber(selectedBatch.wetWeightGram)}).`
             );
@@ -1553,7 +1577,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
             (sum, entry) => sum + (typeof entry.initialWeightGram === 'number' ? entry.initialWeightGram : 0),
             0
         );
-        if (totalInitialWeight > selectedBatch.wetWeightGram) {
+        if (exceedsRemainingBeyondPecahBonTolerance(totalInitialWeight, selectedBatch.wetWeightGram)) {
             toast.error(
                 `Total berat (${formatNumber(totalInitialWeight)}) melebihi sisa berat batch (${formatNumber(selectedBatch.wetWeightGram)}).`
             );

@@ -24,6 +24,12 @@ import { NumberingService } from "../../common/numbering/numbering.service";
 import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
 import { LOCATION_CODES, workerRackCode } from "../../common/constants";
 import { roundDryWeight } from "../../common/utils/weight";
+import {
+  PECAH_BON_FINAL_SPLIT_TARGET_GRAM,
+  PECAH_BON_FINAL_SPLIT_TOLERANCE_GRAM,
+  getRemainingAfterPecahBonConsumption,
+  isAllowedPecahBonFinalSplit,
+} from "../../common/utils/pecah-bon-weight";
 
 type RawBatchWithSupplier = Prisma.RawBatchGetPayload<{
   include: { supplier: true };
@@ -219,10 +225,15 @@ export class BakuService {
       });
     }
 
-    if (rawBatch.wetWeightGram < dto.initialWeightGram) {
+    const remainingAfterCreate = getRemainingAfterPecahBonConsumption(
+      rawBatch.wetWeightGram,
+      dto.initialWeightGram,
+    );
+    if (remainingAfterCreate === null) {
       return badRequest("Berat awal melebihi sisa berat batch", {
         available: rawBatch.wetWeightGram,
         requested: dto.initialWeightGram,
+        toleranceGram: PECAH_BON_FINAL_SPLIT_TOLERANCE_GRAM,
       });
     }
 
@@ -238,12 +249,19 @@ export class BakuService {
     }
     const remainingRounded = Math.round(rawBatch.wetWeightGram);
     if (remainingRounded >= 35 && remainingRounded <= 50) {
-      if (lotWetWeightGram !== remainingRounded) {
+      if (
+        !isAllowedPecahBonFinalSplit(
+          rawBatch.wetWeightGram,
+          dto.initialWeightGram,
+        )
+      ) {
         return badRequest(
-          "Sisa batch berada di rentang 35–50 gr, harus dihabiskan sekaligus.",
+          "Sisa batch berada di rentang 35-50 gr, harus dihabiskan sekaligus atau dibulatkan menjadi 50 gr jika selisih kurang dari 5 gr.",
           {
             requested: lotWetWeightGram,
             remaining: remainingRounded,
+            targetWeightGram: PECAH_BON_FINAL_SPLIT_TARGET_GRAM,
+            toleranceGram: PECAH_BON_FINAL_SPLIT_TOLERANCE_GRAM,
           },
         );
       }
@@ -376,9 +394,7 @@ export class BakuService {
       await tx.rawBatch.update({
         where: { id: rawBatchId },
         data: {
-          wetWeightGram: this.roundToTwoDecimals(
-            rawBatch.wetWeightGram - dto.initialWeightGram,
-          ),
+          wetWeightGram: remainingAfterCreate,
         },
       });
 
@@ -460,16 +476,20 @@ export class BakuService {
     const oldInitialWeight = this.roundToTwoDecimals(entry.initialWeightGram);
     const deltaWeight = this.roundToTwoDecimals(newInitialWeight - oldInitialWeight);
 
-    if (deltaWeight > 0 && rawBatch.wetWeightGram < deltaWeight) {
+    const newRemaining =
+      deltaWeight > 0
+        ? getRemainingAfterPecahBonConsumption(
+            rawBatch.wetWeightGram,
+            deltaWeight,
+          )
+        : this.roundToTwoDecimals(rawBatch.wetWeightGram - deltaWeight);
+    if (newRemaining === null) {
       return badRequest("Berat awal melebihi sisa berat batch", {
         available: rawBatch.wetWeightGram,
         requested: deltaWeight,
+        toleranceGram: PECAH_BON_FINAL_SPLIT_TOLERANCE_GRAM,
       });
     }
-
-    const newRemaining = this.roundToTwoDecimals(
-      rawBatch.wetWeightGram - deltaWeight,
-    );
     const remainingRounded = Math.round(newRemaining);
     if (remainingRounded >= 35 && remainingRounded <= 50) {
       return badRequest(
