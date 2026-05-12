@@ -3,8 +3,9 @@ FROM node:22-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
 
 WORKDIR /app
 
@@ -38,4 +39,4 @@ COPY --from=build /app/apps/web /app/apps/web
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "pnpm start -H 0.0.0.0 -p 3000"]
+CMD ["sh", "-c", "./node_modules/.bin/next start -H 0.0.0.0 -p 3000"]

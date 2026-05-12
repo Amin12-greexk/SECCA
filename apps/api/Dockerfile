@@ -2,8 +2,9 @@ FROM node:22-alpine AS base
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
 
 WORKDIR /app
 
@@ -38,4 +39,4 @@ COPY --from=build /app/apps/api /app/apps/api
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/src/main.js"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node dist/src/main.js"]
