@@ -13,7 +13,7 @@ FROM base AS deps
 COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/.npmrc apps/web/package.json apps/web/
 
-RUN pnpm install --filter web... --frozen-lockfile --config.dangerouslyAllowAllBuilds=true
+RUN pnpm install --filter web... --frozen-lockfile
 
 FROM base AS build
 

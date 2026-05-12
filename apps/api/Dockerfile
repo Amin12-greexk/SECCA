@@ -12,7 +12,7 @@ FROM base AS deps
 COPY .npmrc package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/.npmrc apps/api/package.json apps/api/
 
-RUN pnpm install --filter api... --frozen-lockfile --config.dangerouslyAllowAllBuilds=true
+RUN pnpm install --filter api... --frozen-lockfile
 
 FROM base AS build
 
