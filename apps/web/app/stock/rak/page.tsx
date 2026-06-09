@@ -15,7 +15,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/lib/toast';
-import { getGrades, getRackLotsByCodePaginated, moveLot, type ProductionLot } from '@/lib/api';
+import { getGrades, getRackLotsByCodePaginated, moveLot, getPecahBonById, markPecahBonPrinted, type ProductionLot, type PecahBonEntry } from '@/lib/api';
 
 type RackKey = 'preSale' | 'mitraOrder';
 type ViewMode = 'grid' | 'list';
@@ -90,9 +90,6 @@ function RackContent() {
     const [viewMode, setViewMode] = useState<ViewMode>('list');
     const [searchInput, setSearchInput] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedGradeId, setSelectedGradeId] = useState<string>('all');
-    const [gradeOptions, setGradeOptions] = useState<GradeOption[]>([]);
-    const [printedFilter, setPrintedFilter] = useState<PrintedFilter>('all');
     const [listPage, setListPage] = useState<Record<RackKey, number>>({
         preSale: 1,
         mitraOrder: 1,
@@ -101,6 +98,8 @@ function RackContent() {
     const [highlightedLotId, setHighlightedLotId] = useState<string | null>(null);
     const [pendingJumpLotId, setPendingJumpLotId] = useState<string | null>(null);
     const [pendingJumpKeyword, setPendingJumpKeyword] = useState<string | null>(null);
+    const [selectedLotIds, setSelectedLotIds] = useState<Set<string>>(new Set());
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; lotId: string; from: RackKey } | null>(null);
     const [rackState, setRackState] = useState<Record<RackKey, RackListState>>({
         preSale: {
             lots: [],
@@ -135,15 +134,11 @@ function RackContent() {
                     page: listPage.preSale,
                     limit: LIST_PAGE_SIZE,
                     search: searchTerm || undefined,
-                    gradeId: selectedGradeId === 'all' ? undefined : selectedGradeId,
-                    printed: printedFilter,
                 }),
                 getRackLotsByCodePaginated(RACKS.mitraOrder.code, {
                     page: listPage.mitraOrder,
                     limit: LIST_PAGE_SIZE,
                     search: searchTerm || undefined,
-                    gradeId: selectedGradeId === 'all' ? undefined : selectedGradeId,
-                    printed: printedFilter,
                 }),
             ]);
             setRackState({
@@ -187,26 +182,9 @@ function RackContent() {
     }, [searchInput]);
 
     useEffect(() => {
-        const loadGradeOptions = async () => {
-            try {
-                const grades = await getGrades();
-                const shapeCodes = grades
-                    .filter((grade) => grade.type === 'BENTUK' && grade.code)
-                    .map((grade) => ({ id: grade.id, code: grade.code }))
-                    .sort((left, right) => left.code.localeCompare(right.code));
-                setGradeOptions(shapeCodes);
-            } catch (error) {
-                console.error('Error loading grades:', error);
-            }
-        };
-
-        void loadGradeOptions();
-    }, []);
-
-    useEffect(() => {
         void loadData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [listPage.preSale, listPage.mitraOrder, searchTerm, selectedGradeId, printedFilter]);
+    }, [listPage.preSale, listPage.mitraOrder, searchTerm]);
 
     const listMeta = useMemo(() => {
         const buildMeta = (rack: RackListState) => {
@@ -291,6 +269,384 @@ function RackContent() {
         setDragOver(target);
     };
 
+    const handleContextMenu = (event: React.MouseEvent, lotId: string, from: RackKey) => {
+        event.preventDefault();
+        setContextMenu({
+            x: event.clientX,
+            y: event.clientY,
+            lotId,
+            from,
+        });
+    };
+
+    const closeContextMenu = () => setContextMenu(null);
+
+    useEffect(() => {
+        const handleGlobalClick = () => closeContextMenu();
+        window.addEventListener('click', handleGlobalClick);
+        return () => window.removeEventListener('click', handleGlobalClick);
+    }, []);
+
+    const executeMove = async (lotId: string, targetRack: RackKey) => {
+        try {
+            const movedLot = await moveLot(lotId, RACKS[targetRack].code);
+
+            if (targetRack === 'mitraOrder' && movedLot.externalId) {
+                try {
+                    const entry = await getPecahBonById(movedLot.externalId);
+                    await handleAutoPrint(entry);
+                } catch (err) {
+                    console.error('Auto print failed for lot:', lotId, err);
+                    toast.error(`Pindah berhasil tapi gagal cetak otomatis untuk ${movedLot.externalId}`);
+                }
+            }
+            return true;
+        } catch (error) {
+            console.error('Failed to move lot:', lotId, error);
+            toast.error(error instanceof Error ? error.message : `Gagal memindahkan LP ${lotId}`);
+            return false;
+        }
+    };
+
+    const handleToggleSelect = (lotId: string) => {
+        setSelectedLotIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(lotId)) {
+                next.delete(lotId);
+            } else {
+                next.add(lotId);
+            }
+            return next;
+        });
+    };
+
+    const handleMoveSelected = async (targetRack: RackKey) => {
+        if (selectedLotIds.size === 0) return;
+        setMoving(true);
+        let successCount = 0;
+
+        try {
+            const ids = Array.from(selectedLotIds);
+            for (const lotId of ids) {
+                const ok = await executeMove(lotId, targetRack);
+                if (ok) {
+                    successCount++;
+                    // Small delay between LPs to prevent printer job collisions
+                    if (ids.length > 1) {
+                        await new Promise((resolve) => setTimeout(resolve, 800));
+                    }
+                }
+            }
+
+            if (successCount > 0) {
+                toast.success(`${successCount} LP berhasil dipindahkan.`);
+                setSelectedLotIds(new Set());
+                await loadData();
+            }
+        } finally {
+            setMoving(false);
+        }
+    };
+
+    // Print helpers (matching PecahBonPage for consistency)
+    const buildPrintOptions = () => {
+        return {
+            silent: true,
+            preview: false,
+            margin: '0',
+            pageSize: { width: 80000, height: 297000 },
+            addFinalMargin: true,
+            bodyAttributes: {
+                style: 'width: 80mm !important; max-width: 80mm !important; margin: 0 !important; padding: 0 !important;',
+            },
+            containerAttributes: {
+                style: 'width: 76mm !important; max-width: 76mm !important; margin: 0 auto !important; margin-left: -2mm !important; padding: 0 !important;',
+            },
+            styleSheet: `
+                @page {
+                    size: 80mm auto;
+                    margin: 0 !important;
+                }
+                * {
+                    box-sizing: border-box !important;
+                }
+                html, body {
+                    width: 80mm !important;
+                    max-width: 80mm !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    font-family: Arial, Helvetica, sans-serif;
+                    font-size: 11pt;
+                }
+                #container {
+                    width: 76mm !important;
+                    max-width: 76mm !important;
+                    margin: 0 auto !important;
+                    margin-left: -2mm !important;
+                    padding: 0 !important;
+                    text-align: center !important;
+                }
+                #container .section {
+                    width: 100% !important;
+                    max-width: 72mm !important;
+                    margin: 0 auto !important;
+                    padding: 1mm 0 !important;
+                    text-align: center !important;
+                }
+                img {
+                    max-width: 100% !important;
+                    display: block !important;
+                    margin: 0 auto !important;
+                }
+            `,
+        };
+    };
+
+    const buildPecahBonPrintData = (entry: PecahBonEntry) => {
+        const dateStr = formatDateTime(entry.pecahBonDate);
+        const gradeDisplay = `${entry.grade?.code ?? '-'} / ${entry.featherGrade?.code ?? '-'} / ${entry.colorGrade?.code ?? '-'}`;
+        const batchNumber = entry.rawBatch?.batchNumber ?? '-';
+
+        return [
+            {
+                type: 'text',
+                raw: true,
+                value: `<div style="text-align:center;font-size:12pt;font-weight:bold;padding:1mm 0;">KARTU PECAH BON - TEI</div>`,
+            },
+            {
+                type: 'qrCode',
+                value: entry.pecahBonId || batchNumber,
+                width: 80,
+                height: 80,
+                sectionStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1mm 0' },
+            },
+            {
+                type: 'text',
+                raw: true,
+                value: `
+                    <div style="border:1px solid #333;padding:1.5mm;font-size:9pt;width:100%;box-sizing:border-box;">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
+                            <span style="font-weight:bold;">ID Pecah</span><span>${entry.pecahBonId ?? '-'}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
+                            <span style="font-weight:bold;">Batch No</span><span>${batchNumber}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;">
+                            <span style="font-weight:bold;">Tgl Pecah</span><span>${dateStr}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-top:0.5mm;">
+                            <span style="font-weight:bold;">Grade</span><span>${gradeDisplay}</span>
+                        </div>
+                    </div>
+                `,
+            },
+            {
+                type: 'text',
+                raw: true,
+                value: `
+                    <div style="border:1.5px solid #000;padding:1.5mm;margin-top:1mm;text-align:center;width:100%;box-sizing:border-box;">
+                        <div style="font-size:10pt;font-weight:bold;">BERAT: ${formatNumber(entry.initialWeightGram, 2)} Gr</div>
+                        <div style="font-size:10pt;font-weight:bold;">KADAR AIR: ${formatNumber(entry.moisturePercent, 1)}%</div>
+                    </div>
+                `,
+            },
+            {
+                type: 'text',
+                raw: true,
+                value: `<div style="margin-top:2mm;border-top:1px dashed #000;width:100%;"></div>`,
+            },
+        ];
+    };
+
+    const buildSetoranPrintData = (entry: PecahBonEntry) => {
+        const dateStr = formatDateTime(entry.pecahBonDate);
+        const gradeCode = `${entry.grade?.code ?? '-'} / ${entry.featherGrade?.code ?? '-'} / ${entry.colorGrade?.code ?? '-'}`;
+        const pieceCount = entry.pieceCount;
+        const wetWeight = formatNumber(entry.initialWeightGram, 2);
+        const moisture = formatNumber(entry.moisturePercent, 1);
+        const dryWeight = formatNumber(entry.dryWeightGram, 2);
+        const batchNumber = entry.rawBatch?.batchNumber ?? '-';
+
+        return [
+            {
+                type: 'text',
+                raw: true,
+                value: `<div style="text-align:center;font-size:11pt;font-weight:700;padding:0.5mm 0;border-bottom:1px solid #000;">SETORAN</div>`,
+            },
+            {
+                type: 'text',
+                raw: true,
+                value: `
+                    <div style="font-size:7pt;font-weight:600;line-height:1.2;padding:0.4mm 0;width:100%;max-width:72mm;margin:0 auto;">
+                        <table style="width:100%;border-collapse:collapse;">
+                            <tr>
+                                <td style="padding:0.1mm 0;width:52%;">NAMA: TEI</td>
+                                <td style="padding:0.1mm 0;width:48%;">GRADE: ${gradeCode}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0.1mm 0;">TGL: ${dateStr.split(',')[0]}</td>
+                                <td style="padding:0.1mm 0;">BIJI: ${pieceCount} kpg</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0.1mm 0;">NO LP: ${entry.pecahBonId ?? '-'}</td>
+                                <td style="padding:0.1mm 0;">B.BASAH: ${wetWeight}g</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0.1mm 0;">KARTU: ${batchNumber}</td>
+                                <td style="padding:0.1mm 0;">K.AIR: ${moisture}%</td>
+                            </tr>
+                        </table>
+                    </div>
+                `,
+            },
+            {
+                type: 'text',
+                raw: true,
+                value: `
+                    <div style="margin:0.5mm auto;width:100%;max-width:72mm;">
+                        <table style="width:100%;border-collapse:collapse;font-size:7pt;font-weight:600;border:1px solid #000;">
+                            <tr style="background:#ddd;">
+                                <td style="border:1px solid #000;padding:0.2mm;width:50%;"></td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;width:15%;">BIJI</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;width:35%;">GRAM</td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #000;padding:0.2mm;font-size:8pt;">BERAT KERING</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;">${pieceCount}</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:center;">${dryWeight}</td>
+                            </tr>
+                        </table>
+                    </div>
+                `,
+            },
+            {
+                type: 'text',
+                raw: true,
+                value: `
+                    <div style="margin:0.5mm auto;width:100%;max-width:72mm;">
+                        <table style="width:100%;border-collapse:collapse;font-size:7pt;font-weight:600;border:1px solid #000;">
+                            <tr style="background:#ff9;">
+                                <td style="border:1px solid #000;padding:0.2mm;font-size:8pt;" colspan="2">HASIL JADI:</td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;width:35%;">
+                                    <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #000;padding:0.2mm;">HANCURAN</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">
+                                    <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #000;padding:0.2mm;">SESEKAN</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">
+                                    <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #000;padding:0.2mm;">KAKI</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">
+                                    <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #000;padding:0.2mm;">LAIN-LAIN</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">
+                                    <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                `,
+            },
+            {
+                type: 'text',
+                raw: true,
+                value: `
+                    <div style="margin:0.5mm auto;width:100%;max-width:72mm;">
+                        <table style="width:100%;border-collapse:collapse;font-size:7pt;font-weight:600;border:1px solid #000;">
+                            <tr style="background:#ddd;">
+                                <td style="border:1px solid #000;padding:0.2mm;width:65%;font-size:8pt;">TOTAL BARANG JADI</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;width:35%;">
+                                    <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="border:1px solid #000;padding:0.2mm;">HILANG/SUSUT</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">
+                                    <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
+                                </td>
+                            </tr>
+                            <tr style="background:#ddd;">
+                                <td style="border:1px solid #000;padding:0.2mm;">SUSUT PROSES</td>
+                                <td style="border:1px solid #000;padding:0.2mm;text-align:right;">
+                                    <span style="display:block;width:100%;border-bottom:1px dotted #000;height:1em;"></span>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                `,
+            },
+            {
+                type: 'text',
+                raw: true,
+                value: `<div style="margin-top:1mm;border-top:1px dashed #000;"></div>`,
+            },
+        ];
+    };
+
+    const handleAutoPrint = async (entry: PecahBonEntry) => {
+        if (typeof window === 'undefined') return;
+
+        try {
+            // Priority: Thermal printer (securePOSPrinter) for exact sizing
+            if (window.securePOSPrinter?.print) {
+                const options = buildPrintOptions();
+                
+                // 1. Print Kartu Pecah Bon
+                const kartuData = buildPecahBonPrintData(entry);
+                await window.securePOSPrinter.print(kartuData, options);
+                
+                // Add a small delay between separate jobs to ensure the printer driver processes both
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // 2. Print Setoran
+                const setoranData = buildSetoranPrintData(entry);
+                await window.securePOSPrinter.print(setoranData, options);
+
+                await markPecahBonPrinted(entry.id).catch((err) => {
+                    console.error('Failed to mark printed:', err);
+                });
+                
+                toast.success(`Berhasil cetak (Kartu & Setoran): ${entry.pecahBonId ?? entry.id}`);
+                return;
+            }
+
+            // Fallback: Electron seccaPrint
+            if (window.seccaPrint?.print) {
+                await window.seccaPrint.print({
+                    silent: true,
+                    printBackground: true,
+                    margins: { marginType: 'none' },
+                    preferCSSPageSize: true,
+                });
+                
+                await markPecahBonPrinted(entry.id).catch((err) => {
+                    console.error('Failed to mark printed:', err);
+                });
+                toast.success('Cetak otomatis selesai.');
+                return;
+            }
+
+            toast.warning('LP dipindahkan, tapi printer tidak ditemukan untuk cetak otomatis.');
+        } catch (error) {
+            console.error('Error in auto-print:', error);
+            toast.error('Gagal cetak otomatis: ' + (error instanceof Error ? error.message : String(error)));
+        }
+    };
+
     const handleDrop = async (event: React.DragEvent<HTMLDivElement>, target: RackKey) => {
         event.preventDefault();
         setDragOver(null);
@@ -303,12 +659,11 @@ function RackContent() {
             const payload = JSON.parse(raw) as { lotId: string; from: RackKey };
             if (payload.from === target) return;
             setMoving(true);
-            await moveLot(payload.lotId, RACKS[target].code);
-            toast.success('LP berhasil dipindahkan.');
-            await loadData();
-        } catch (error) {
-            console.error('Error moving lot:', error);
-            toast.error(error instanceof Error ? error.message : 'Gagal memindahkan LP.');
+            const ok = await executeMove(payload.lotId, target);
+            if (ok) {
+                toast.success('LP berhasil dipindahkan.');
+                await loadData();
+            }
         } finally {
             setMoving(false);
         }
@@ -324,8 +679,6 @@ function RackContent() {
         setViewMode('list');
         setSearchInput(keyword);
         setSearchTerm(keyword);
-        setSelectedGradeId('all');
-        setPrintedFilter('all');
         setListPage({
             preSale: 1,
             mitraOrder: 1,
@@ -356,6 +709,7 @@ function RackContent() {
     const renderLotCard = (lot: ProductionLot, from: RackKey, rack: RackConfig) => {
         const movable = isLotMovable(lot);
         const printed = Boolean(lot.printedAt);
+        const isSelected = selectedLotIds.has(lot.id);
         const gradeLabel = [lot.grade?.code, lot.featherGrade?.code, lot.colorGrade?.code]
             .filter(Boolean)
             .join(' / ');
@@ -368,17 +722,25 @@ function RackContent() {
                     draggable={movable}
                     onDragStart={(event) => handleDragStart(event, lot, from)}
                     onDragEnd={handleDragEnd}
+                    onContextMenu={(e) => movable && handleContextMenu(e, lot.id, from)}
                     className={`rounded-lg border px-3 py-2 transition ${
                         lot.id === highlightedLotId
                             ? 'border-green-400 bg-green-50 ring-1 ring-green-300'
-                            : 'border-gray-200 bg-white'
+                            : isSelected ? 'border-green-300 bg-green-50/50' : 'border-gray-200 bg-white'
                     } ${
                         movable
                             ? 'cursor-move hover:border-gray-300 hover:shadow-sm'
                             : 'cursor-not-allowed opacity-85'
                     }`}
                 >
-                    <div className="grid grid-cols-[1.7fr_1.2fr_0.8fr_0.9fr_0.9fr_0.9fr] items-center gap-2 text-xs">
+                    <div className="grid grid-cols-[auto_1.7fr_1.2fr_0.8fr_0.9fr_0.9fr_0.9fr] items-center gap-2 text-xs">
+                        <input 
+                            type="checkbox" 
+                            checked={isSelected}
+                            onChange={() => handleToggleSelect(lot.id)}
+                            disabled={!movable}
+                            className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
+                        />
                         <div className="min-w-0">
                             <p className="truncate text-sm font-semibold text-gray-900">
                                 {lot.externalId ?? lot.lotNumber}
@@ -421,15 +783,27 @@ function RackContent() {
                 draggable={movable}
                 onDragStart={(event) => handleDragStart(event, lot, from)}
                 onDragEnd={handleDragEnd}
-                className={`rounded-xl border border-gray-200 bg-white p-3.5 shadow-sm transition ${
+                onContextMenu={(e) => movable && handleContextMenu(e, lot.id, from)}
+                className={`rounded-xl border transition p-3.5 shadow-sm ${
+                    isSelected ? 'border-green-400 bg-green-50 shadow-md' : 'border-gray-200 bg-white'
+                } ${
                     movable
                         ? 'cursor-move hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-lg'
                         : 'cursor-not-allowed opacity-85'
                 }`}
             >
                 <div className="mb-2.5 flex items-start justify-between gap-2">
-                    <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${rack.iconBgClass}`}>
-                        <Package className={`h-4 w-4 ${rack.iconTextClass}`} />
+                    <div className="flex items-center gap-2">
+                        <input 
+                            type="checkbox" 
+                            checked={isSelected}
+                            onChange={() => handleToggleSelect(lot.id)}
+                            disabled={!movable}
+                            className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
+                        />
+                        <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${rack.iconBgClass}`}>
+                            <Package className={`h-4 w-4 ${rack.iconTextClass}`} />
+                        </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
                         <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${rack.badgeClass}`}>
@@ -484,68 +858,71 @@ function RackContent() {
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Rak LP</h1>
                         <p className="mt-1 text-sm text-gray-600">
-                            Kontrol perpindahan LP antara Rak Sementara dan Rak Mitra Order.
+                            Pindahkan LP (Single Drag atau Multiple Checkbox).
                         </p>
                     </div>
-                    <Button variant="outline" onClick={loadData} disabled={loading || moving}>
-                        {loading ? 'Memuat...' : 'Refresh'}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        {selectedLotIds.size > 0 && (
+                            <div className="flex items-center gap-2 rounded-lg bg-white p-1 border shadow-sm">
+                                <span className="px-2 text-xs font-bold text-green-700">{selectedLotIds.size} dipilih</span>
+                                <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="h-8 border-orange-200 text-orange-700 hover:bg-orange-50"
+                                    onClick={() => handleMoveSelected('preSale')}
+                                    disabled={moving}
+                                >
+                                    Ke Rak Sementara
+                                </Button>
+                                <Button 
+                                    size="sm" 
+                                    className="h-8 bg-green-700 hover:bg-green-800"
+                                    onClick={() => handleMoveSelected('mitraOrder')}
+                                    disabled={moving}
+                                >
+                                    Ke Rak Mitra Order
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setSelectedLotIds(new Set())}>
+                                    Batal
+                                </Button>
+                            </div>
+                        )}
+                        <Button variant="outline" onClick={loadData} disabled={loading || moving}>
+                            {loading ? 'Memuat...' : 'Refresh'}
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <div className="grid gap-3 md:grid-cols-[2fr_1fr_1fr_auto]">
-                        <div className="space-y-1">
-                            <label className="text-xs font-medium text-gray-600">Cari LP</label>
+                    <div className="flex flex-wrap items-end gap-3">
+                        <div className="flex-1 min-w-[240px] space-y-1">
+                            <label className="text-xs font-medium text-gray-600">Cari Nomor LP</label>
                             <Input
                                 value={searchInput}
                                 onChange={(event) => {
                                     setSearchInput(event.target.value);
-                                    setListPage((prev) => {
-                                        if (prev.preSale === 1 && prev.mitraOrder === 1) return prev;
-                                        return { preSale: 1, mitraOrder: 1 };
-                                    });
+                                    setListPage({ preSale: 1, mitraOrder: 1 });
                                 }}
-                                placeholder="Cari nomor LP / ID eksternal"
+                                placeholder="Cari LP ID (TEI-...)"
                             />
                         </div>
                         <div className="space-y-1">
-                            <label className="text-xs font-medium text-gray-600">Filter Grade</label>
-                            <select
-                                value={selectedGradeId}
-                                onChange={(event) => {
-                                    setSelectedGradeId(event.target.value);
-                                    setListPage((prev) => {
-                                        if (prev.preSale === 1 && prev.mitraOrder === 1) return prev;
-                                        return { preSale: 1, mitraOrder: 1 };
-                                    });
-                                }}
-                                className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm outline-none focus:border-green-600 focus:ring-2 focus:ring-green-100"
-                            >
-                                <option value="all">Semua Grade</option>
-                                {gradeOptions.map((grade) => (
-                                    <option key={grade.id} value={grade.id}>
-                                        {grade.code}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs font-medium text-gray-600">Status Cetak</label>
-                            <select
-                                value={printedFilter}
-                                onChange={(event) => {
-                                    setPrintedFilter(event.target.value as PrintedFilter);
-                                    setListPage((prev) => {
-                                        if (prev.preSale === 1 && prev.mitraOrder === 1) return prev;
-                                        return { preSale: 1, mitraOrder: 1 };
-                                    });
-                                }}
-                                className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm outline-none focus:border-green-600 focus:ring-2 focus:ring-green-100"
-                            >
-                                <option value="all">Semua</option>
-                                <option value="printed">Sudah Cetak</option>
-                                <option value="unprinted">Belum Cetak</option>
-                            </select>
+                            <label className="text-xs font-medium text-gray-600">Quick Jump</label>
+                            <div className="flex gap-2">
+                                <Input
+                                    value={jumpTerm}
+                                    className="w-40"
+                                    onChange={(event) => setJumpTerm(event.target.value)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') {
+                                            event.preventDefault();
+                                            handleQuickJump();
+                                        }
+                                    }}
+                                    placeholder="Langsung ke LP"
+                                />
+                                <Button onClick={handleQuickJump}>Jump</Button>
+                            </div>
                         </div>
                         <div className="space-y-1">
                             <label className="text-xs font-medium text-gray-600">Tampilan</label>
@@ -568,32 +945,6 @@ function RackContent() {
                                 </Button>
                             </div>
                         </div>
-                    </div>
-                    <div className="mt-3 grid gap-3 md:grid-cols-[2fr_auto]">
-                        <div className="space-y-1">
-                            <label className="text-xs font-medium text-gray-600">Quick Jump LP</label>
-                            <Input
-                                value={jumpTerm}
-                                onChange={(event) => setJumpTerm(event.target.value)}
-                                onKeyDown={(event) => {
-                                    if (event.key === 'Enter') {
-                                        event.preventDefault();
-                                        handleQuickJump();
-                                    }
-                                }}
-                                placeholder="Contoh: TEI-0221-26"
-                            />
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs font-medium text-transparent">Jump</label>
-                            <Button className="h-10 w-full md:w-auto" onClick={handleQuickJump}>
-                                Jump ke LP
-                            </Button>
-                        </div>
-                    </div>
-                    <div className="mt-3 inline-flex items-center gap-2 rounded-md bg-gray-100 px-2.5 py-1 text-xs text-gray-600">
-                        <Filter className="h-3.5 w-3.5" />
-                        Mode list lebih ringkas untuk LP banyak. Drag & drop aktif untuk LP yang belum masuk work order.
                     </div>
                 </div>
 
@@ -663,10 +1014,7 @@ function RackContent() {
                                                     <Package className="h-8 w-8 text-gray-400" />
                                                 </div>
                                                 <p className="text-sm font-medium text-gray-900">
-                                                    Tidak ada LP untuk filter saat ini
-                                                </p>
-                                                <p className="mt-1 text-xs text-gray-500">
-                                                    Coba ubah pencarian atau filter.
+                                                    Tidak ada LP
                                                 </p>
                                             </div>
                                         </div>
@@ -677,7 +1025,8 @@ function RackContent() {
                                     ) : (
                                         <>
                                             <div className="sticky top-0 z-10 mb-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                                                <div className="grid grid-cols-[1.7fr_1.2fr_0.8fr_0.9fr_0.9fr_0.9fr] items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-gray-600">
+                                                <div className="grid grid-cols-[auto_1.7fr_1.2fr_0.8fr_0.9fr_0.9fr_0.9fr] items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-gray-600">
+                                                    <div className="w-4"></div>
                                                     <div>LP / Grade</div>
                                                     <div>Tanggal</div>
                                                     <div className="text-right">Basah</div>
@@ -738,6 +1087,54 @@ function RackContent() {
                     })}
                 </div>
             </div>
+
+            {/* Context Menu */}
+            {contextMenu && (
+                <div
+                    className="fixed z-[100] min-w-[200px] overflow-hidden rounded-md border bg-white p-1 shadow-md animate-in fade-in zoom-in-95 duration-100"
+                    style={{ top: contextMenu.y, left: contextMenu.x }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="px-2 py-1.5 text-xs font-semibold text-gray-500 border-b mb-1 uppercase tracking-wider">
+                        Opsi Rak LP
+                    </div>
+                    {contextMenu.from !== 'preSale' && (
+                        <button
+                            className="flex w-full items-center rounded-sm px-2 py-2 text-sm outline-none hover:bg-slate-100 text-slate-700 transition-colors"
+                            onClick={async () => {
+                                setMoving(true);
+                                const ok = await executeMove(contextMenu.lotId, 'preSale');
+                                if (ok) await loadData();
+                                setMoving(false);
+                                closeContextMenu();
+                            }}
+                        >
+                            Pindah ke Rak Sementara
+                        </button>
+                    )}
+                    {contextMenu.from !== 'mitraOrder' && (
+                        <button
+                            className="flex w-full items-center rounded-sm px-2 py-2 text-sm outline-none hover:bg-slate-100 text-slate-700 transition-colors"
+                            onClick={async () => {
+                                setMoving(true);
+                                const ok = await executeMove(contextMenu.lotId, 'mitraOrder');
+                                if (ok) await loadData();
+                                setMoving(false);
+                                closeContextMenu();
+                            }}
+                        >
+                            Pindah ke Rak Mitra Order
+                        </button>
+                    )}
+                    <div className="h-px bg-slate-200 my-1" />
+                    <button
+                        className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-slate-100 text-red-600 transition-colors"
+                        onClick={closeContextMenu}
+                    >
+                        Batal
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
