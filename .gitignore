@@ -18,6 +18,11 @@ apps/desktop/win-unpacked/
 *.dmg
 *.zip
 coverage/
+
+# Data mentah/referensi upload dashboard performa — berisi nama & upah asli,
+# jangan pernah masuk git (public/ di-serve statis oleh Next.js).
+apps/web/public/Dashboard/
+
 .DS_Store
 Thumbs.db
 pnpm-debug.log*

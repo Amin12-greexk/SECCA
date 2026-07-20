@@ -63,6 +63,12 @@ enum GradeType {
   BENTUK
 }
 
+enum AuditDashboardImportStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
 model AppUser {
   id                String         @id @default(uuid())
   name              String
@@ -80,6 +86,7 @@ model AppUser {
   mitraOrderRequests  MitraOrderRequest[] @relation("MitraOrderRequester")
   mitraOrderProcessed MitraOrderRequest[] @relation("MitraOrderProcessor")
   uiAccesses          UserUiAccess[]
+  auditDashboardImports AuditDashboardImport[] @relation("AuditDashboardUploader")
 
   @@index([role])
 }
@@ -264,6 +271,7 @@ model Worker {
   activeWorkOrder WorkerActiveWorkOrder?
   trainer      AppUser? @relation("WorkerTrainer", fields: [trainerId], references: [id])
   mitraOrderRequests MitraOrderRequest[]
+  auditDashboardPersons AuditDashboardPerson[] @relation("AuditDashboardPersonWorker")
 
   @@index([trainerId])
 }
@@ -518,6 +526,88 @@ model PayrollEntry {
   workOrderItem WorkOrderItem @relation(fields: [workOrderItemId], references: [id])
   worker        Worker        @relation(fields: [workerId], references: [id])
   grade         Grade         @relation(fields: [gradeId], references: [id])
+}
+
+/// Dashboard performa berbasis upload Excel manual.
+/// Terpisah penuh dari tabel produksi (RawBatch, ProductionLot, dst) —
+/// nilai Excel adalah source of truth dan tidak pernah dipakai lintas modul.
+model AuditDashboardImport {
+  id               String                     @id @default(uuid())
+  fileName         String
+  fileHash         String?
+  uploadedByUserId String?
+  status           AuditDashboardImportStatus @default(PENDING)
+  totalSheets      Int                        @default(0)
+  totalRows        Int                        @default(0)
+  errorJson        Json?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  uploadedBy AppUser?                @relation("AuditDashboardUploader", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  periods    AuditDashboardPeriod[]
+
+  @@index([uploadedByUserId])
+  @@index([createdAt])
+}
+
+model AuditDashboardPeriod {
+  id        String    @id @default(uuid())
+  importId  String
+  sheetName String
+  label     String
+  startDate DateTime?
+  endDate   DateTime?
+  year      Int?
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  import  AuditDashboardImport   @relation(fields: [importId], references: [id], onDelete: Cascade)
+  metrics AuditDashboardMetric[]
+
+  @@index([importId])
+  @@index([sortOrder, createdAt])
+}
+
+model AuditDashboardPerson {
+  id             String   @id @default(uuid())
+  name           String
+  normalizedName String   @unique
+  workerId       String?
+  colorHex       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  worker  Worker?                @relation("AuditDashboardPersonWorker", fields: [workerId], references: [id], onDelete: SetNull)
+  metrics AuditDashboardMetric[]
+
+  @@index([workerId])
+}
+
+model AuditDashboardMetric {
+  id                 String   @id @default(uuid())
+  periodId           String
+  personId           String
+  rawName            String
+  rawUserLevel       String?
+  normalizedLevel    String?
+  levelNumber        Int?
+  hk                 Float?
+  totalBakuBasah     Float?
+  totalBjd           Float?
+  rendemenPctBps     Int?
+  susutProsesPctBps  Int?
+  susutHilangPctBps  Int?
+  rawRowJson         Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  period AuditDashboardPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  person AuditDashboardPerson @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, personId])
+  @@index([personId, createdAt])
+  @@index([periodId])
 }
 
 model InventoryMovement {

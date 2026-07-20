@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import multipart from "@fastify/multipart";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
@@ -11,6 +12,11 @@ async function bootstrap() {
     AppModule,
     new FastifyAdapter(),
   );
+
+  // Upload Excel dashboard performa (POST /api/audit-dashboard/import).
+  await app.register(multipart, {
+    limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  });
 
   app.enableCors({
     origin: true,

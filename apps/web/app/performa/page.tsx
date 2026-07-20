@@ -1,0 +1,427 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+    BarChart3,
+    CalendarRange,
+    Loader2,
+    RefreshCw,
+    Upload,
+} from 'lucide-react';
+import { useAuth } from '@/lib/auth/AuthContext';
+import { useToast } from '@/lib/toast';
+import {
+    getPerformaPeriodStats,
+    getPerformaPeriods,
+    getPerformaPersons,
+    getPerformaSummary,
+    importPerformaWorkbook,
+    type PerformaPerson,
+    type PerformaPeriod,
+    type PerformaPeriodStat,
+    type PerformaSummaryResponse,
+} from '@/lib/api';
+import DeltaBadge from './components/DeltaBadge';
+import IndividualPanel from './components/IndividualPanel';
+import MitraRanking from './components/MitraRanking';
+import PeriodTrends from './components/PeriodTrends';
+
+/* ─── Helpers ─────────────────────────────────────────────────── */
+
+const fmt = (value: number, fd = 0) =>
+    new Intl.NumberFormat('id-ID', {
+        minimumFractionDigits: fd,
+        maximumFractionDigits: fd,
+    }).format(value);
+
+/** bps -> "76,0%" (1% = 100 bps). */
+const fmtBps = (value: number | null | undefined, fd = 1) =>
+    value === null || value === undefined ? '–' : `${fmt(value / 100, fd)}%`;
+
+const fmtNum = (value: number | null | undefined, fd = 1) =>
+    value === null || value === undefined ? '–' : fmt(value, fd);
+
+const SELECT_CLASS =
+    'rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none transition';
+
+/* ─── Stat tile ───────────────────────────────────────────────── */
+
+function StatTile({
+    label,
+    value,
+    hint,
+    delta = null,
+    deltaSuffix = '',
+    accent,
+    hero = false,
+}: {
+    label: string;
+    value: string;
+    hint?: string;
+    delta?: number | null;
+    deltaSuffix?: string;
+    accent?: string;
+    hero?: boolean;
+}) {
+    if (hero) {
+        return (
+            <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-[#047f2b] to-emerald-500 px-4 py-3 text-white shadow-sm">
+                <div className="absolute -right-6 -top-10 h-28 w-28 rounded-full bg-white/10 blur-2xl" />
+                <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-50/80">
+                    {label}
+                </p>
+                <p className="mt-0.5 text-2xl font-bold">{value}</p>
+                <div className="mt-1 flex items-center justify-between gap-2">
+                    <DeltaBadge value={delta} suffix={deltaSuffix} tone="dark" />
+                    {hint ? <p className="text-[10px] text-emerald-50/70">{hint}</p> : null}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                {accent ? (
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: accent }} />
+                ) : null}
+                {label}
+            </p>
+            <p className="mt-0.5 text-2xl font-bold text-gray-900">{value}</p>
+            <div className="mt-1 flex items-center justify-between gap-2">
+                <DeltaBadge value={delta} suffix={deltaSuffix} />
+                {hint ? <p className="text-[10px] text-gray-400">{hint}</p> : null}
+            </div>
+        </div>
+    );
+}
+
+/* ─── Upload card ─────────────────────────────────────────────── */
+
+function UploadCard({ onUploaded }: { onUploaded: () => void }) {
+    const toast = useToast();
+    const inputRef = useRef<HTMLInputElement>(null);
+    const [uploading, setUploading] = useState(false);
+
+    const handleFile = async (file: File) => {
+        setUploading(true);
+        try {
+            const result = await importPerformaWorkbook(file);
+            const replaced = result.periods.filter((period) => period.replaced).length;
+            toast.success(
+                `${result.totalSheets} periode • ${result.totalRows} baris dimuat` +
+                    (replaced > 0 ? ` (${replaced} periode diperbarui)` : ''),
+            );
+            onUploaded();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Gagal mengunggah file.');
+        } finally {
+            setUploading(false);
+            if (inputRef.current) inputRef.current.value = '';
+        }
+    };
+
+    return (
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                    <Upload className="h-4 w-4 text-green-600" />
+                    <div>
+                        <h2 className="text-sm font-semibold text-gray-800">Upload Data</h2>
+                        <p className="text-xs text-gray-400">File .xlsx — satu sheet = satu periode</p>
+                    </div>
+                </div>
+
+                <input
+                    ref={inputRef}
+                    type="file"
+                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    className="hidden"
+                    onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) handleFile(file);
+                    }}
+                />
+                <button
+                    type="button"
+                    onClick={() => inputRef.current?.click()}
+                    disabled={uploading}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 disabled:opacity-50"
+                >
+                    {uploading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                        <Upload className="h-4 w-4" />
+                    )}
+                    {uploading ? 'Mengunggah...' : 'Pilih File'}
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/* ─── Page ────────────────────────────────────────────────────── */
+
+export default function PerformaPage() {
+    const { isAuthenticated, hasModuleAccess } = useAuth();
+    const toast = useToast();
+
+    const [periods, setPeriods] = useState<PerformaPeriod[]>([]);
+    const [persons, setPersons] = useState<PerformaPerson[]>([]);
+    const [periodStats, setPeriodStats] = useState<PerformaPeriodStat[]>([]);
+    const [periodId, setPeriodId] = useState('');
+    const [summary, setSummary] = useState<PerformaSummaryResponse | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
+
+    const canManage = isAuthenticated && hasModuleAccess('dashboard', 2);
+
+    const loadBase = useCallback(async () => {
+        const [periodList, personList, statsResponse] = await Promise.all([
+            getPerformaPeriods(),
+            getPerformaPersons(),
+            getPerformaPeriodStats(),
+        ]);
+        setPeriods(periodList);
+        setPersons(personList);
+        setPeriodStats(statsResponse.periods);
+        return periodList;
+    }, []);
+
+    const loadAll = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const periodList = await loadBase();
+            // Periode terbaru = sortOrder terbesar (backend memakai default yang sama).
+            const targetId = periodId || periodList[periodList.length - 1]?.id || '';
+            const data = await getPerformaSummary(targetId || undefined);
+            setSummary(data);
+            if (!periodId && data.period) setPeriodId(data.period.id);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Gagal memuat data.');
+        } finally {
+            setLoading(false);
+        }
+        // periodId sengaja tidak jadi dependency: perpindahan periode ditangani handlePeriodChange.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [loadBase]);
+
+    useEffect(() => {
+        loadAll();
+    }, [loadAll]);
+
+    const handlePeriodChange = async (nextId: string) => {
+        setPeriodId(nextId);
+        setLoading(true);
+        setError(null);
+        try {
+            setSummary(await getPerformaSummary(nextId || undefined));
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Gagal memuat ringkasan periode.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleColorSaved = (updated: PerformaPerson) => {
+        setPersons((current) =>
+            current.map((person) =>
+                person.id === updated.id
+                    ? { ...person, colorHex: updated.colorHex, hasCustomColor: updated.hasCustomColor }
+                    : person,
+            ),
+        );
+        setSummary((current) =>
+            current
+                ? {
+                      ...current,
+                      rows: current.rows.map((row) =>
+                          row.personId === updated.id ? { ...row, colorHex: updated.colorHex } : row,
+                      ),
+                  }
+                : current,
+        );
+    };
+
+    const handleUploaded = async () => {
+        setPeriodId('');
+        setLoading(true);
+        try {
+            const periodList = await loadBase();
+            const latest = periodList[periodList.length - 1]?.id;
+            const data = await getPerformaSummary(latest);
+            setSummary(data);
+            if (data.period) setPeriodId(data.period.id);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Gagal memuat data terbaru.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const rows = useMemo(() => summary?.rows ?? [], [summary]);
+
+    // Auto-pilih anak dengan BJD tertinggi supaya panel individu tidak kosong.
+    useEffect(() => {
+        if (!selectedPersonId && rows.length > 0) {
+            const top = [...rows].sort((a, b) => (b.totalBjd ?? 0) - (a.totalBjd ?? 0))[0];
+            setSelectedPersonId(top.personId);
+        }
+    }, [rows, selectedPersonId]);
+
+    /** Klik dari ranking/tabel: pilih anak lalu gulir ke panelnya. */
+    const selectPerson = useCallback((personId: string) => {
+        setSelectedPersonId(personId);
+        requestAnimationFrame(() => {
+            panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    }, []);
+
+    const stats = summary?.summary ?? null;
+    // Delta tile diambil dari period-stats periode yang sedang dilihat.
+    const currentStat =
+        periodStats.find((stat) => stat.id === summary?.period?.id) ?? null;
+    const currentRow = rows.find((row) => row.personId === selectedPersonId) ?? null;
+    const isEmpty = !loading && !error && periods.length === 0;
+
+    return (
+        <div className="p-4 sm:p-8">
+            <div className="mx-auto max-w-6xl space-y-5">
+                {/* Header */}
+                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <div className="flex flex-col gap-3 px-5 pt-5 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h1 className="flex items-center gap-2 text-lg font-bold text-gray-900">
+                                <BarChart3 className="h-5 w-5 text-green-600" />
+                                Dashboard Performa
+                            </h1>
+                            <p className="mt-0.5 text-xs text-gray-500">
+                                {summary?.period ? summary.period.label : 'Data periode'}
+                            </p>
+                        </div>
+
+                        <div className="flex flex-wrap items-end gap-3">
+                            <div>
+                                <label
+                                    htmlFor="performa-period"
+                                    className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-500"
+                                >
+                                    Periode
+                                </label>
+                                <select
+                                    id="performa-period"
+                                    value={periodId}
+                                    onChange={(event) => handlePeriodChange(event.target.value)}
+                                    disabled={periods.length === 0}
+                                    className={`${SELECT_CLASS} disabled:opacity-50`}
+                                >
+                                    {periods.length === 0 ? <option value="">Belum ada data</option> : null}
+                                    {periods.map((period) => (
+                                        <option key={period.id} value={period.id}>
+                                            {period.label} ({period.totalMetrics})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={loadAll}
+                                disabled={loading}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 disabled:opacity-50"
+                            >
+                                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                {loading ? 'Memuat...' : 'Refresh'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {canManage ? <UploadCard onUploaded={handleUploaded} /> : null}
+
+                {error ? (
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                        {error}
+                    </div>
+                ) : null}
+
+                {isEmpty ? (
+                    <div className="rounded-xl border border-dashed border-gray-200 bg-white p-12 text-center">
+                        <CalendarRange className="mx-auto h-8 w-8 text-gray-300" />
+                        <p className="mt-3 text-sm font-medium text-gray-700">Belum ada data periode</p>
+                        <p className="mt-1 text-xs text-gray-400">
+                            {canManage ? 'Upload file Excel untuk mulai.' : 'Data belum diunggah.'}
+                        </p>
+                    </div>
+                ) : null}
+
+                {/* Ringkasan: urutan BJD -> Rendemen -> HK -> Anak */}
+                {stats ? (
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                        <StatTile
+                            hero
+                            label="Total BJD"
+                            value={fmtNum(stats.totalBjd)}
+                            hint={`Baku Basah ${fmtNum(stats.totalBakuBasah)}`}
+                            delta={currentStat?.deltaBjd ?? null}
+                        />
+                        <StatTile
+                            label="Rendemen"
+                            value={fmtBps(stats.weightedRendemenPctBps)}
+                            hint={`SP ${fmtBps(stats.averageSusutProsesPctBps)} · SH ${fmtBps(stats.averageSusutHilangPctBps)}`}
+                            delta={
+                                currentStat?.deltaRendemenPctBps == null
+                                    ? null
+                                    : currentStat.deltaRendemenPctBps / 100
+                            }
+                            deltaSuffix="%"
+                            accent="#2a78d6"
+                        />
+                        <StatTile
+                            label="Total HK"
+                            value={fmtNum(stats.totalHk)}
+                            delta={currentStat?.deltaHk ?? null}
+                            accent="#eda100"
+                        />
+                        <StatTile
+                            label="Total Anak"
+                            value={fmt(stats.totalPeople)}
+                            hint="di periode ini"
+                            accent="#4a3aa7"
+                        />
+                    </div>
+                ) : null}
+
+                {/* 01 — Kapasitas per anak (klik untuk detail) */}
+                {rows.length > 0 ? (
+                    <MitraRanking
+                        rows={rows}
+                        periods={periods}
+                        periodId={periodId}
+                        onPeriodChange={handlePeriodChange}
+                        periodLabel={summary?.period?.label}
+                        onSelect={selectPerson}
+                    />
+                ) : null}
+
+                {/* 02 — Detail anak terpilih */}
+                <div ref={panelRef} className="scroll-mt-24">
+                    <IndividualPanel
+                        personId={selectedPersonId}
+                        persons={persons}
+                        currentRow={currentRow}
+                        periodLabel={summary?.period?.label}
+                        canManage={canManage}
+                        onColorSaved={handleColorSaved}
+                    />
+                </div>
+
+                {/* 03 — Tren antar periode */}
+                {periodStats.length > 0 ? <PeriodTrends stats={periodStats} /> : null}
+            </div>
+        </div>
+    );
+}

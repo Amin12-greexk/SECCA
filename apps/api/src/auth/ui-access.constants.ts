@@ -36,6 +36,17 @@ const API_ACCESS_RULES: ApiAccessRule[] = [
     pattern: /^\/api\/analytics(?:\/|$)/i,
     anyOf: [{ moduleKey: "dashboard", minLevel: 2 }],
   },
+  // Endpoint GET dashboard performa bersifat @Public; hanya tulis yang diatur di sini.
+  {
+    pattern: /^\/api\/audit-dashboard\/import$/i,
+    anyOf: [{ moduleKey: "dashboard", minLevel: 2 }],
+    methods: ["POST"],
+  },
+  {
+    pattern: /^\/api\/audit-dashboard\/persons\/[^/]+\/color$/i,
+    anyOf: [{ moduleKey: "dashboard", minLevel: 2 }],
+    methods: ["PATCH"],
+  },
   {
     pattern: /^\/api\/users(?:\/|$)/i,
     anyOf: [{ moduleKey: "admin", minLevel: 2 }],

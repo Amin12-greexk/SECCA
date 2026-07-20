@@ -2911,3 +2911,286 @@ export async function completeDryQcWorkItem(workOrderItemId: string): Promise<vo
     }
 }
 
+/* ─── Dashboard Performa (data periode dari Excel) ─────────────── */
+
+export interface PerformaPeriod {
+    id: string;
+    label: string;
+    sheetName: string;
+    startDate?: string | null;
+    endDate?: string | null;
+    year?: number | null;
+    sortOrder: number;
+    totalMetrics: number;
+    createdAt: string;
+}
+
+export interface PerformaRow {
+    id: string;
+    personId: string;
+    name: string;
+    rawName: string;
+    colorHex: string;
+    hasCustomColor: boolean;
+    rawUserLevel?: string | null;
+    normalizedLevel?: string | null;
+    levelNumber?: number | null;
+    hk?: number | null;
+    totalBakuBasah?: number | null;
+    totalBjd?: number | null;
+    rendemenPctBps?: number | null;
+    susutProsesPctBps?: number | null;
+    susutHilangPctBps?: number | null;
+}
+
+export interface PerformaSummaryResponse {
+    period: {
+        id: string;
+        label: string;
+        sheetName: string;
+        startDate?: string | null;
+        endDate?: string | null;
+        year?: number | null;
+    } | null;
+    summary: {
+        totalPeople: number;
+        totalHk: number;
+        totalBakuBasah: number;
+        totalBjd: number;
+        weightedRendemenPctBps: number | null;
+        averageRendemenPctBps: number | null;
+        averageSusutProsesPctBps: number | null;
+        averageSusutHilangPctBps: number | null;
+    } | null;
+    rows: PerformaRow[];
+}
+
+export interface PerformaPerson {
+    id: string;
+    name: string;
+    normalizedName: string;
+    workerId?: string | null;
+    colorHex: string;
+    hasCustomColor: boolean;
+    totalPeriods: number;
+}
+
+export type PerformaTrendMetric =
+    | 'totalBakuBasah'
+    | 'totalBjd'
+    | 'rendemen'
+    | 'sp'
+    | 'sh'
+    | 'hk';
+
+export interface PerformaTrendSeries {
+    personId: string;
+    name: string;
+    colorHex: string;
+    /** Sejajar index dengan `periods`; null = mitra tidak punya data di periode itu. */
+    points: Array<number | null>;
+}
+
+export interface PerformaTrendResponse {
+    metric: PerformaTrendMetric;
+    unit: 'bps' | 'number';
+    periods: Array<{ id: string; label: string; sortOrder: number }>;
+    series: PerformaTrendSeries[];
+}
+
+export interface PerformaPeriodStat {
+    id: string;
+    label: string;
+    sortOrder: number;
+    startDate?: string | null;
+    endDate?: string | null;
+    totalPeople: number;
+    totalHk: number;
+    totalBakuBasah: number;
+    totalBjd: number;
+    weightedRendemenPctBps: number | null;
+    averageRendemenPctBps: number | null;
+    averageSusutProsesPctBps: number | null;
+    averageSusutHilangPctBps: number | null;
+    /** Selisih vs periode sebelumnya; null di periode pertama. */
+    deltaBakuBasah: number | null;
+    deltaBjd: number | null;
+    deltaHk: number | null;
+    deltaRendemenPctBps: number | null;
+}
+
+export interface PerformaPeriodStatsResponse {
+    periods: PerformaPeriodStat[];
+}
+
+export interface PerformaImportResponse {
+    importId: string;
+    fileName: string;
+    totalSheets: number;
+    totalRows: number;
+    periods: Array<{
+        id: string;
+        label: string;
+        sheetName: string;
+        totalRows: number;
+        replaced: boolean;
+    }>;
+}
+
+/** Pesan error backend bisa string atau array (ValidationPipe). */
+async function readApiError(response: Response, fallback: string): Promise<string> {
+    const errorData = await response.json().catch(() => ({}));
+    const message = Array.isArray(errorData?.message)
+        ? errorData.message.join(' ')
+        : errorData?.message;
+    return message || fallback;
+}
+
+export async function getPerformaPeriods(): Promise<PerformaPeriod[]> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/audit-dashboard/periods`, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            throw new Error(await readApiError(response, 'Gagal memuat data periode.'));
+        }
+
+        const json = await response.json();
+        return unwrap<PerformaPeriod[]>(json);
+    } catch (error) {
+        console.error('Error fetching performa periods:', error);
+        throw error;
+    }
+}
+
+export async function getPerformaSummary(periodId?: string): Promise<PerformaSummaryResponse> {
+    try {
+        const url = `${API_BASE_URL}/api/audit-dashboard/summary${buildQueryString({ periodId })}`;
+        const response = await fetch(url, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            throw new Error(await readApiError(response, 'Gagal memuat ringkasan periode.'));
+        }
+
+        const json = await response.json();
+        return unwrap<PerformaSummaryResponse>(json);
+    } catch (error) {
+        console.error('Error fetching performa summary:', error);
+        throw error;
+    }
+}
+
+export async function getPerformaPersons(): Promise<PerformaPerson[]> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/audit-dashboard/persons`, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            throw new Error(await readApiError(response, 'Gagal memuat data mitra.'));
+        }
+
+        const json = await response.json();
+        return unwrap<PerformaPerson[]>(json);
+    } catch (error) {
+        console.error('Error fetching performa persons:', error);
+        throw error;
+    }
+}
+
+export async function getPerformaTrends(
+    personIds: string[],
+    metric: PerformaTrendMetric,
+): Promise<PerformaTrendResponse> {
+    try {
+        const url = `${API_BASE_URL}/api/audit-dashboard/trends${buildQueryString({
+            personIds: personIds.join(','),
+            metric,
+        })}`;
+        const response = await fetch(url, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            throw new Error(await readApiError(response, 'Gagal memuat tren individu.'));
+        }
+
+        const json = await response.json();
+        return unwrap<PerformaTrendResponse>(json);
+    } catch (error) {
+        console.error('Error fetching performa trends:', error);
+        throw error;
+    }
+}
+
+export async function getPerformaPeriodStats(): Promise<PerformaPeriodStatsResponse> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/audit-dashboard/period-stats`, {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            throw new Error(await readApiError(response, 'Gagal memuat kapasitas periode.'));
+        }
+
+        const json = await response.json();
+        return unwrap<PerformaPeriodStatsResponse>(json);
+    } catch (error) {
+        console.error('Error fetching performa period stats:', error);
+        throw error;
+    }
+}
+
+export async function updatePerformaPersonColor(
+    personId: string,
+    colorHex: string | null,
+): Promise<PerformaPerson> {
+    try {
+        const response = await fetch(
+            `${API_BASE_URL}/api/audit-dashboard/persons/${encodeURIComponent(personId)}/color`,
+            {
+                method: 'PATCH',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ colorHex }),
+            },
+        );
+
+        if (!response.ok) {
+            throw new Error(await readApiError(response, 'Gagal menyimpan warna.'));
+        }
+
+        const json = await response.json();
+        return unwrap<PerformaPerson>(json);
+    } catch (error) {
+        console.error('Error updating performa person color:', error);
+        throw error;
+    }
+}
+
+export async function importPerformaWorkbook(file: File): Promise<PerformaImportResponse> {
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Content-Type sengaja tidak di-set: browser yang mengisi boundary multipart.
+        const response = await fetch(`${API_BASE_URL}/api/audit-dashboard/import`, {
+            method: 'POST',
+            headers: getAuthHeaders({ json: false }),
+            body: formData,
+        });
+
+        if (!response.ok) {
+            throw new Error(await readApiError(response, 'Gagal mengunggah file.'));
+        }
+
+        const json = await response.json();
+        return unwrap<PerformaImportResponse>(json);
+    } catch (error) {
+        console.error('Error importing performa workbook:', error);
+        throw error;
+    }
+}
+
