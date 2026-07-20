@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Calculator, ChevronRight, Columns2, Search, Trophy } from 'lucide-react';
 import LazyEChart from '@/components/charts/LazyEChart';
 import DeltaBadge from './DeltaBadge';
@@ -14,6 +14,7 @@ import {
 } from '@/lib/api';
 import { personTrendOption, type PersonBjdRendemenTrend } from './personTrendChart';
 import { describeTenure, tenureWeeks } from './tenure';
+import CapacityBadge from './CapacityBadge';
 
 /**
  * Kapasitas mitra sebagai daftar (bukan bar chart raksasa) — jumlah anak
@@ -83,11 +84,17 @@ function PerDayBreakdown({
         hk && hk > 0 && value != null ? value / hk : null;
 
     const tenure = describeTenure(row.rawUserLevel, row.levelNumber);
+    const bjdPerDay = perDay(row.totalBjd);
 
-    const items: Array<{ label: string; value: string; strong?: boolean }> = [
+    const items: Array<{ label: string; value: string; strong?: boolean; badge?: number | null }> = [
         { label: 'Lama Kerja', value: tenure?.label ?? '–' },
         { label: 'HK', value: hk == null ? '–' : `${fmtId(hk, 0)} hari` },
-        { label: 'BJD / hari', value: perDay(row.totalBjd) == null ? '–' : `${fmtId(perDay(row.totalBjd) as number, 1)} g`, strong: true },
+        {
+            label: 'BJD / hari',
+            value: bjdPerDay == null ? '–' : `${fmtId(bjdPerDay, 1)} g`,
+            strong: true,
+            badge: bjdPerDay,
+        },
         { label: 'Baku Basah / hari', value: perDay(row.totalBakuBasah) == null ? '–' : `${fmtId(perDay(row.totalBakuBasah) as number, 1)} g` },
         { label: 'Rendemen', value: fmtBpsId(row.rendemenPctBps) },
         { label: 'Susut Proses', value: fmtBpsId(row.susutProsesPctBps) },
@@ -119,11 +126,14 @@ function PerDayBreakdown({
                                 {item.label}
                             </p>
                             <p
-                                className={`text-sm font-bold ${
+                                className={`flex items-center gap-1.5 text-sm font-bold ${
                                     item.strong ? 'text-green-700' : 'text-gray-900'
                                 }`}
                             >
                                 {item.value}
+                                {item.badge !== undefined ? (
+                                    <CapacityBadge gramPerHk={item.badge} variant="pill" />
+                                ) : null}
                             </p>
                         </div>
                     ))}
@@ -133,96 +143,96 @@ function PerDayBreakdown({
     );
 }
 
+/** Satu kolom periode dalam tabel perbandingan multi-periode. */
+type WindowColumn = {
+    period: PerformaPeriod;
+    row: PerformaRow | null;
+    isCurrent: boolean;
+};
+
 /**
- * Perbandingan side-by-side satu mitra di dua periode: pembanding di kiri,
- * periode aktif di kanan, Δ = aktif − pembanding.
+ * Perbandingan satu mitra melintasi N periode (bukan cuma 2) — tiap periode
+ * jadi satu kolom, urut kronologis, periode aktif ditonjolkan di kolom
+ * terakhir. Kolom Δ paling kanan = periode terakhir dikurangi periode
+ * pertama yang ditampilkan (tren keseluruhan jendela, bukan cuma 1 langkah).
  */
-function PeriodComparison({
-    row,
-    compareRow,
-    periodLabel,
-    compareLabel,
+function MultiPeriodComparison({
+    columns,
     loading,
+    missingLabels,
 }: {
-    row: PerformaRow;
-    compareRow: PerformaRow | null;
-    periodLabel?: string;
-    compareLabel: string;
+    columns: WindowColumn[];
     loading: boolean;
+    missingLabels: string[];
 }) {
     if (loading) {
         return <div className="mb-3 h-[190px] animate-pulse rounded-lg bg-gray-50" />;
     }
+    if (columns.length === 0) return null;
 
     const fmtG = (value: number | null) => (value === null ? '–' : `${fmtId(value, 1)} g`);
     const pct = (bps: number | null | undefined) => (bps == null ? null : bps / 100);
     const delta = (a: number | null, b: number | null) =>
         a === null || b === null ? null : a - b;
 
-    const items: Array<{
+    const first = columns[0].row;
+    const last = columns[columns.length - 1].row;
+
+    type Row = {
         label: string;
-        compare: string;
-        current: string;
+        values: string[];
+        badges?: Array<number | null>;
         delta: number | null;
         deltaSuffix: string;
         strong?: boolean;
-    }> = [
+    };
+
+    const rows: Row[] = [
         {
             label: 'Lama kerja',
-            compare:
-                describeTenure(compareRow?.rawUserLevel, compareRow?.levelNumber)?.label ??
-                '–',
-            current: describeTenure(row.rawUserLevel, row.levelNumber)?.label ?? '–',
+            values: columns.map((c) => describeTenure(c.row?.rawUserLevel, c.row?.levelNumber)?.label ?? '–'),
             delta: delta(
-                tenureWeeks(row.rawUserLevel, row.levelNumber),
-                tenureWeeks(compareRow?.rawUserLevel, compareRow?.levelNumber),
+                tenureWeeks(last?.rawUserLevel, last?.levelNumber),
+                tenureWeeks(first?.rawUserLevel, first?.levelNumber),
             ),
             deltaSuffix: ' mgg',
         },
         {
             label: 'HK',
-            compare: compareRow?.hk == null ? '–' : `${fmtId(compareRow.hk, 0)} hari`,
-            current: row.hk == null ? '–' : `${fmtId(row.hk, 0)} hari`,
-            delta: delta(row.hk ?? null, compareRow?.hk ?? null),
+            values: columns.map((c) => (c.row?.hk == null ? '–' : `${fmtId(c.row.hk, 0)} hari`)),
+            delta: delta(last?.hk ?? null, first?.hk ?? null),
             deltaSuffix: '',
         },
         {
             label: 'BJD / hari',
-            compare: fmtG(perDayOf(compareRow, 'totalBjd')),
-            current: fmtG(perDayOf(row, 'totalBjd')),
-            delta: delta(perDayOf(row, 'totalBjd'), perDayOf(compareRow, 'totalBjd')),
+            values: columns.map((c) => fmtG(perDayOf(c.row, 'totalBjd'))),
+            badges: columns.map((c) => perDayOf(c.row, 'totalBjd')),
+            delta: delta(perDayOf(last, 'totalBjd'), perDayOf(first, 'totalBjd')),
             deltaSuffix: ' g',
             strong: true,
         },
         {
             label: 'Baku Basah / hari',
-            compare: fmtG(perDayOf(compareRow, 'totalBakuBasah')),
-            current: fmtG(perDayOf(row, 'totalBakuBasah')),
-            delta: delta(
-                perDayOf(row, 'totalBakuBasah'),
-                perDayOf(compareRow, 'totalBakuBasah'),
-            ),
+            values: columns.map((c) => fmtG(perDayOf(c.row, 'totalBakuBasah'))),
+            delta: delta(perDayOf(last, 'totalBakuBasah'), perDayOf(first, 'totalBakuBasah')),
             deltaSuffix: ' g',
         },
         {
             label: 'Rendemen',
-            compare: fmtBpsId(compareRow?.rendemenPctBps),
-            current: fmtBpsId(row.rendemenPctBps),
-            delta: delta(pct(row.rendemenPctBps), pct(compareRow?.rendemenPctBps)),
+            values: columns.map((c) => fmtBpsId(c.row?.rendemenPctBps)),
+            delta: delta(pct(last?.rendemenPctBps), pct(first?.rendemenPctBps)),
             deltaSuffix: '%',
         },
         {
             label: 'Susut Proses',
-            compare: fmtBpsId(compareRow?.susutProsesPctBps),
-            current: fmtBpsId(row.susutProsesPctBps),
-            delta: delta(pct(row.susutProsesPctBps), pct(compareRow?.susutProsesPctBps)),
+            values: columns.map((c) => fmtBpsId(c.row?.susutProsesPctBps)),
+            delta: delta(pct(last?.susutProsesPctBps), pct(first?.susutProsesPctBps)),
             deltaSuffix: '%',
         },
         {
             label: 'Susut Hilang',
-            compare: fmtBpsId(compareRow?.susutHilangPctBps),
-            current: fmtBpsId(row.susutHilangPctBps),
-            delta: delta(pct(row.susutHilangPctBps), pct(compareRow?.susutHilangPctBps)),
+            values: columns.map((c) => fmtBpsId(c.row?.susutHilangPctBps)),
+            delta: delta(pct(last?.susutHilangPctBps), pct(first?.susutHilangPctBps)),
             deltaSuffix: '%',
         },
     ];
@@ -231,12 +241,12 @@ function PeriodComparison({
         <div className="mb-3 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
             <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                 <Columns2 className="h-3.5 w-3.5 text-green-600" />
-                Perbandingan per hari kerja
+                Perbandingan {columns.length} periode terakhir
             </p>
 
-            {!compareRow ? (
+            {missingLabels.length > 0 ? (
                 <p className="mb-2 rounded-md border border-amber-100 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700">
-                    Anak ini tidak punya data di periode {compareLabel}.
+                    Anak ini tidak punya data di: {missingLabels.join(', ')}.
                 </p>
             ) : null}
 
@@ -245,17 +255,23 @@ function PeriodComparison({
                     <thead>
                         <tr className="border-b border-gray-200 text-[10px] uppercase tracking-wide text-gray-400">
                             <th className="py-1.5 pr-2 text-left font-medium">Metrik</th>
-                            <th className="px-2 py-1.5 text-right font-medium">
-                                {stripPeriode(compareLabel)}
-                            </th>
-                            <th className="px-2 py-1.5 text-right font-semibold text-gray-500">
-                                {periodLabel ? stripPeriode(periodLabel) : 'Periode ini'}
-                            </th>
-                            <th className="py-1.5 pl-2 text-right font-medium">Δ</th>
+                            {columns.map((c) => (
+                                <th
+                                    key={c.period.id}
+                                    className={`px-2 py-1.5 text-right font-medium ${
+                                        c.isCurrent ? 'font-semibold text-gray-500' : ''
+                                    }`}
+                                >
+                                    {stripPeriode(c.period.label)}
+                                </th>
+                            ))}
+                            {columns.length > 1 ? (
+                                <th className="py-1.5 pl-2 text-right font-medium">Δ</th>
+                            ) : null}
                         </tr>
                     </thead>
                     <tbody>
-                        {items.map((item) => (
+                        {rows.map((item) => (
                             <tr
                                 key={item.label}
                                 className={`border-b border-gray-100 last:border-0 ${
@@ -263,19 +279,34 @@ function PeriodComparison({
                                 }`}
                             >
                                 <td className="py-1.5 pr-2 text-gray-500">{item.label}</td>
-                                <td className="px-2 py-1.5 text-right text-gray-600">
-                                    {item.compare}
-                                </td>
-                                <td
-                                    className={`px-2 py-1.5 text-right font-semibold ${
-                                        item.strong ? 'text-green-700' : 'text-gray-900'
-                                    }`}
-                                >
-                                    {item.current}
-                                </td>
-                                <td className="py-1.5 pl-2 text-right">
-                                    <DeltaBadge value={item.delta} suffix={item.deltaSuffix} />
-                                </td>
+                                {item.values.map((value, index) => {
+                                    const isLast = index === columns.length - 1;
+                                    return (
+                                        <td
+                                            key={columns[index].period.id}
+                                            className={`px-2 py-1.5 text-right ${
+                                                isLast
+                                                    ? `font-semibold ${item.strong ? 'text-green-700' : 'text-gray-900'}`
+                                                    : 'text-gray-600'
+                                            }`}
+                                        >
+                                            <span className="inline-flex items-center gap-1">
+                                                {value}
+                                                {item.badges ? (
+                                                    <CapacityBadge
+                                                        gramPerHk={item.badges[index]}
+                                                        variant="dot"
+                                                    />
+                                                ) : null}
+                                            </span>
+                                        </td>
+                                    );
+                                })}
+                                {columns.length > 1 ? (
+                                    <td className="py-1.5 pl-2 text-right">
+                                        <DeltaBadge value={item.delta} suffix={item.deltaSuffix} />
+                                    </td>
+                                ) : null}
                             </tr>
                         ))}
                     </tbody>
@@ -309,61 +340,63 @@ export default function MitraRanking({
     const [loadingTrend, setLoadingTrend] = useState(false);
     /** Jumlah HK untuk estimasi barang jadi; default 5 hari kerja. */
     const [estDays, setEstDays] = useState(5);
-    /** Periode pembanding untuk tabel side-by-side; '' = tanpa pembanding. */
-    const [compareId, setCompareId] = useState('');
-    const [compareRows, setCompareRows] = useState<PerformaRow[] | null>(null);
-    const [loadingCompare, setLoadingCompare] = useState(false);
-    const compareCache = useRef(new Map<string, PerformaRow[]>());
+    /** Jumlah periode yang dibandingkan sekaligus; 0 = semua periode. */
+    const [periodWindow, setPeriodWindow] = useState(4);
+    const [rowsByPeriod, setRowsByPeriod] = useState<Record<string, PerformaRow[]>>({});
+    const [loadingWindow, setLoadingWindow] = useState(false);
 
     const active = METRICS.find((item) => item.value === metric) ?? METRICS[0];
 
-    // Default pembanding: periode tepat sebelum periode aktif.
-    useEffect(() => {
-        const index = periods.findIndex((period) => period.id === periodId);
-        setCompareId(index > 0 ? periods[index - 1].id : '');
-    }, [periods, periodId]);
+    const currentIndex = periods.findIndex((period) => period.id === periodId);
+    /** N periode terakhir yang berakhir tepat di periode aktif (urut kronologis). */
+    const windowPeriods = useMemo(() => {
+        if (currentIndex < 0) return [] as PerformaPeriod[];
+        const size = periodWindow <= 0 ? periods.length : periodWindow;
+        const start = Math.max(0, currentIndex - size + 1);
+        return periods.slice(start, currentIndex + 1);
+    }, [periods, currentIndex, periodWindow]);
 
-    // Data upload baru -> daftar periode berubah -> cache pembanding basi.
+    // Data upload baru -> daftar periode berubah -> cache jendela basi.
     useEffect(() => {
-        compareCache.current.clear();
+        setRowsByPeriod({});
     }, [periods]);
 
     useEffect(() => {
-        if (!compareId) {
-            setCompareRows(null);
-            return;
-        }
-        const cached = compareCache.current.get(compareId);
-        if (cached) {
-            setCompareRows(cached);
-            return;
-        }
+        const missing = windowPeriods.filter(
+            (period) => period.id !== periodId && !(period.id in rowsByPeriod),
+        );
+        if (missing.length === 0) return;
         let alive = true;
-        setLoadingCompare(true);
-        getPerformaSummary(compareId)
-            .then((data) => {
+        setLoadingWindow(true);
+        Promise.all(
+            missing.map((period) =>
+                getPerformaSummary(period.id).then((data) => [period.id, data.rows] as const),
+            ),
+        )
+            .then((entries) => {
                 if (!alive) return;
-                compareCache.current.set(compareId, data.rows);
-                setCompareRows(data.rows);
+                setRowsByPeriod((prev) => {
+                    const next = { ...prev };
+                    for (const [id, rows] of entries) next[id] = rows;
+                    return next;
+                });
             })
             .catch((error) => {
                 if (alive) {
                     toast.error(
-                        error instanceof Error
-                            ? error.message
-                            : 'Gagal memuat periode pembanding.',
+                        error instanceof Error ? error.message : 'Gagal memuat periode pembanding.',
                     );
                 }
             })
             .finally(() => {
-                if (alive) setLoadingCompare(false);
+                if (alive) setLoadingWindow(false);
             });
         return () => {
             alive = false;
         };
         // toast stabil dari provider; tidak dijadikan dependency.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [compareId]);
+    }, [windowPeriods, periodId]);
 
     const sorted = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -376,9 +409,23 @@ export default function MitraRanking({
 
     const maxValue = sorted.length > 0 ? sorted[0].value : 0;
     const selected = rows.find((row) => row.personId === selectedId) ?? null;
-    const comparePeriod = periods.find((period) => period.id === compareId) ?? null;
-    const compareRow =
-        compareRows?.find((row) => row.personId === selectedId) ?? null;
+
+    const windowColumns = useMemo<WindowColumn[]>(
+        () =>
+            windowPeriods.map((period) => ({
+                period,
+                isCurrent: period.id === periodId,
+                row:
+                    period.id === periodId
+                        ? selected
+                        : (rowsByPeriod[period.id]?.find((row) => row.personId === selectedId) ?? null),
+            })),
+        [windowPeriods, periodId, selected, rowsByPeriod, selectedId],
+    );
+    const missingWindowLabels = useMemo(
+        () => windowColumns.filter((c) => !c.isCurrent && !c.row).map((c) => stripPeriode(c.period.label)),
+        [windowColumns],
+    );
 
     // Default: anak peringkat teratas — juga saat ganti periode dan anak
     // yang terpilih tidak punya data di periode baru.
@@ -568,8 +615,12 @@ export default function MitraRanking({
                                                 </span>
                                             </span>
                                             <span className="shrink-0 text-right">
-                                                <span className="block text-sm font-semibold text-gray-900">
+                                                <span className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
                                                     {displayValue(item.value)}
+                                                    <CapacityBadge
+                                                        gramPerHk={perDayOf(item.row, 'totalBjd')}
+                                                        variant="dot"
+                                                    />
                                                 </span>
                                                 <span
                                                     className="block text-[10px] text-gray-400"
@@ -635,33 +686,27 @@ export default function MitraRanking({
                                 </button>
                             </div>
 
-                            {/* Pilih periode pembanding untuk tabel side-by-side */}
+                            {/* Jumlah periode yang dibandingkan sekaligus */}
                             <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-                                <span className="text-gray-500">Bandingkan dengan</span>
+                                <span className="text-gray-500">Bandingkan</span>
                                 <select
-                                    value={compareId}
-                                    onChange={(event) => setCompareId(event.target.value)}
+                                    value={periodWindow}
+                                    onChange={(event) => setPeriodWindow(Number(event.target.value))}
                                     className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs transition focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
-                                    aria-label="Periode pembanding"
+                                    aria-label="Jumlah periode dibandingkan"
                                 >
-                                    <option value="">— tanpa pembanding —</option>
-                                    {periods
-                                        .filter((period) => period.id !== periodId)
-                                        .map((period) => (
-                                            <option key={period.id} value={period.id}>
-                                                {period.label}
-                                            </option>
-                                        ))}
+                                    <option value={2}>2 periode terakhir</option>
+                                    <option value={4}>4 periode terakhir</option>
+                                    <option value={8}>8 periode terakhir</option>
+                                    <option value={0}>Semua periode</option>
                                 </select>
                             </div>
 
-                            {compareId && comparePeriod ? (
-                                <PeriodComparison
-                                    row={selected}
-                                    compareRow={compareRow}
-                                    periodLabel={periodLabel}
-                                    compareLabel={comparePeriod.label}
-                                    loading={loadingCompare}
+                            {windowColumns.length > 1 ? (
+                                <MultiPeriodComparison
+                                    columns={windowColumns}
+                                    loading={loadingWindow}
+                                    missingLabels={missingWindowLabels}
                                 />
                             ) : (
                                 <PerDayBreakdown row={selected} periodLabel={periodLabel} />
