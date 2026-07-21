@@ -51,3 +51,18 @@ export function tenureWeeks(
     }
     return null;
 }
+
+/**
+ * Sudah lewat 20 minggu kerja? Mandiri = pasti ya; Perintis dihitung dari
+ * levelNumber (kasus jaga-jaga bila belum sempat naik status ke Mandiri).
+ */
+export function isVeteranTenure(
+    rawUserLevel?: string | null,
+    levelNumber?: number | null,
+): boolean {
+    const raw = rawUserLevel?.trim();
+    if (!raw) return false;
+    if (/mandiri/i.test(raw)) return true;
+    if (/perintis|minggu/i.test(raw) && levelNumber != null && levelNumber > 20) return true;
+    return false;
+}

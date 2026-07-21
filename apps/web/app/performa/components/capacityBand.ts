@@ -26,3 +26,13 @@ export function classifyCapacity(gramPerHk: number | null | undefined): Capacity
     );
     return match ? { key: match.key, label: match.label, color: match.color } : null;
 }
+
+/** Daftar band untuk legenda/filter — urut dari terendah ke tertinggi. */
+export const CAPACITY_BANDS: CapacityBand[] = BANDS.map(({ key, label, color }) => ({
+    key,
+    label,
+    color,
+}));
+
+/** Ambang batas tiap band (dipakai markArea chart tren kapasitas). */
+export const CAPACITY_BAND_RANGES = BANDS.map(({ min, max, color }) => ({ min, max, color }));

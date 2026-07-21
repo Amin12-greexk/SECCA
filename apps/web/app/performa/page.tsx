@@ -381,9 +381,10 @@ export default function PerformaPage() {
                             accent="#2a78d6"
                         />
                         <StatTile
-                            label="Total HK"
-                            value={fmtNum(stats.totalHk)}
-                            delta={currentStat?.deltaHk ?? null}
+                            label="Rata-rata Harian"
+                            value={fmtNum(stats.totalBjd / 6)}
+                            hint="Total BJD ÷ 6 hari"
+                            delta={currentStat?.deltaBjd == null ? null : currentStat.deltaBjd / 6}
                             accent="#eda100"
                         />
                         <StatTile

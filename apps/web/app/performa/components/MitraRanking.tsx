@@ -1,9 +1,17 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Calculator, ChevronRight, Columns2, Search, Trophy } from 'lucide-react';
+import {
+    AlertTriangle,
+    CalendarDays,
+    Calculator,
+    ChevronRight,
+    Filter,
+    Search,
+    TrendingUp,
+    Trophy,
+} from 'lucide-react';
 import LazyEChart from '@/components/charts/LazyEChart';
-import DeltaBadge from './DeltaBadge';
 import { fmtBpsId, fmtId, stripPeriode } from '@/components/charts/chart-theme';
 import { useToast } from '@/lib/toast';
 import {
@@ -13,8 +21,10 @@ import {
     type PerformaRow,
 } from '@/lib/api';
 import { personTrendOption, type PersonBjdRendemenTrend } from './personTrendChart';
-import { describeTenure, tenureWeeks } from './tenure';
+import { describeTenure, isVeteranTenure } from './tenure';
 import CapacityBadge from './CapacityBadge';
+import { CAPACITY_BANDS, classifyCapacity, type CapacityBand } from './capacityBand';
+import { capacityTrendOption } from './capacityTrendChart';
 
 /**
  * Kapasitas mitra sebagai daftar (bukan bar chart raksasa) — jumlah anak
@@ -66,6 +76,18 @@ function perDayOf(
     if (!row || row.hk == null || row.hk <= 0) return null;
     const value = row[key];
     return value == null ? null : value / row.hk;
+}
+
+/**
+ * Sudah >20 minggu kerja (Mandiri) tapi kapasitas masih di bawah band biru
+ * (< 50 g/HK) — sinyal anak ini butuh perhatian ekstra, bukan lagi wajar
+ * untuk mitra yang seharusnya sudah berpengalaman.
+ */
+function needsCapacityWarning(row: PerformaRow): boolean {
+    if (!isVeteranTenure(row.rawUserLevel, row.levelNumber)) return false;
+    const gramPerHk = perDayOf(row, 'totalBjd');
+    if (gramPerHk == null) return false;
+    return classifyCapacity(gramPerHk)?.key !== 'blue';
 }
 
 /**
@@ -150,13 +172,26 @@ type WindowColumn = {
     isCurrent: boolean;
 };
 
+/** Titik warna kecil untuk legenda band kapasitas. */
+function CapacityLegend() {
+    return (
+        <div className="flex flex-wrap items-center gap-2.5">
+            {CAPACITY_BANDS.map((band) => (
+                <span key={band.key} className="inline-flex items-center gap-1 text-[10px] text-gray-500">
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: band.color }} />
+                    {band.label}
+                </span>
+            ))}
+        </div>
+    );
+}
+
 /**
- * Perbandingan satu mitra melintasi N periode (bukan cuma 2) — tiap periode
- * jadi satu kolom, urut kronologis, periode aktif ditonjolkan di kolom
- * terakhir. Kolom Δ paling kanan = periode terakhir dikurangi periode
- * pertama yang ditampilkan (tren keseluruhan jendela, bukan cuma 1 langkah).
+ * Tren kapasitas (gram BJD/HK) satu mitra melintasi N periode — grafik
+ * garis dengan pita latar band & tiap titik diwarnai sesuai bandnya,
+ * supaya naik/turun antar periode langsung kelihatan tanpa tabel.
  */
-function MultiPeriodComparison({
+function CapacityTrendChart({
     columns,
     loading,
     missingLabels,
@@ -166,83 +201,24 @@ function MultiPeriodComparison({
     missingLabels: string[];
 }) {
     if (loading) {
-        return <div className="mb-3 h-[190px] animate-pulse rounded-lg bg-gray-50" />;
+        return <div className="h-[260px] animate-pulse rounded-lg bg-gray-50" />;
     }
     if (columns.length === 0) return null;
 
-    const fmtG = (value: number | null) => (value === null ? '–' : `${fmtId(value, 1)} g`);
-    const pct = (bps: number | null | undefined) => (bps == null ? null : bps / 100);
-    const delta = (a: number | null, b: number | null) =>
-        a === null || b === null ? null : a - b;
-
-    const first = columns[0].row;
-    const last = columns[columns.length - 1].row;
-
-    type Row = {
-        label: string;
-        values: string[];
-        badges?: Array<number | null>;
-        delta: number | null;
-        deltaSuffix: string;
-        strong?: boolean;
-    };
-
-    const rows: Row[] = [
-        {
-            label: 'Lama kerja',
-            values: columns.map((c) => describeTenure(c.row?.rawUserLevel, c.row?.levelNumber)?.label ?? '–'),
-            delta: delta(
-                tenureWeeks(last?.rawUserLevel, last?.levelNumber),
-                tenureWeeks(first?.rawUserLevel, first?.levelNumber),
-            ),
-            deltaSuffix: ' mgg',
-        },
-        {
-            label: 'HK',
-            values: columns.map((c) => (c.row?.hk == null ? '–' : `${fmtId(c.row.hk, 0)} hari`)),
-            delta: delta(last?.hk ?? null, first?.hk ?? null),
-            deltaSuffix: '',
-        },
-        {
-            label: 'BJD / hari',
-            values: columns.map((c) => fmtG(perDayOf(c.row, 'totalBjd'))),
-            badges: columns.map((c) => perDayOf(c.row, 'totalBjd')),
-            delta: delta(perDayOf(last, 'totalBjd'), perDayOf(first, 'totalBjd')),
-            deltaSuffix: ' g',
-            strong: true,
-        },
-        {
-            label: 'Baku Basah / hari',
-            values: columns.map((c) => fmtG(perDayOf(c.row, 'totalBakuBasah'))),
-            delta: delta(perDayOf(last, 'totalBakuBasah'), perDayOf(first, 'totalBakuBasah')),
-            deltaSuffix: ' g',
-        },
-        {
-            label: 'Rendemen',
-            values: columns.map((c) => fmtBpsId(c.row?.rendemenPctBps)),
-            delta: delta(pct(last?.rendemenPctBps), pct(first?.rendemenPctBps)),
-            deltaSuffix: '%',
-        },
-        {
-            label: 'Susut Proses',
-            values: columns.map((c) => fmtBpsId(c.row?.susutProsesPctBps)),
-            delta: delta(pct(last?.susutProsesPctBps), pct(first?.susutProsesPctBps)),
-            deltaSuffix: '%',
-        },
-        {
-            label: 'Susut Hilang',
-            values: columns.map((c) => fmtBpsId(c.row?.susutHilangPctBps)),
-            delta: delta(pct(last?.susutHilangPctBps), pct(first?.susutHilangPctBps)),
-            deltaSuffix: '%',
-        },
-    ];
+    const points = columns.map((c) => ({
+        label: stripPeriode(c.period.label),
+        gramPerHk: perDayOf(c.row, 'totalBjd'),
+    }));
 
     return (
-        <div className="mb-3 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
-            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                <Columns2 className="h-3.5 w-3.5 text-green-600" />
-                Perbandingan {columns.length} periode terakhir
-            </p>
+        <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                    <TrendingUp className="h-3.5 w-3.5 text-green-600" />
+                    Tren kapasitas · {columns.length} periode terakhir
+                </p>
+                <CapacityLegend />
+            </div>
 
             {missingLabels.length > 0 ? (
                 <p className="mb-2 rounded-md border border-amber-100 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700">
@@ -250,68 +226,7 @@ function MultiPeriodComparison({
                 </p>
             ) : null}
 
-            <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                    <thead>
-                        <tr className="border-b border-gray-200 text-[10px] uppercase tracking-wide text-gray-400">
-                            <th className="py-1.5 pr-2 text-left font-medium">Metrik</th>
-                            {columns.map((c) => (
-                                <th
-                                    key={c.period.id}
-                                    className={`px-2 py-1.5 text-right font-medium ${
-                                        c.isCurrent ? 'font-semibold text-gray-500' : ''
-                                    }`}
-                                >
-                                    {stripPeriode(c.period.label)}
-                                </th>
-                            ))}
-                            {columns.length > 1 ? (
-                                <th className="py-1.5 pl-2 text-right font-medium">Δ</th>
-                            ) : null}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.map((item) => (
-                            <tr
-                                key={item.label}
-                                className={`border-b border-gray-100 last:border-0 ${
-                                    item.strong ? 'bg-green-50/60' : ''
-                                }`}
-                            >
-                                <td className="py-1.5 pr-2 text-gray-500">{item.label}</td>
-                                {item.values.map((value, index) => {
-                                    const isLast = index === columns.length - 1;
-                                    return (
-                                        <td
-                                            key={columns[index].period.id}
-                                            className={`px-2 py-1.5 text-right ${
-                                                isLast
-                                                    ? `font-semibold ${item.strong ? 'text-green-700' : 'text-gray-900'}`
-                                                    : 'text-gray-600'
-                                            }`}
-                                        >
-                                            <span className="inline-flex items-center gap-1">
-                                                {value}
-                                                {item.badges ? (
-                                                    <CapacityBadge
-                                                        gramPerHk={item.badges[index]}
-                                                        variant="dot"
-                                                    />
-                                                ) : null}
-                                            </span>
-                                        </td>
-                                    );
-                                })}
-                                {columns.length > 1 ? (
-                                    <td className="py-1.5 pl-2 text-right">
-                                        <DeltaBadge value={item.delta} suffix={item.deltaSuffix} />
-                                    </td>
-                                ) : null}
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+            <LazyEChart option={capacityTrendOption(points)} height={220} />
         </div>
     );
 }
@@ -335,6 +250,8 @@ export default function MitraRanking({
     const toast = useToast();
     const [metric, setMetric] = useState<RankMetric>('bjd');
     const [search, setSearch] = useState('');
+    /** Filter daftar anak berdasar band kapasitas gram/HK; null = semua. */
+    const [bandFilter, setBandFilter] = useState<CapacityBand['key'] | null>(null);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [trend, setTrend] = useState<PersonTrend | null>(null);
     const [loadingTrend, setLoadingTrend] = useState(false);
@@ -402,12 +319,19 @@ export default function MitraRanking({
         const query = search.trim().toLowerCase();
         return rows
             .filter((row) => (query ? row.name.toLowerCase().includes(query) : true))
+            .filter((row) =>
+                bandFilter ? classifyCapacity(perDayOf(row, 'totalBjd'))?.key === bandFilter : true,
+            )
             .map((row) => ({ row, value: readMetric(row, metric) }))
             .filter((item): item is { row: PerformaRow; value: number } => item.value !== null)
             .sort((a, b) => b.value - a.value);
-    }, [rows, metric, search]);
+    }, [rows, metric, search, bandFilter]);
 
-    const maxValue = sorted.length > 0 ? sorted[0].value : 0;
+    const warningCount = useMemo(
+        () => rows.filter((row) => needsCapacityWarning(row)).length,
+        [rows],
+    );
+
     const selected = rows.find((row) => row.personId === selectedId) ?? null;
 
     const windowColumns = useMemo<WindowColumn[]>(
@@ -512,6 +436,15 @@ export default function MitraRanking({
                             {rows.length} anak · klik anak untuk lihat grafik BJD-nya
                         </p>
                     </div>
+                    {warningCount > 0 ? (
+                        <span
+                            className="ml-2 inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700"
+                            title="Sudah >20 minggu kerja (Mandiri) tapi kapasitas masih di bawah 50 g/HK"
+                        >
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            {warningCount} mitra perlu perhatian
+                        </span>
+                    ) : null}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -562,85 +495,117 @@ export default function MitraRanking({
                 </div>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,360px)_1fr]">
-                {/* Daftar anak (ranking) */}
-                <div className="max-h-[400px] overflow-y-auto rounded-lg border border-gray-100">
+            {/* Filter band kapasitas — mempersempit pencarian berdasar warna */}
+            <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                <span className="flex items-center gap-1 text-[11px] font-medium text-gray-400">
+                    <Filter className="h-3 w-3" />
+                    Filter kapasitas:
+                </span>
+                <button
+                    type="button"
+                    onClick={() => setBandFilter(null)}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                        bandFilter === null
+                            ? 'border-gray-800 bg-gray-800 text-white'
+                            : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                    }`}
+                >
+                    Semua
+                </button>
+                {CAPACITY_BANDS.map((band) => (
+                    <button
+                        key={band.key}
+                        type="button"
+                        onClick={() => setBandFilter((current) => (current === band.key ? null : band.key))}
+                        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                            bandFilter === band.key
+                                ? 'border-transparent text-white'
+                                : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                        }`}
+                        style={bandFilter === band.key ? { backgroundColor: band.color } : undefined}
+                    >
+                        <span
+                            className="h-2 w-2 rounded-full"
+                            style={{ backgroundColor: bandFilter === band.key ? '#fff' : band.color }}
+                        />
+                        {band.label}
+                    </button>
+                ))}
+            </div>
+
+            <div className="space-y-4">
+                {/* Daftar anak (ranking) — kartu grid, lebar penuh */}
+                <div className="max-h-[360px] overflow-y-auto rounded-lg border border-gray-100 p-2">
                     {sorted.length === 0 ? (
-                        <div className="flex h-[200px] items-center justify-center text-sm text-gray-400">
-                            {search
-                                ? `Tidak ada anak cocok "${search}".`
+                        <div className="flex h-[160px] items-center justify-center text-sm text-gray-400">
+                            {search || bandFilter
+                                ? 'Tidak ada anak cocok filter ini.'
                                 : 'Tidak ada data untuk metrik ini.'}
                         </div>
                     ) : (
-                        <ul className="divide-y divide-gray-50">
+                        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                             {sorted.map((item, index) => {
                                 const isSelected = item.row.personId === selectedId;
-                                const barWidth =
-                                    maxValue > 0
-                                        ? Math.max((item.value / maxValue) * 100, 2)
-                                        : 0;
+                                const warn = needsCapacityWarning(item.row);
                                 return (
-                                    <li key={item.row.id}>
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelectedId(item.row.personId)}
-                                            className={`flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors ${
-                                                isSelected ? 'bg-green-50/70' : 'hover:bg-gray-50'
+                                    <button
+                                        key={item.row.id}
+                                        type="button"
+                                        onClick={() => setSelectedId(item.row.personId)}
+                                        className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors ${
+                                            isSelected
+                                                ? 'border-green-300 bg-green-50/70'
+                                                : warn
+                                                  ? 'border-amber-200 bg-amber-50/40 hover:bg-amber-50/70'
+                                                  : 'border-gray-100 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <span
+                                            className={`w-5 shrink-0 text-right font-mono text-[10px] ${
+                                                RANK_CLASS[index] ?? 'text-gray-300'
                                             }`}
                                         >
+                                            {index + 1}
+                                        </span>
+                                        <span
+                                            className="h-2 w-2 shrink-0 rounded-full"
+                                            style={{ backgroundColor: item.row.colorHex }}
+                                        />
+                                        <span className="min-w-0 flex-1">
+                                            <span className="flex items-center gap-1 truncate text-xs font-medium text-gray-800">
+                                                {item.row.name}
+                                                {warn ? (
+                                                    <AlertTriangle
+                                                        className="h-3 w-3 shrink-0 text-amber-500"
+                                                        aria-label="Perlu perhatian"
+                                                    />
+                                                ) : null}
+                                            </span>
                                             <span
-                                                className={`w-6 shrink-0 text-right font-mono text-[11px] ${
-                                                    RANK_CLASS[index] ?? 'text-gray-300'
-                                                }`}
+                                                className="block text-[10px] text-gray-400"
+                                                title={item.row.rawUserLevel ?? undefined}
                                             >
-                                                {index + 1}
+                                                {describeTenure(
+                                                    item.row.rawUserLevel,
+                                                    item.row.levelNumber,
+                                                )?.short ?? '–'}
                                             </span>
-                                            <span
-                                                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                                                style={{ backgroundColor: item.row.colorHex }}
+                                        </span>
+                                        <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-gray-900">
+                                            {displayValue(item.value)}
+                                            <CapacityBadge
+                                                gramPerHk={perDayOf(item.row, 'totalBjd')}
+                                                variant="dot"
                                             />
-                                            <span className="min-w-0 flex-1">
-                                                <span className="block truncate text-sm font-medium text-gray-800">
-                                                    {item.row.name}
-                                                </span>
-                                                <span className="mt-0.5 block h-1 w-full rounded-full bg-gray-100">
-                                                    <span
-                                                        className="block h-1 rounded-full"
-                                                        style={{
-                                                            width: `${barWidth}%`,
-                                                            backgroundColor: active.color,
-                                                            opacity: 0.65,
-                                                        }}
-                                                    />
-                                                </span>
-                                            </span>
-                                            <span className="shrink-0 text-right">
-                                                <span className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
-                                                    {displayValue(item.value)}
-                                                    <CapacityBadge
-                                                        gramPerHk={perDayOf(item.row, 'totalBjd')}
-                                                        variant="dot"
-                                                    />
-                                                </span>
-                                                <span
-                                                    className="block text-[10px] text-gray-400"
-                                                    title={item.row.rawUserLevel ?? undefined}
-                                                >
-                                                    {describeTenure(
-                                                        item.row.rawUserLevel,
-                                                        item.row.levelNumber,
-                                                    )?.short ?? '–'}
-                                                </span>
-                                            </span>
-                                        </button>
-                                    </li>
+                                        </span>
+                                    </button>
                                 );
                             })}
-                        </ul>
+                        </div>
                     )}
                 </div>
 
-                {/* Grafik BJD anak terpilih */}
+                {/* Grafik BJD anak terpilih — sekarang lebar penuh */}
                 <div className="min-w-0 rounded-lg border border-gray-100 p-4">
                     {selected ? (
                         <>
@@ -667,6 +632,15 @@ export default function MitraRanking({
                                                     </span>
                                                 ) : null;
                                             })()}
+                                            {needsCapacityWarning(selected) ? (
+                                                <span
+                                                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+                                                    title="Sudah >20 minggu kerja tapi kapasitas masih di bawah 50 g/HK"
+                                                >
+                                                    <AlertTriangle className="h-3 w-3" />
+                                                    Perlu perhatian
+                                                </span>
+                                            ) : null}
                                         </p>
                                         <p className="text-[11px] text-gray-400">
                                             BJD &amp; Rendemen per periode
@@ -703,60 +677,69 @@ export default function MitraRanking({
                             </div>
 
                             {windowColumns.length > 1 ? (
-                                <MultiPeriodComparison
-                                    columns={windowColumns}
-                                    loading={loadingWindow}
-                                    missingLabels={missingWindowLabels}
-                                />
-                            ) : (
-                                <PerDayBreakdown row={selected} periodLabel={periodLabel} />
-                            )}
-
-                            {loadingTrend || !trend ? (
-                                <div className="h-[300px] animate-pulse rounded-lg bg-gray-50" />
+                                <div className="grid gap-3 lg:grid-cols-2">
+                                    <CapacityTrendChart
+                                        columns={windowColumns}
+                                        loading={loadingWindow}
+                                        missingLabels={missingWindowLabels}
+                                    />
+                                    {loadingTrend || !trend ? (
+                                        <div className="h-[260px] animate-pulse rounded-lg bg-gray-50" />
+                                    ) : (
+                                        <LazyEChart
+                                            option={personTrendOption(trend, selected.colorHex)}
+                                            height={260}
+                                        />
+                                    )}
+                                </div>
                             ) : (
                                 <>
-                                    <LazyEChart
-                                        option={personTrendOption(trend, selected.colorHex)}
-                                        height={300}
-                                    />
-
-                                    {trendSummary?.avgPerHk != null ? (
-                                        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg border border-green-100 bg-green-50/50 px-3 py-2 text-xs text-gray-600">
-                                            <Calculator className="h-3.5 w-3.5 shrink-0 text-green-600" />
-                                            <span>
-                                                Rata-rata{' '}
-                                                <b className="text-gray-900">
-                                                    {fmtId(trendSummary.avgPerHk, 1)} g/HK
-                                                </b>
-                                            </span>
-                                            <span className="text-gray-300">·</span>
-                                            <span>estimasi dengan</span>
-                                            <select
-                                                value={estDays}
-                                                onChange={(event) =>
-                                                    setEstDays(Number(event.target.value))
-                                                }
-                                                className="rounded-md border border-gray-300 bg-white px-1.5 py-0.5 text-xs focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
-                                                aria-label="Jumlah hari kerja untuk estimasi"
-                                            >
-                                                {[1, 2, 3, 4, 5, 6, 7].map((days) => (
-                                                    <option key={days} value={days}>
-                                                        {days} HK
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <span>
-                                                ≈{' '}
-                                                <b className="text-green-700">
-                                                    {fmtId(trendSummary.avgPerHk * estDays, 1)} g
-                                                </b>{' '}
-                                                barang jadi
-                                            </span>
-                                        </div>
-                                    ) : null}
+                                    <PerDayBreakdown row={selected} periodLabel={periodLabel} />
+                                    {loadingTrend || !trend ? (
+                                        <div className="h-[300px] animate-pulse rounded-lg bg-gray-50" />
+                                    ) : (
+                                        <LazyEChart
+                                            option={personTrendOption(trend, selected.colorHex)}
+                                            height={300}
+                                        />
+                                    )}
                                 </>
                             )}
+
+                            {trendSummary?.avgPerHk != null ? (
+                                <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg border border-green-100 bg-green-50/50 px-3 py-2 text-xs text-gray-600">
+                                    <Calculator className="h-3.5 w-3.5 shrink-0 text-green-600" />
+                                    <span>
+                                        Rata-rata{' '}
+                                        <b className="text-gray-900">
+                                            {fmtId(trendSummary.avgPerHk, 1)} g/HK
+                                        </b>
+                                    </span>
+                                    <span className="text-gray-300">·</span>
+                                    <span>estimasi dengan</span>
+                                    <select
+                                        value={estDays}
+                                        onChange={(event) =>
+                                            setEstDays(Number(event.target.value))
+                                        }
+                                        className="rounded-md border border-gray-300 bg-white px-1.5 py-0.5 text-xs focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+                                        aria-label="Jumlah hari kerja untuk estimasi"
+                                    >
+                                        {[1, 2, 3, 4, 5, 6, 7].map((days) => (
+                                            <option key={days} value={days}>
+                                                {days} HK
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <span>
+                                        ≈{' '}
+                                        <b className="text-green-700">
+                                            {fmtId(trendSummary.avgPerHk * estDays, 1)} g
+                                        </b>{' '}
+                                        barang jadi
+                                    </span>
+                                </div>
+                            ) : null}
                         </>
                     ) : (
                         <div className="flex h-[300px] items-center justify-center text-sm text-gray-400">
