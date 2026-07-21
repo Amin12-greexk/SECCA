@@ -53,6 +53,9 @@ const RANK_CLASS: Record<number, string> = {
     2: 'text-orange-400 font-bold',
 };
 
+/** Garis BJD di chart tren memakai hijau standar BJD (bukan warna identitas per anak). */
+const BJD_LINE_COLOR = '#008300';
+
 /** Trend chart butuh BJD & Rendemen; HK ditambah khusus untuk kalkulator estimasi di bawah. */
 type PersonTrend = PersonBjdRendemenTrend & { hk: Array<number | null> };
 
@@ -433,7 +436,7 @@ export default function MitraRanking({
                         </h2>
                         <p className="text-xs text-gray-400">
                             {periodLabel ? `${periodLabel} · ` : ''}
-                            {rows.length} anak · klik anak untuk lihat grafik BJD-nya
+                            {rows.length} anak
                         </p>
                     </div>
                     {warningCount > 0 ? (
@@ -547,11 +550,13 @@ export default function MitraRanking({
                             {sorted.map((item, index) => {
                                 const isSelected = item.row.personId === selectedId;
                                 const warn = needsCapacityWarning(item.row);
+                                const band = classifyCapacity(perDayOf(item.row, 'totalBjd'));
                                 return (
                                     <button
                                         key={item.row.id}
                                         type="button"
                                         onClick={() => setSelectedId(item.row.personId)}
+                                        title={item.row.rawUserLevel ?? undefined}
                                         className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors ${
                                             isSelected
                                                 ? 'border-green-300 bg-green-50/70'
@@ -567,36 +572,22 @@ export default function MitraRanking({
                                         >
                                             {index + 1}
                                         </span>
+                                        {/* Satu titik saja: warna mengikuti band kapasitas, konsisten dengan chart */}
                                         <span
-                                            className="h-2 w-2 shrink-0 rounded-full"
-                                            style={{ backgroundColor: item.row.colorHex }}
+                                            className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                            style={{ backgroundColor: band?.color ?? '#d1d5db' }}
                                         />
-                                        <span className="min-w-0 flex-1">
-                                            <span className="flex items-center gap-1 truncate text-xs font-medium text-gray-800">
-                                                {item.row.name}
-                                                {warn ? (
-                                                    <AlertTriangle
-                                                        className="h-3 w-3 shrink-0 text-amber-500"
-                                                        aria-label="Perlu perhatian"
-                                                    />
-                                                ) : null}
-                                            </span>
-                                            <span
-                                                className="block text-[10px] text-gray-400"
-                                                title={item.row.rawUserLevel ?? undefined}
-                                            >
-                                                {describeTenure(
-                                                    item.row.rawUserLevel,
-                                                    item.row.levelNumber,
-                                                )?.short ?? '–'}
-                                            </span>
+                                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800">
+                                            {item.row.name}
                                         </span>
-                                        <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-gray-900">
-                                            {displayValue(item.value)}
-                                            <CapacityBadge
-                                                gramPerHk={perDayOf(item.row, 'totalBjd')}
-                                                variant="dot"
+                                        {warn ? (
+                                            <AlertTriangle
+                                                className="h-3 w-3 shrink-0 text-amber-500"
+                                                aria-label="Perlu perhatian"
                                             />
+                                        ) : null}
+                                        <span className="shrink-0 text-xs font-semibold text-gray-900">
+                                            {displayValue(item.value)}
                                         </span>
                                     </button>
                                 );
@@ -613,7 +604,11 @@ export default function MitraRanking({
                                 <div className="flex min-w-0 items-center gap-2">
                                     <span
                                         className="h-3 w-3 shrink-0 rounded-full"
-                                        style={{ backgroundColor: selected.colorHex }}
+                                        style={{
+                                            backgroundColor:
+                                                classifyCapacity(perDayOf(selected, 'totalBjd'))
+                                                    ?.color ?? '#d1d5db',
+                                        }}
                                     />
                                     <div className="min-w-0">
                                         <p className="flex items-center gap-2 truncate text-sm font-semibold text-gray-800">
@@ -642,12 +637,12 @@ export default function MitraRanking({
                                                 </span>
                                             ) : null}
                                         </p>
-                                        <p className="text-[11px] text-gray-400">
-                                            BJD &amp; Rendemen per periode
-                                            {trendSummary
-                                                ? ` · total BJD ${fmtId(trendSummary.total, 1)} · ${trendSummary.periods} periode aktif`
-                                                : ''}
-                                        </p>
+                                        {trendSummary ? (
+                                            <p className="text-[11px] text-gray-400">
+                                                Total BJD {fmtId(trendSummary.total, 1)} ·{' '}
+                                                {trendSummary.periods} periode aktif
+                                            </p>
+                                        ) : null}
                                     </div>
                                 </div>
                                 <button
@@ -687,7 +682,7 @@ export default function MitraRanking({
                                         <div className="h-[260px] animate-pulse rounded-lg bg-gray-50" />
                                     ) : (
                                         <LazyEChart
-                                            option={personTrendOption(trend, selected.colorHex)}
+                                            option={personTrendOption(trend, BJD_LINE_COLOR)}
                                             height={260}
                                         />
                                     )}
@@ -699,7 +694,7 @@ export default function MitraRanking({
                                         <div className="h-[300px] animate-pulse rounded-lg bg-gray-50" />
                                     ) : (
                                         <LazyEChart
-                                            option={personTrendOption(trend, selected.colorHex)}
+                                            option={personTrendOption(trend, BJD_LINE_COLOR)}
                                             height={300}
                                         />
                                     )}
