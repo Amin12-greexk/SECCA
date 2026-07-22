@@ -81,16 +81,75 @@ function perDayOf(
     return value == null ? null : value / row.hk;
 }
 
+export type WarningStatus = {
+    hasWarning: boolean;
+    isRedMonth: boolean;
+    isUnder13TwoWeeks: boolean;
+    reasons: string[];
+};
+
 /**
- * Sudah >20 minggu kerja (Mandiri) tapi kapasitas masih di bawah band biru
- * (< 50 g/HK) — sinyal anak ini butuh perhatian ekstra, bukan lagi wajar
- * untuk mitra yang seharusnya sudah berpengalaman.
+ * Aturan warning baru:
+ * 1. Rule 1: 1 bulan (4 periode berturut-turut) di badge/warna merah (<25 g/HK).
+ * 2. Rule 2: 2 minggu (2 periode berturut-turut) < 13 g/HK.
  */
-function needsCapacityWarning(row: PerformaRow): boolean {
-    if (!isVeteranTenure(row.rawUserLevel, row.levelNumber)) return false;
-    const gramPerHk = perDayOf(row, 'totalBjd');
-    if (gramPerHk == null) return false;
-    return classifyCapacity(gramPerHk)?.key !== 'blue';
+function evaluateMitraWarning(
+    personId: string,
+    rowsByPeriod: Record<string, PerformaRow[]>,
+    recentPeriods: PerformaPeriod[],
+    currentRow: PerformaRow | null,
+): WarningStatus {
+    if (!currentRow) {
+        return { hasWarning: false, isRedMonth: false, isUnder13TwoWeeks: false, reasons: [] };
+    }
+
+    const historyRows = recentPeriods.map((p) => {
+        const isCurrentActive = p.id === (currentRow as { periodId?: string }).periodId;
+        const rowFromPeriod = rowsByPeriod[p.id]?.find((r) => r.personId === personId);
+        return {
+            period: p,
+            row: rowFromPeriod ?? (isCurrentActive ? currentRow : null),
+        };
+    });
+
+    // Pastikan periode paling akhir (periode aktif) selalu memakai currentRow jika belum ada di historyRows
+    if (recentPeriods.length > 0) {
+        const lastIdx = historyRows.length - 1;
+        if (!historyRows[lastIdx].row) {
+            historyRows[lastIdx].row = currentRow;
+        }
+    }
+
+    const dailyOutputs = historyRows.map((h) => (h.row ? perDayOf(h.row, 'totalBjd') : null));
+
+    // Rule 1: 1 bulan (4 periode terakhir) berada di badge merah (<25 g/HK)
+    const last4Outputs = dailyOutputs.slice(-4);
+    const validLast4 = last4Outputs.filter((v): v is number => v !== null);
+    const isRedMonth =
+        validLast4.length > 0 && validLast4.every((val) => val < 25);
+
+    // Rule 2: 2 minggu (2 periode terakhir) < 13 g/HK
+    const last2Outputs = dailyOutputs.slice(-2);
+    const validLast2 = last2Outputs.filter((v): v is number => v !== null);
+    const isUnder13TwoWeeks =
+        validLast2.length >= 2
+            ? validLast2.every((val) => val < 13)
+            : validLast2.length === 1 && validLast2[0] < 13;
+
+    const reasons: string[] = [];
+    if (isRedMonth) {
+        reasons.push('1 bulan di badge merah (<25 g/HK)');
+    }
+    if (isUnder13TwoWeeks) {
+        reasons.push('2 minggu <13 g/HK');
+    }
+
+    return {
+        hasWarning: isRedMonth || isUnder13TwoWeeks,
+        isRedMonth,
+        isUnder13TwoWeeks,
+        reasons,
+    };
 }
 
 /**
@@ -276,28 +335,38 @@ export default function MitraRanking({
         return periods.slice(start, currentIndex + 1);
     }, [periods, currentIndex, periodWindow]);
 
+    /** 4 periode terakhir (1 bulan) ending di periode aktif untuk evaluasi warning. */
+    const recent4Periods = useMemo(() => {
+        if (currentIndex < 0) return [] as PerformaPeriod[];
+        const start = Math.max(0, currentIndex - 3);
+        return periods.slice(start, currentIndex + 1);
+    }, [periods, currentIndex]);
+
     // Data upload baru -> daftar periode berubah -> cache jendela basi.
     useEffect(() => {
         setRowsByPeriod({});
     }, [periods]);
 
     useEffect(() => {
-        const missing = windowPeriods.filter(
-            (period) => period.id !== periodId && !(period.id in rowsByPeriod),
+        const requiredPeriods = Array.from(
+            new Set([...windowPeriods.map((p) => p.id), ...recent4Periods.map((p) => p.id)]),
+        );
+        const missing = requiredPeriods.filter(
+            (id) => id !== periodId && !(id in rowsByPeriod),
         );
         if (missing.length === 0) return;
         let alive = true;
         setLoadingWindow(true);
         Promise.all(
-            missing.map((period) =>
-                getPerformaSummary(period.id).then((data) => [period.id, data.rows] as const),
+            missing.map((id) =>
+                getPerformaSummary(id).then((data) => [id, data.rows] as const),
             ),
         )
             .then((entries) => {
                 if (!alive) return;
                 setRowsByPeriod((prev) => {
                     const next = { ...prev };
-                    for (const [id, rows] of entries) next[id] = rows;
+                    for (const [id, rws] of entries) next[id] = rws;
                     return next;
                 });
             })
@@ -316,7 +385,7 @@ export default function MitraRanking({
         };
         // toast stabil dari provider; tidak dijadikan dependency.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [windowPeriods, periodId]);
+    }, [windowPeriods, recent4Periods, periodId]);
 
     const sorted = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -330,9 +399,32 @@ export default function MitraRanking({
             .sort((a, b) => b.value - a.value);
     }, [rows, metric, search, bandFilter]);
 
+    const warningMap = useMemo(() => {
+        const map: Record<string, WarningStatus> = {};
+        for (const row of rows) {
+            map[row.personId] = evaluateMitraWarning(
+                row.personId,
+                rowsByPeriod,
+                recent4Periods,
+                row,
+            );
+        }
+        return map;
+    }, [rows, rowsByPeriod, recent4Periods]);
+
     const warningCount = useMemo(
-        () => rows.filter((row) => needsCapacityWarning(row)).length,
-        [rows],
+        () => rows.filter((row) => warningMap[row.personId]?.hasWarning).length,
+        [rows, warningMap],
+    );
+
+    const redMonthCount = useMemo(
+        () => rows.filter((row) => warningMap[row.personId]?.isRedMonth).length,
+        [rows, warningMap],
+    );
+
+    const under13Count = useMemo(
+        () => rows.filter((row) => warningMap[row.personId]?.isUnder13TwoWeeks).length,
+        [rows, warningMap],
     );
 
     const selected = rows.find((row) => row.personId === selectedId) ?? null;
@@ -441,10 +533,10 @@ export default function MitraRanking({
                     </div>
                     {warningCount > 0 ? (
                         <span
-                            className="ml-2 inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700"
-                            title="Sudah >20 minggu kerja (Mandiri) tapi kapasitas masih di bawah 50 g/HK"
+                            className="ml-2 inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-800 shadow-xs"
+                            title={`Mitra Perlu Perhatian:\n• ${redMonthCount} mitra 1 bulan di badge merah (<25 g/HK)\n• ${under13Count} mitra 2 minggu <13 g/HK`}
                         >
-                            <AlertTriangle className="h-3.5 w-3.5" />
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
                             {warningCount} mitra perlu perhatian
                         </span>
                     ) : null}
@@ -549,7 +641,8 @@ export default function MitraRanking({
                         <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                             {sorted.map((item, index) => {
                                 const isSelected = item.row.personId === selectedId;
-                                const warn = needsCapacityWarning(item.row);
+                                const warnStatus = warningMap[item.row.personId];
+                                const warn = warnStatus?.hasWarning;
                                 const band = classifyCapacity(perDayOf(item.row, 'totalBjd'));
                                 return (
                                     <button
@@ -581,10 +674,18 @@ export default function MitraRanking({
                                             {item.row.name}
                                         </span>
                                         {warn ? (
-                                            <AlertTriangle
-                                                className="h-3 w-3 shrink-0 text-amber-500"
-                                                aria-label="Perlu perhatian"
-                                            />
+                                            <span title={`Warning:\n• ${warnStatus.reasons.join('\n• ')}`}>
+                                                <AlertTriangle
+                                                    className={`h-3 w-3 shrink-0 ${
+                                                        warnStatus.isRedMonth && warnStatus.isUnder13TwoWeeks
+                                                            ? 'text-red-600 animate-pulse'
+                                                            : warnStatus.isRedMonth
+                                                              ? 'text-red-500'
+                                                              : 'text-amber-500'
+                                                    }`}
+                                                    aria-label={warnStatus.reasons.join(', ')}
+                                                />
+                                            </span>
                                         ) : null}
                                         <span className="shrink-0 text-xs font-semibold text-gray-900">
                                             {displayValue(item.value)}
@@ -627,13 +728,13 @@ export default function MitraRanking({
                                                     </span>
                                                 ) : null;
                                             })()}
-                                            {needsCapacityWarning(selected) ? (
+                                            {selected && warningMap[selected.personId]?.hasWarning ? (
                                                 <span
-                                                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
-                                                    title="Sudah >20 minggu kerja tapi kapasitas masih di bawah 50 g/HK"
+                                                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 border border-amber-200"
+                                                    title={`Warning:\n• ${warningMap[selected.personId].reasons.join('\n• ')}`}
                                                 >
-                                                    <AlertTriangle className="h-3 w-3" />
-                                                    Perlu perhatian
+                                                    <AlertTriangle className="h-3 w-3 text-amber-600" />
+                                                    Warning: {warningMap[selected.personId].reasons.join(' · ')}
                                                 </span>
                                             ) : null}
                                         </p>
