@@ -256,16 +256,38 @@ export default function ManagerAnalytics() {
     const [error, setError] = useState<string | null>(null);
     const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
+    /* Derived donut data by combo, feather, and color */
+    const [comboUsage, setComboUsage] = useState<GradeUsageResponse | null>(null);
+    const [featherUsage, setFeatherUsage] = useState<GradeUsageResponse | null>(null);
+    const [colorUsage, setColorUsage] = useState<GradeUsageResponse | null>(null);
+
     const loadData = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            const [gu, cap] = await Promise.all([
-                getManagerGradeUsage({ from, to, groupBy, metric }),
-                getManagerCapacity({ from, to }),
+            const reqs = {
+                capacity: getManagerCapacity({ from, to }),
+                tableUsage: getManagerGradeUsage({ from, to, groupBy, metric }),
+                combo: groupBy === 'combo' ? null : getManagerGradeUsage({ from, to, groupBy: 'combo', metric }),
+                feather: groupBy === 'feather' ? null : getManagerGradeUsage({ from, to, groupBy: 'feather', metric }),
+                color: groupBy === 'color' ? null : getManagerGradeUsage({ from, to, groupBy: 'color', metric }),
+            };
+
+            const [cap, tableUsage, comboRes, featherRes, colorRes] = await Promise.all([
+                reqs.capacity,
+                reqs.tableUsage,
+                reqs.combo,
+                reqs.feather,
+                reqs.color,
             ]);
-            setGradeUsage(gu);
+
             setCapacity(cap);
+            setGradeUsage(tableUsage);
+            
+            setComboUsage(reqs.combo === null ? tableUsage : comboRes);
+            setFeatherUsage(reqs.feather === null ? tableUsage : featherRes);
+            setColorUsage(reqs.color === null ? tableUsage : colorRes);
+
             setLastUpdatedAt(new Date());
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Gagal memuat data analitik.');
@@ -275,24 +297,6 @@ export default function ManagerAnalytics() {
     }, [from, to, groupBy, metric]);
 
     useEffect(() => { loadData(); }, [loadData]);
-
-    /* Derived donut data by combo, feather, and color */
-    const [comboUsage, setComboUsage] = useState<GradeUsageResponse | null>(null);
-    const [featherUsage, setFeatherUsage] = useState<GradeUsageResponse | null>(null);
-    const [colorUsage, setColorUsage] = useState<GradeUsageResponse | null>(null);
-
-    useEffect(() => {
-        if (!from || !to) return;
-        Promise.all([
-            getManagerGradeUsage({ from, to, groupBy: 'combo', metric }),
-            getManagerGradeUsage({ from, to, groupBy: 'feather', metric }),
-            getManagerGradeUsage({ from, to, groupBy: 'color', metric }),
-        ]).then(([c, f, w]) => {
-            setComboUsage(c);
-            setFeatherUsage(f);
-            setColorUsage(w);
-        }).catch(() => { /* already handled by main load */ });
-    }, [from, to, metric]);
 
     const animatedTotalGram = useAnimatedNumber(capacity?.summary.totalGram ?? 0, 700);
     const animatedTotalLp = useAnimatedNumber(capacity?.summary.totalLp ?? 0, 700);

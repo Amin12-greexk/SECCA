@@ -13,46 +13,67 @@ export class AnalyticsService {
         const metric = dto.metric ?? "initial";
         const { from, to } = this.getValidatedDateRange(dto.from, dto.to);
 
-        const entries = await this.prisma.pecahBonEntry.findMany({
+        const weightField = metric === "dry" ? "dryWeightGram" : "initialWeightGram";
+
+        const groupedData = await this.prisma.pecahBonEntry.groupBy({
+            by: ['gradeId', 'featherGradeId', 'colorGradeId'],
             where: {
                 pecahBonDate: { gte: from, lte: to },
             },
-            include: {
-                grade: true,
-                featherGrade: true,
-                colorGrade: true,
+            _sum: {
+                initialWeightGram: true,
+                dryWeightGram: true,
+            },
+            _count: {
+                id: true,
             },
         });
 
-        const weightField =
-            metric === "dry" ? "dryWeightGram" : "initialWeightGram";
+        const allGrades = await this.prisma.grade.findMany({
+            select: { id: true, code: true }
+        });
+        const gradeMap = new Map(allGrades.map(g => [g.id, g.code]));
 
-        const grouped = new Map<
-            string,
-            { gram: number; lpCount: number }
-        >();
+        const grouped = new Map<string, { gram: number; lpCount: number }>();
 
-        for (const entry of entries) {
-            const key = this.buildGroupKey(entry, groupBy);
+        for (const entry of groupedData) {
+            const shape = gradeMap.get(entry.gradeId) ?? "-";
+            const feather = entry.featherGradeId ? (gradeMap.get(entry.featherGradeId) ?? "-") : "-";
+            const color = entry.colorGradeId ? (gradeMap.get(entry.colorGradeId) ?? "-") : "-";
+
+            let key = "";
+            switch (groupBy) {
+                case "shape":
+                    key = shape;
+                    break;
+                case "feather":
+                    key = feather;
+                    break;
+                case "color":
+                    key = color;
+                    break;
+                case "combo":
+                default:
+                    key = `${shape}/${feather}/${color}`;
+                    break;
+            }
+
+            const gram = (weightField === "dryWeightGram" ? entry._sum.dryWeightGram : entry._sum.initialWeightGram) ?? 0;
+            const lpCount = entry._count.id;
+
             const existing = grouped.get(key) ?? { gram: 0, lpCount: 0 };
-            existing.gram += entry[weightField];
-            existing.lpCount += 1;
+            existing.gram += gram;
+            existing.lpCount += lpCount;
             grouped.set(key, existing);
         }
 
-        const totalGram = entries.reduce(
-            (sum, e) => sum + e[weightField],
-            0,
-        );
+        const totalGram = Array.from(grouped.values()).reduce((sum, val) => sum + val.gram, 0);
 
         let rows = Array.from(grouped.entries())
             .map(([key, val]) => ({
                 key,
                 gram: Math.round(val.gram * 100) / 100,
-                percentage:
-                    totalGram > 0
-                        ? Math.round((val.gram / totalGram) * 10000) / 100
-                        : 0,
+                percentage: totalGram > 0 ? Math.round((val.gram / totalGram) * 10000) / 100 : 0,
                 lpCount: val.lpCount,
             }))
             .sort((a, b) => b.gram - a.gram);
@@ -181,31 +202,6 @@ export class AnalyticsService {
 
         to.setHours(23, 59, 59, 999);
         return { from, to };
-    }
-
-    private buildGroupKey(
-        entry: {
-            grade: { code: string } | null;
-            featherGrade: { code: string } | null;
-            colorGrade: { code: string } | null;
-        },
-        groupBy: string,
-    ): string {
-        const shape = entry.grade?.code ?? "-";
-        const feather = entry.featherGrade?.code ?? "-";
-        const color = entry.colorGrade?.code ?? "-";
-
-        switch (groupBy) {
-            case "shape":
-                return shape;
-            case "feather":
-                return feather;
-            case "color":
-                return color;
-            case "combo":
-            default:
-                return `${shape}/${feather}/${color}`;
-        }
     }
 
     private getMonday(date: Date): Date {
