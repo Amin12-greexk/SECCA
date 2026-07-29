@@ -16,6 +16,7 @@ import {
     getPerformaPersons,
     getPerformaSummary,
     importPerformaWorkbook,
+    resetPerformaData,
     type PerformaPerson,
     type PerformaPeriod,
     type PerformaPeriodStat,
@@ -25,6 +26,7 @@ import DeltaBadge from './components/DeltaBadge';
 import IndividualPanel from './components/IndividualPanel';
 import MitraRanking from './components/MitraRanking';
 import PeriodTrends from './components/PeriodTrends';
+import TurnoverAndShifts from './components/TurnoverAndShifts';
 
 /* ─── Helpers ─────────────────────────────────────────────────── */
 
@@ -102,6 +104,23 @@ function UploadCard({ onUploaded }: { onUploaded: () => void }) {
     const toast = useToast();
     const inputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
+    const [resetting, setResetting] = useState(false);
+
+    const handleReset = async () => {
+        if (!confirm('Apakah Anda yakin ingin menghapus SEMUA data performa? Aksi ini tidak dapat dibatalkan.')) {
+            return;
+        }
+        setResetting(true);
+        try {
+            const res = await resetPerformaData();
+            toast.success(res.message);
+            onUploaded(); // this will trigger reload of data
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Gagal mereset data.');
+        } finally {
+            setResetting(false);
+        }
+    };
 
     const handleFile = async (file: File) => {
         setUploading(true);
@@ -132,29 +151,39 @@ function UploadCard({ onUploaded }: { onUploaded: () => void }) {
                     </div>
                 </div>
 
-                <input
-                    ref={inputRef}
-                    type="file"
-                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    className="hidden"
-                    onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (file) handleFile(file);
-                    }}
-                />
-                <button
-                    type="button"
-                    onClick={() => inputRef.current?.click()}
-                    disabled={uploading}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 disabled:opacity-50"
-                >
-                    {uploading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                        <Upload className="h-4 w-4" />
-                    )}
-                    {uploading ? 'Mengunggah...' : 'Pilih File'}
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={handleReset}
+                        disabled={uploading || resetting}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 shadow-sm transition-colors hover:bg-red-100 disabled:opacity-50"
+                    >
+                        {resetting ? 'Mereset...' : 'Reset Data'}
+                    </button>
+                    <input
+                        ref={inputRef}
+                        type="file"
+                        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        className="hidden"
+                        onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (file) handleFile(file);
+                        }}
+                    />
+                    <button
+                        type="button"
+                        onClick={() => inputRef.current?.click()}
+                        disabled={uploading || resetting}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 disabled:opacity-50"
+                    >
+                        {uploading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <Upload className="h-4 w-4" />
+                        )}
+                        {uploading ? 'Mengunggah...' : 'Pilih File'}
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -171,6 +200,7 @@ export default function PerformaPage() {
     const [periodStats, setPeriodStats] = useState<PerformaPeriodStat[]>([]);
     const [periodId, setPeriodId] = useState('');
     const [summary, setSummary] = useState<PerformaSummaryResponse | null>(null);
+    const [prevSummary, setPrevSummary] = useState<PerformaSummaryResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
@@ -199,6 +229,15 @@ export default function PerformaPage() {
             const targetId = periodId || periodList[periodList.length - 1]?.id || '';
             const data = await getPerformaSummary(targetId || undefined);
             setSummary(data);
+            
+            const currentIndex = periodList.findIndex(p => p.id === (data.period?.id ?? targetId));
+            const prevId = currentIndex > 0 ? periodList[currentIndex - 1].id : null;
+            if (prevId) {
+                setPrevSummary(await getPerformaSummary(prevId));
+            } else {
+                setPrevSummary(null);
+            }
+
             if (!periodId && data.period) setPeriodId(data.period.id);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Gagal memuat data.');
@@ -218,7 +257,16 @@ export default function PerformaPage() {
         setLoading(true);
         setError(null);
         try {
-            setSummary(await getPerformaSummary(nextId || undefined));
+            const data = await getPerformaSummary(nextId || undefined);
+            setSummary(data);
+
+            const currentIndex = periods.findIndex(p => p.id === (data.period?.id ?? nextId));
+            const prevId = currentIndex > 0 ? periods[currentIndex - 1].id : null;
+            if (prevId) {
+                setPrevSummary(await getPerformaSummary(prevId));
+            } else {
+                setPrevSummary(null);
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Gagal memuat ringkasan periode.');
         } finally {
@@ -254,6 +302,14 @@ export default function PerformaPage() {
             const latest = periodList[periodList.length - 1]?.id;
             const data = await getPerformaSummary(latest);
             setSummary(data);
+            
+            const prevId = periodList.length > 1 ? periodList[periodList.length - 2].id : null;
+            if (prevId) {
+                setPrevSummary(await getPerformaSummary(prevId));
+            } else {
+                setPrevSummary(null);
+            }
+
             if (data.period) setPeriodId(data.period.id);
         } catch (err) {
             toast.error(err instanceof Error ? err.message : 'Gagal memuat data terbaru.');
@@ -398,15 +454,26 @@ export default function PerformaPage() {
 
                 {/* 01 — Kapasitas per anak (klik untuk detail) */}
                 {rows.length > 0 ? (
-                    <MitraRanking
-                        rows={rows}
-                        periods={periods}
-                        periodId={periodId}
-                        onPeriodChange={handlePeriodChange}
-                        periodLabel={summary?.period?.label}
-                        onSelect={selectPerson}
-                    />
+                    <>
+                        <MitraRanking
+                            rows={rows}
+                            periods={periods}
+                            periodId={periodId}
+                            onPeriodChange={handlePeriodChange}
+                            periodLabel={summary?.period?.label}
+                            onSelect={selectPerson}
+                        />
+                        <div className="mt-2 text-sm text-gray-600 bg-white border border-gray-200 px-4 py-2 rounded-lg shadow-sm inline-flex items-center gap-2">
+                            <CalendarRange className="h-4 w-4 text-indigo-500" />
+                            Total Hari Kerja Periode Ini: <span className="font-bold text-gray-900">{stats?.totalHk ?? 0} HK</span>
+                        </div>
+                    </>
                 ) : null}
+
+                {/* Turnover & Shifts (Khusus Manager) */}
+                {canManage && prevSummary && (
+                    <TurnoverAndShifts currentSummary={summary} prevSummary={prevSummary} />
+                )}
 
                 {/* 02 — Detail anak terpilih */}
                 <div ref={panelRef} className="scroll-mt-24">

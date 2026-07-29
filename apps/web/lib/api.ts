@@ -101,6 +101,7 @@ export interface RackLotsPaginatedResponse {
 }
 
 export interface PecahBonRequest {
+    trainerOrderRequestId?: string;
     gradeId: string;
     featherGradeId: string;
     colorGradeId: string;
@@ -507,9 +508,39 @@ export interface WorkOrderBoardItem {
     };
 }
 
+export interface MitraWorkCard {
+    id: string;
+    lpNumber: string;
+    internalLotNumber: string;
+    orderDate: string | null;
+    workDate: string;
+    pecahBonDate: string | null;
+    pencabutanStartedAt: string | null;
+    stockId: string | null;
+    workerId: string;
+    workerName: string;
+    location: {
+        code: string;
+        name: string;
+    };
+    weightGram: number;
+    dryWeightGram: number;
+    grade: {
+        shape?: string | null;
+        feather?: string | null;
+        color?: string | null;
+    };
+    lane: WorkLane;
+    flowState: 'NEXT_DAY' | 'IN_PROGRESS' | 'READY_TO_SUBMIT';
+    dryingReadyAt?: string | null;
+    attentionLevel: 'NORMAL' | 'YELLOW' | 'RED';
+    ageDays: number;
+}
+
 export interface WorkOrderBoard {
     workerId: string;
     activeWorkOrder: { id: string; status: string } | null;
+    cards: MitraWorkCard[];
     lanes: {
         NEXT_DAY: WorkOrderBoardItem[];
         IN_PROGRESS: WorkOrderBoardItem[];
@@ -982,10 +1013,10 @@ export async function createWorkOrder(data: {
     }
 }
 
-export async function getWorkOrderBoard(workerId: string): Promise<WorkOrderBoard> {
+export async function getWorkOrderBoard(workerId?: string): Promise<WorkOrderBoard> {
     try {
         const url = new URL(`${API_BASE_URL}/api/work-orders/board`);
-        url.searchParams.set('workerId', workerId);
+        if (workerId) url.searchParams.set('workerId', workerId);
         const response = await fetch(url.toString(), {
             headers: getAuthHeaders({ json: false }),
         });
@@ -2439,6 +2470,28 @@ export interface CapacitySummary {
     totalGram: number;
     totalLp: number;
     avgGramPerLp: number;
+    workingDays?: number;
+}
+
+export interface WorkerPerformanceRow {
+    workerId: string;
+    workerName: string;
+    currentGram: number;
+    prevGram: number;
+    diffGram: number;
+    percentage: number;
+}
+
+export interface WorkerPerformanceResponse {
+    filters: { currentFrom: string; currentTo: string; prevFrom: string; prevTo: string; };
+    turnover: {
+        newActiveCount: number;
+        inactiveCount: number;
+        totalCurrentActive: number;
+        totalPrevActive: number;
+    };
+    topIncreases: WorkerPerformanceRow[];
+    topDecreases: WorkerPerformanceRow[];
 }
 
 export interface WeeklySeries {
@@ -2550,6 +2603,28 @@ export async function getManagerCapacity(params: CapacityParams): Promise<Capaci
         return unwrap<CapacityResponse>(json);
     } catch (error) {
         console.error('Error fetching capacity:', error);
+        throw error;
+    }
+}
+export async function getManagerWorkerPerformance(params: CapacityParams): Promise<WorkerPerformanceResponse> {
+    try {
+        const url = new URL(`${API_BASE_URL}/api/analytics/manager/worker-performance`);
+        url.searchParams.set('from', params.from);
+        url.searchParams.set('to', params.to);
+
+        const response = await fetch(url.toString(), {
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to fetch worker performance: ${response.statusText}`);
+        }
+
+        const json = await response.json();
+        return unwrap<WorkerPerformanceResponse>(json);
+    } catch (error) {
+        console.error('Error fetching worker performance:', error);
         throw error;
     }
 }
@@ -3194,3 +3269,62 @@ export async function importPerformaWorkbook(file: File): Promise<PerformaImport
     }
 }
 
+export async function resetPerformaData(): Promise<{ success: boolean; message: string }> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/audit-dashboard/reset`, {
+            method: 'POST',
+            headers: getAuthHeaders({ json: false }),
+        });
+
+        if (!response.ok) {
+            throw new Error(await readApiError(response, 'Gagal mereset data performa.'));
+        }
+
+        const json = await response.json();
+        return unwrap<{ success: boolean; message: string }>(json);
+    } catch (error) {
+        console.error('Error resetting performa data:', error);
+        throw error;
+    }
+}
+
+export type EvaluationGroupBy = 'mitra' | 'grade' | 'day' | 'week' | 'month';
+
+export interface EvaluationMetricRow {
+    key: string;
+    label: string;
+    lpCount: number;
+    dryInGram: number;
+    mainOutGram: number;
+    byProductGram: number;
+    susutHilangGram: number;
+    rendemenMainPctBps: number;
+    rendemenNetPctBps: number;
+    susutProsesPctBps: number;
+    susutHilangPctBps: number;
+}
+
+export interface EvaluationSummary {
+    overall: EvaluationMetricRow;
+    groups: EvaluationMetricRow[];
+}
+
+export async function getFinishEvaluationSummary(params: {
+    from?: string;
+    to?: string;
+    groupBy: EvaluationGroupBy;
+}): Promise<EvaluationSummary> {
+    try {
+        const url = `${API_BASE_URL}/api/finish/evaluation/summary${buildQueryString(params)}`;
+        const response = await fetch(url, { headers: getAuthHeaders({ json: false }) });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Gagal memuat rekap evaluasi');
+        }
+        const json = await response.json();
+        return unwrap<EvaluationSummary>(json);
+    } catch (error) {
+        console.error('Error fetching evaluation summary:', error);
+        throw error;
+    }
+}

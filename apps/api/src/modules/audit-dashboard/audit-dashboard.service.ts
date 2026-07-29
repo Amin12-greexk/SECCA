@@ -71,6 +71,16 @@ export function aggregateMetrics(metrics: AggregatableMetric[]) {
 export class AuditDashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async resetData() {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.auditDashboardMetric.deleteMany();
+      await tx.auditDashboardPeriod.deleteMany();
+      await tx.auditDashboardImport.deleteMany();
+      await tx.auditDashboardPerson.deleteMany();
+      return { success: true, message: "Data performa berhasil direset." };
+    });
+  }
+
   /* ── Import ─────────────────────────────────────────────────── */
 
   async importWorkbook(params: {

@@ -77,6 +77,14 @@ export class AuditDashboardController {
     });
   }
 
+  @Post("reset")
+  @Roles("manager", "admin")
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Reset semua data dashboard performa" })
+  async resetData() {
+    return this.auditDashboardService.resetData();
+  }
+
   @Get("periods")
   @Public()
   @ApiOperation({ summary: "Daftar periode untuk dashboard performa" })
