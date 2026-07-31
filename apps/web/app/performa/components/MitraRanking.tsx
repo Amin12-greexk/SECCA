@@ -123,18 +123,19 @@ function evaluateMitraWarning(
     const dailyOutputs = historyRows.map((h) => (h.row ? perDayOf(h.row, 'totalBjd') : null));
 
     // Rule 1: 1 bulan (4 periode terakhir) berada di badge merah (<25 g/HK)
+    // Harus benar-benar 4 periode valid berturut-turut — kalau datanya kurang
+    // dari 4 (misalnya Perintis baru 2 minggu), TIDAK boleh dianggap 1 bulan.
     const last4Outputs = dailyOutputs.slice(-4);
     const validLast4 = last4Outputs.filter((v): v is number => v !== null);
     const isRedMonth =
-        validLast4.length > 0 && validLast4.every((val) => val < 25);
+        validLast4.length >= 4 && validLast4.every((val) => val < 25);
 
     // Rule 2: 2 minggu (2 periode terakhir) < 13 g/HK
+    // Harus ada 2 periode valid; 1 periode saja belum cukup untuk warning ini.
     const last2Outputs = dailyOutputs.slice(-2);
     const validLast2 = last2Outputs.filter((v): v is number => v !== null);
     const isUnder13TwoWeeks =
-        validLast2.length >= 2
-            ? validLast2.every((val) => val < 13)
-            : validLast2.length === 1 && validLast2[0] < 13;
+        validLast2.length >= 2 && validLast2.every((val) => val < 13);
 
     const reasons: string[] = [];
     if (isRedMonth) {
