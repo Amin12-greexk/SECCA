@@ -427,7 +427,7 @@ export default function PerformaPage() {
                         <StatTile
                             label="Rendemen"
                             value={fmtBps(stats.weightedRendemenPctBps)}
-                            hint={`SP ${fmtBps(stats.averageSusutProsesPctBps)} · SH ${fmtBps(stats.averageSusutHilangPctBps)}`}
+                            hint={`Rata-rata SP ${fmtBps(stats.averageSusutProsesPctBps)} · SH ${fmtBps(stats.averageSusutHilangPctBps)}`}
                             delta={
                                 currentStat?.deltaRendemenPctBps == null
                                     ? null
