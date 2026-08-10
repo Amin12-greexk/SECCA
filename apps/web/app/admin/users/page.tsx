@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Button } from '@/components/ui/button';
 import {
@@ -58,6 +58,9 @@ function UsersContent() {
   const [productionRooms, setProductionRooms] = useState<ProductionRoom[]>([]);
   const [saving, setSaving] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [userQuery, setUserQuery] = useState('');
+  const [userPage, setUserPage] = useState(1);
   const [editSaving, setEditSaving] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [form, setForm] = useState({
@@ -82,6 +85,30 @@ function UsersContent() {
     useCustomUiAccess: false,
     uiAccessDraft: {} as UiAccessDraft,
   });
+
+  const USERS_PER_PAGE = 10;
+  const filteredUsers = useMemo(() => {
+    const query = userQuery.trim().toLowerCase();
+    if (!query) return users;
+    return users.filter((user) =>
+      [user.name, user.email, user.role, user.productionRoom?.name]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query)),
+    );
+  }, [userQuery, users]);
+  const totalUserPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PER_PAGE));
+  const visibleUsers = filteredUsers.slice(
+    (userPage - 1) * USERS_PER_PAGE,
+    userPage * USERS_PER_PAGE,
+  );
+
+  useEffect(() => {
+    setUserPage(1);
+  }, [userQuery]);
+
+  useEffect(() => {
+    if (userPage > totalUserPages) setUserPage(totalUserPages);
+  }, [totalUserPages, userPage]);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -167,6 +194,7 @@ function UsersContent() {
         useCustomUiAccess: false,
         uiAccessDraft: {},
       });
+      setCreateOpen(false);
       await loadUsers();
       await loadWorkers();
     } catch (error) {
@@ -250,9 +278,26 @@ function UsersContent() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900">Buat Akun</h2>
-            <div className="mt-4 space-y-4">
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Register Akun Baru</h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Buat akun dan hubungkan ke mitra tanpa memenuhi halaman utama.
+                  </p>
+                </div>
+                <Button onClick={() => setCreateOpen(true)}>Tambah Akun</Button>
+              </div>
+            </div>
+            <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Register Akun Baru</DialogTitle>
+                <DialogDescription>
+                  Isi data akun, role, dan relasi mitra bila diperlukan.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Nama</Label>
                 <Input
@@ -423,11 +468,12 @@ function UsersContent() {
                   </div>
                 ) : null}
               </div>
-              <Button className="w-full" onClick={handleCreate} disabled={saving}>
-                {saving ? 'Menyimpan...' : 'Simpan Akun'}
-              </Button>
-            </div>
-          </div>
+                <Button className="w-full" onClick={handleCreate} disabled={saving}>
+                  {saving ? 'Menyimpan...' : 'Simpan Akun'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between">
@@ -435,6 +481,17 @@ function UsersContent() {
               <Button variant="outline" size="sm" onClick={loadUsers} disabled={loading}>
                 Refresh
               </Button>
+            </div>
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <Input
+                className="sm:max-w-xs"
+                placeholder="Cari nama, email, role, atau ruang..."
+                value={userQuery}
+                onChange={(event) => setUserQuery(event.target.value)}
+              />
+              <span className="text-xs text-gray-500">
+                {filteredUsers.length} akun · halaman {userPage} dari {totalUserPages}
+              </span>
             </div>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-sm">
@@ -454,14 +511,14 @@ function UsersContent() {
                         Memuat data...
                       </td>
                     </tr>
-                  ) : users.length === 0 ? (
+                  ) : filteredUsers.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-6 text-center text-gray-500">
-                        Belum ada akun.
+                        {userQuery ? 'Tidak ada akun yang cocok.' : 'Belum ada akun.'}
                       </td>
                     </tr>
                   ) : (
-                    users.map((user) => (
+                    visibleUsers.map((user) => (
                       <tr key={user.id} className="text-gray-700">
                         <td className="py-2 font-medium">{user.name}</td>
                         <td className="py-2">{user.email}</td>
@@ -492,6 +549,31 @@ function UsersContent() {
                   )}
                 </tbody>
               </table>
+            </div>
+            <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3">
+              <span className="text-xs text-gray-500">
+                Menampilkan {filteredUsers.length === 0 ? 0 : (userPage - 1) * USERS_PER_PAGE + 1}
+                {' '}-{' '}
+                {Math.min(userPage * USERS_PER_PAGE, filteredUsers.length)} dari {filteredUsers.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setUserPage((page) => Math.max(1, page - 1))}
+                  disabled={userPage <= 1}
+                >
+                  Sebelumnya
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setUserPage((page) => Math.min(totalUserPages, page + 1))}
+                  disabled={userPage >= totalUserPages}
+                >
+                  Berikutnya
+                </Button>
+              </div>
             </div>
           </div>
         </div>
