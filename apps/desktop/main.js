@@ -2,12 +2,14 @@ const { app, BrowserWindow, ipcMain, Menu } = require('electron');
 const { setupSecurePOSPrinter } = require('electron-secure-pos-printer');
 const path = require('path');
 const fs = require('fs');
+const { normalizeHardwarePayload } = require('./hardware-bridge');
+const serialScale = require('./serial-scale');
 
 let mainWindow;
 let settingsWindow;
 let cachedConfig;
 
-const productionUrl = 'https://secca.tunasestaindonesia.com';
+const productionUrl = process.env.SECCA_PRODUCTION_URL || 'https://secca.tunasestaindonesia.com';
 const developmentUrl = process.env.SECCA_DESKTOP_URL || 'http://localhost:3000';
 const defaultPrintConfig = {};
 const iconPath = path.join(__dirname, 'assets', 'logo-secca.png');
@@ -33,6 +35,9 @@ const readConfig = () => {
   try {
     const raw = fs.readFileSync(getConfigPath(), 'utf8');
     cachedConfig = JSON.parse(raw);
+    if (!cachedConfig.serverUrl || cachedConfig.serverUrl.includes('secca.tunasestaindonesia.com')) {
+      cachedConfig.serverUrl = getRuntimeUrl();
+    }
     return cachedConfig;
   } catch (error) {
     cachedConfig = { serverUrl: getRuntimeUrl(), print: { ...defaultPrintConfig } };
@@ -43,6 +48,14 @@ const readConfig = () => {
 const writeConfig = (nextConfig) => {
   cachedConfig = nextConfig;
   fs.writeFileSync(getConfigPath(), JSON.stringify(nextConfig, null, 2), 'utf8');
+};
+
+const broadcastHardwareEvent = (payload) => {
+  const normalized = normalizeHardwarePayload(payload);
+  BrowserWindow.getAllWindows().forEach((windowInstance) => {
+    windowInstance.webContents.send('secca-hardware-event', normalized);
+  });
+  return normalized;
 };
 
 function createWindow() {
@@ -58,7 +71,9 @@ function createWindow() {
     },
   });
 
-  const targetUrl = app.isPackaged ? productionUrl : (config.serverUrl || developmentUrl);
+  const targetUrl = (config && config.serverUrl && !config.serverUrl.includes('secca.tunasestaindonesia.com'))
+    ? config.serverUrl
+    : getRuntimeUrl();
   mainWindow.loadURL(targetUrl);
 
   // Open DevTools for debugging (remove in production)
@@ -78,8 +93,8 @@ function createSettingsWindow() {
   }
 
   settingsWindow = new BrowserWindow({
-    width: 520,
-    height: 360,
+    width: 600,
+    height: 680,
     resizable: false,
     icon: iconPath,
     webPreferences: {
@@ -113,7 +128,7 @@ function buildMenu() {
   Menu.setApplicationMenu(menu);
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   try {
     setupSecurePOSPrinter(require('electron'));
     logLine('[SECCA] secure POS printer initialized');
@@ -122,6 +137,30 @@ app.whenReady().then(() => {
       error: error?.message || String(error),
     });
   }
+
+  // ── Initialize serial scale ──────────────────────────────────────
+  const config = readConfig();
+  const scaleConfig = config.scale || {};
+  serialScale.init(
+    {
+      portPath: scaleConfig.portPath || '',
+      baudRate: scaleConfig.baudRate || 9600,
+      dataBits: scaleConfig.dataBits || 8,
+      stopBits: scaleConfig.stopBits || 1,
+      parity: scaleConfig.parity || 'none',
+      enabled: scaleConfig.enabled !== false, // enabled by default
+    },
+    (msg, meta) => logLine(msg, meta),
+  );
+
+  // Start scale connection after window is ready
+  try {
+    const result = await serialScale.start();
+    logLine('[SECCA] Serial scale start result', result);
+  } catch (err) {
+    logLine('[SECCA] Serial scale start failed', { error: err?.message || String(err) });
+  }
+
   buildMenu();
   createWindow();
 
@@ -136,6 +175,10 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('before-quit', () => {
+  serialScale.stop();
 });
 
 ipcMain.handle('secca-print', async (event, options) => {
@@ -202,7 +245,9 @@ ipcMain.handle('secca-save-config', async (event, nextConfig) => {
   if (!serverUrl) {
     throw new Error('Server URL wajib diisi.');
   }
-  writeConfig({ serverUrl });
+  // Preserve scale config when saving server config
+  const existing = readConfig();
+  writeConfig({ ...existing, serverUrl });
   if (mainWindow) {
     mainWindow.loadURL(serverUrl);
   }
@@ -221,4 +266,55 @@ ipcMain.handle('secca-log', async (event, payload) => {
     logLine('[SECCA] renderer-log', { message: payload });
   }
   return true;
+});
+
+ipcMain.handle('secca-hardware-payload', async (event, payload) => {
+  const normalized = broadcastHardwareEvent(payload);
+  logLine('[SECCA] hardware payload received', normalized);
+  return normalized;
+});
+
+// ── Serial scale IPC handlers ──────────────────────────────────────
+
+ipcMain.handle('secca-scale-get-status', async () => {
+  return serialScale.getStatus();
+});
+
+ipcMain.handle('secca-scale-list-ports', async () => {
+  const ports = await serialScale.listPorts();
+  return ports.map((p) => ({
+    path: p.path,
+    manufacturer: p.manufacturer || '',
+    vendorId: p.vendorId || '',
+    productId: p.productId || '',
+    friendlyName: p.friendlyName || p.path,
+  }));
+});
+
+ipcMain.handle('secca-scale-update-config', async (event, scaleConfig) => {
+  logLine('[SECCA] Scale config update requested', scaleConfig);
+
+  // Save to disk
+  const config = readConfig();
+  config.scale = {
+    portPath: scaleConfig.portPath || '',
+    baudRate: Number(scaleConfig.baudRate) || 9600,
+    dataBits: Number(scaleConfig.dataBits) || 8,
+    stopBits: Number(scaleConfig.stopBits) || 1,
+    parity: scaleConfig.parity || 'none',
+    enabled: scaleConfig.enabled !== false,
+  };
+  writeConfig(config);
+
+  // Apply to running scale
+  const result = await serialScale.updateConfig(config.scale);
+  logLine('[SECCA] Scale config applied', result);
+  return result;
+});
+
+ipcMain.handle('secca-scale-reconnect', async () => {
+  logLine('[SECCA] Scale manual reconnect requested');
+  const result = await serialScale.start();
+  logLine('[SECCA] Scale reconnect result', result);
+  return result;
 });

@@ -9,14 +9,28 @@ contextBridge.exposeInMainWorld('seccaPrint', {
 });
 console.log('[SECCA Preload] seccaPrint exposed');
 
-// Expose seccaDesktop (for config, logging, settings)
+// Expose seccaDesktop (for config, logging, settings, hardware, scale)
 contextBridge.exposeInMainWorld('seccaDesktop', {
   getConfig: () => ipcRenderer.invoke('secca-get-config'),
   saveConfig: (config) => ipcRenderer.invoke('secca-save-config', config),
   openSettings: () => ipcRenderer.invoke('secca-open-settings'),
   log: (payload) => ipcRenderer.invoke('secca-log', payload),
+  sendHardwarePayload: (payload) => ipcRenderer.invoke('secca-hardware-payload', payload),
+  onHardwareEvent: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('secca-hardware-event', listener);
+    return () => ipcRenderer.removeListener('secca-hardware-event', listener);
+  },
+
+  // ── Serial scale APIs ──────────────────────────────────────────
+  scale: {
+    getStatus: () => ipcRenderer.invoke('secca-scale-get-status'),
+    listPorts: () => ipcRenderer.invoke('secca-scale-list-ports'),
+    updateConfig: (config) => ipcRenderer.invoke('secca-scale-update-config', config),
+    reconnect: () => ipcRenderer.invoke('secca-scale-reconnect'),
+  },
 });
-console.log('[SECCA Preload] seccaDesktop exposed');
+console.log('[SECCA Preload] seccaDesktop exposed (with scale API)');
 
 // Setup electron-secure-pos-printer bridge (for thermal printer)
 // Wrap in try-catch to prevent preload crash if package has issues

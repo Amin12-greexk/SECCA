@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SECCA - Pengaturan Server</title>
+    <title>SECCA - Pengaturan</title>
     <style>
       :root {
         color-scheme: light;
@@ -17,35 +17,49 @@
       .container {
         padding: 24px;
         display: grid;
-        gap: 16px;
+        gap: 20px;
       }
       h1 {
         font-size: 18px;
         margin: 0;
       }
+      h2 {
+        font-size: 15px;
+        margin: 0 0 4px 0;
+        color: #0f766e;
+      }
       p {
         margin: 0;
-        font-size: 14px;
+        font-size: 13px;
         color: #475569;
       }
       label {
         font-size: 13px;
         font-weight: 600;
+        display: block;
+        margin-bottom: 4px;
       }
       input, select {
         width: 100%;
-        padding: 10px 12px;
-        font-size: 14px;
-        border-radius: 10px;
-        border: 1px solid #cbd5f5;
+        padding: 8px 10px;
+        font-size: 13px;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
         background: #fff;
+        box-sizing: border-box;
+      }
+      select {
+        cursor: pointer;
       }
       .grid {
         display: grid;
-        gap: 12px;
+        gap: 10px;
       }
       .grid.two {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .grid.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
       }
       .actions {
         display: flex;
@@ -53,45 +67,150 @@
         gap: 8px;
       }
       button {
-        padding: 8px 14px;
-        border-radius: 10px;
+        padding: 7px 14px;
+        border-radius: 8px;
         border: 1px solid #e2e8f0;
         background: #0f766e;
         color: white;
+        font-size: 13px;
         font-weight: 600;
         cursor: pointer;
+      }
+      button:hover {
+        opacity: 0.9;
       }
       button.secondary {
         background: #fff;
         color: #0f172a;
       }
-      .error {
-        background: #fee2e2;
-        color: #b91c1c;
+      button.danger {
+        background: #dc2626;
+        color: #fff;
+      }
+      .toast {
         padding: 8px 12px;
-        border-radius: 10px;
+        border-radius: 8px;
         font-size: 13px;
         display: none;
       }
-      .success {
+      .toast.error {
+        background: #fee2e2;
+        color: #b91c1c;
+      }
+      .toast.success {
         background: #dcfce7;
         color: #166534;
-        padding: 8px 12px;
-        border-radius: 10px;
-        font-size: 13px;
-        display: none;
       }
       .section {
         border-top: 1px solid #e2e8f0;
         padding-top: 16px;
       }
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .status-badge.connected {
+        background: #dcfce7;
+        color: #166534;
+      }
+      .status-badge.disconnected {
+        background: #fee2e2;
+        color: #b91c1c;
+      }
+      .status-badge.disabled {
+        background: #f1f5f9;
+        color: #64748b;
+      }
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+      .status-dot.green { background: #22c55e; }
+      .status-dot.red { background: #ef4444; }
+      .status-dot.gray { background: #94a3b8; }
+      .weight-display {
+        font-family: "Consolas", "Courier New", monospace;
+        font-size: 28px;
+        font-weight: 700;
+        text-align: center;
+        padding: 12px;
+        background: #f0fdf4;
+        border: 2px solid #86efac;
+        border-radius: 10px;
+        color: #166534;
+        letter-spacing: 1px;
+      }
+      .weight-display.inactive {
+        background: #f1f5f9;
+        border-color: #cbd5e1;
+        color: #94a3b8;
+      }
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .toggle {
+        position: relative;
+        width: 44px;
+        height: 24px;
+        cursor: pointer;
+      }
+      .toggle input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .toggle-slider {
+        position: absolute;
+        inset: 0;
+        background: #cbd5e1;
+        border-radius: 24px;
+        transition: background 0.2s;
+      }
+      .toggle-slider::before {
+        content: '';
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 18px;
+        height: 18px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.2s;
+      }
+      .toggle input:checked + .toggle-slider {
+        background: #0f766e;
+      }
+      .toggle input:checked + .toggle-slider::before {
+        transform: translateX(20px);
+      }
+      .refresh-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        padding: 2px 6px;
+        color: #475569;
+      }
+      .refresh-btn:hover {
+        color: #0f766e;
+      }
     </style>
   </head>
   <body>
     <div class="container">
+      <!-- Server URL Section -->
       <div>
-        <h1>Pengaturan Server SECCA</h1>
-        <p>Masukkan alamat server frontend (contoh: http://192.168.11.246:3000).</p>
+        <h1>Pengaturan SECCA</h1>
+        <p>Konfigurasi server dan perangkat keras.</p>
       </div>
 
       <div>
@@ -99,29 +218,102 @@
         <input id="serverUrl" placeholder="http://192.168.11.246:3000" />
       </div>
 
-      <div id="error" class="error"></div>
-      <div id="success" class="success">Berhasil disimpan. Aplikasi akan memuat ulang.</div>
+      <div id="serverToast" class="toast"></div>
 
       <div class="actions">
         <button class="secondary" id="reload">Reload</button>
-        <button id="save">Simpan</button>
+        <button id="save">Simpan Server</button>
+      </div>
+
+      <!-- Scale Section -->
+      <div class="section">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <h2>⚖️ Timbangan Digital</h2>
+          <div id="scaleStatus"></div>
+        </div>
+
+        <div id="weightDisplay" class="weight-display inactive">— gr</div>
+      </div>
+
+      <div class="toggle-row">
+        <label style="margin:0;">Aktifkan Timbangan</label>
+        <label class="toggle">
+          <input type="checkbox" id="scaleEnabled" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="grid two">
+        <div>
+          <label for="scalePort">
+            Port Serial
+            <button class="refresh-btn" id="refreshPorts" title="Refresh daftar port">🔄</button>
+          </label>
+          <select id="scalePort">
+            <option value="">(Auto-detect)</option>
+          </select>
+        </div>
+        <div>
+          <label for="scaleBaud">Baud Rate</label>
+          <select id="scaleBaud">
+            <option value="2400">2400</option>
+            <option value="4800">4800</option>
+            <option value="9600" selected>9600</option>
+            <option value="19200">19200</option>
+            <option value="38400">38400</option>
+            <option value="57600">57600</option>
+            <option value="115200">115200</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid three">
+        <div>
+          <label for="scaleDataBits">Data Bits</label>
+          <select id="scaleDataBits">
+            <option value="7">7</option>
+            <option value="8" selected>8</option>
+          </select>
+        </div>
+        <div>
+          <label for="scaleStopBits">Stop Bits</label>
+          <select id="scaleStopBits">
+            <option value="1" selected>1</option>
+            <option value="2">2</option>
+          </select>
+        </div>
+        <div>
+          <label for="scaleParity">Parity</label>
+          <select id="scaleParity">
+            <option value="none" selected>None</option>
+            <option value="even">Even</option>
+            <option value="odd">Odd</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="scaleToast" class="toast"></div>
+
+      <div class="actions">
+        <button class="secondary" id="scaleReconnect">Reconnect</button>
+        <button id="scaleSave">Simpan Timbangan</button>
       </div>
     </div>
 
     <script>
+      // ── Server URL ──────────────────────────────────────────────────
       const serverInput = document.getElementById('serverUrl');
-      const errorEl = document.getElementById('error');
-      const successEl = document.getElementById('success');
+      const serverToast = document.getElementById('serverToast');
       const saveBtn = document.getElementById('save');
       const reloadBtn = document.getElementById('reload');
 
-      // Check if seccaDesktop is available (preload script loaded correctly)
+      // Check if seccaDesktop is available
       if (!window.seccaDesktop) {
         document.body.innerHTML = `
           <div class="container">
-            <div class="error" style="display:block;">
-              <strong>Error:</strong> Desktop API tidak tersedia. 
-              Preload script mungkin gagal dimuat. 
+            <div class="toast error" style="display:block;">
+              <strong>Error:</strong> Desktop API tidak tersedia.
+              Preload script mungkin gagal dimuat.
               Silakan restart aplikasi atau periksa log.
             </div>
           </div>
@@ -129,42 +321,166 @@
         throw new Error('seccaDesktop not available');
       }
 
-      const showError = (message) => {
-        errorEl.textContent = message;
-        errorEl.style.display = 'block';
-        successEl.style.display = 'none';
-      };
-
-      const showSuccess = () => {
-        successEl.style.display = 'block';
-        errorEl.style.display = 'none';
-      };
+      function showToast(el, type, message) {
+        el.className = `toast ${type}`;
+        el.textContent = message;
+        el.style.display = 'block';
+        setTimeout(() => { el.style.display = 'none'; }, 4000);
+      }
 
       const loadConfig = async () => {
         try {
           const config = await window.seccaDesktop.getConfig();
           serverInput.value = config?.serverUrl ?? '';
         } catch (error) {
-          showError('Gagal memuat konfigurasi: ' + (error?.message || 'Unknown error'));
+          showToast(serverToast, 'error', 'Gagal memuat konfigurasi: ' + (error?.message || 'Unknown'));
         }
       };
 
       saveBtn.addEventListener('click', async () => {
         try {
-          await window.seccaDesktop.saveConfig({
-            serverUrl: serverInput.value,
-          });
-          showSuccess();
+          await window.seccaDesktop.saveConfig({ serverUrl: serverInput.value });
+          showToast(serverToast, 'success', 'Berhasil disimpan. Aplikasi akan memuat ulang.');
         } catch (error) {
-          showError(error?.message || 'Gagal menyimpan konfigurasi.');
+          showToast(serverToast, 'error', error?.message || 'Gagal menyimpan konfigurasi.');
         }
       });
 
-      reloadBtn.addEventListener('click', () => {
-        window.location.reload();
-      });
+      reloadBtn.addEventListener('click', () => { window.location.reload(); });
 
       loadConfig();
+
+      // ── Scale ───────────────────────────────────────────────────────
+      const scaleEnabled = document.getElementById('scaleEnabled');
+      const scalePort = document.getElementById('scalePort');
+      const scaleBaud = document.getElementById('scaleBaud');
+      const scaleDataBits = document.getElementById('scaleDataBits');
+      const scaleStopBits = document.getElementById('scaleStopBits');
+      const scaleParity = document.getElementById('scaleParity');
+      const scaleStatusEl = document.getElementById('scaleStatus');
+      const weightDisplay = document.getElementById('weightDisplay');
+      const scaleToast = document.getElementById('scaleToast');
+      const scaleReconnect = document.getElementById('scaleReconnect');
+      const scaleSaveBtn = document.getElementById('scaleSave');
+      const refreshPortsBtn = document.getElementById('refreshPorts');
+
+      function renderStatus(status) {
+        if (!status.enabled) {
+          scaleStatusEl.innerHTML = '<span class="status-badge disabled"><span class="status-dot gray"></span>Nonaktif</span>';
+          weightDisplay.className = 'weight-display inactive';
+          weightDisplay.textContent = '— gr';
+          return;
+        }
+        if (status.connected) {
+          scaleStatusEl.innerHTML = `<span class="status-badge connected"><span class="status-dot green"></span>${status.portPath}</span>`;
+          weightDisplay.className = 'weight-display';
+          weightDisplay.textContent = status.lastWeight ? `${status.lastWeight} gr` : '0 gr';
+        } else {
+          scaleStatusEl.innerHTML = '<span class="status-badge disconnected"><span class="status-dot red"></span>Terputus</span>';
+          weightDisplay.className = 'weight-display inactive';
+          weightDisplay.textContent = '— gr';
+        }
+      }
+
+      async function loadPorts() {
+        if (!window.seccaDesktop?.scale) return;
+        try {
+          const ports = await window.seccaDesktop.scale.listPorts();
+          const current = scalePort.value;
+          // Keep auto-detect option
+          scalePort.innerHTML = '<option value="">(Auto-detect)</option>';
+          for (const p of ports) {
+            const opt = document.createElement('option');
+            opt.value = p.path;
+            opt.textContent = p.friendlyName || p.path;
+            if (p.manufacturer) opt.textContent += ` [${p.manufacturer}]`;
+            scalePort.appendChild(opt);
+          }
+          // Restore selection
+          if (current) scalePort.value = current;
+        } catch (err) {
+          console.error('Failed to list ports:', err);
+        }
+      }
+
+      async function loadScaleStatus() {
+        if (!window.seccaDesktop?.scale) {
+          scaleStatusEl.innerHTML = '<span class="status-badge disabled"><span class="status-dot gray"></span>N/A</span>';
+          return;
+        }
+        try {
+          const status = await window.seccaDesktop.scale.getStatus();
+          renderStatus(status);
+
+          // Populate form from config
+          const config = await window.seccaDesktop.getConfig();
+          const sc = config?.scale || {};
+          scaleEnabled.checked = sc.enabled !== false;
+          if (sc.portPath) scalePort.value = sc.portPath;
+          if (sc.baudRate) scaleBaud.value = String(sc.baudRate);
+          if (sc.dataBits) scaleDataBits.value = String(sc.dataBits);
+          if (sc.stopBits) scaleStopBits.value = String(sc.stopBits);
+          if (sc.parity) scaleParity.value = sc.parity;
+        } catch (err) {
+          console.error('Failed to load scale status:', err);
+        }
+      }
+
+      refreshPortsBtn.addEventListener('click', () => loadPorts());
+
+      scaleSaveBtn.addEventListener('click', async () => {
+        try {
+          const result = await window.seccaDesktop.scale.updateConfig({
+            portPath: scalePort.value,
+            baudRate: Number(scaleBaud.value),
+            dataBits: Number(scaleDataBits.value),
+            stopBits: Number(scaleStopBits.value),
+            parity: scaleParity.value,
+            enabled: scaleEnabled.checked,
+          });
+          showToast(scaleToast, 'success', result.connected
+            ? `Terhubung ke ${result.portPath}`
+            : `Konfigurasi disimpan. ${result.reason || 'Belum terhubung.'}`);
+          loadScaleStatus();
+        } catch (err) {
+          showToast(scaleToast, 'error', err?.message || 'Gagal menyimpan konfigurasi timbangan.');
+        }
+      });
+
+      scaleReconnect.addEventListener('click', async () => {
+        try {
+          const result = await window.seccaDesktop.scale.reconnect();
+          showToast(scaleToast, result.connected ? 'success' : 'error',
+            result.connected
+              ? `Terhubung ke ${result.portPath}`
+              : `Gagal terhubung: ${result.reason || 'Unknown'}`);
+          loadScaleStatus();
+        } catch (err) {
+          showToast(scaleToast, 'error', err?.message || 'Gagal reconnect.');
+        }
+      });
+
+      // Listen for live weight updates
+      if (window.seccaDesktop?.onHardwareEvent) {
+        window.seccaDesktop.onHardwareEvent((payload) => {
+          if (payload && payload.type === 'weight' && payload.value) {
+            weightDisplay.className = 'weight-display';
+            weightDisplay.textContent = `${payload.value} gr`;
+          }
+        });
+      }
+
+      // Periodically refresh status
+      setInterval(async () => {
+        if (!window.seccaDesktop?.scale) return;
+        try {
+          const status = await window.seccaDesktop.scale.getStatus();
+          renderStatus(status);
+        } catch (e) { /* ignore */ }
+      }, 5000);
+
+      // Initial load
+      loadPorts().then(() => loadScaleStatus());
     </script>
   </body>
 </html>
