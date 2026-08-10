@@ -6,6 +6,7 @@ import QRCode from "react-qr-code";
 export type PecahBonCardData = {
   pecahBonId: string;
   batchNumber: string;
+  orderedForName?: string;
   pecahBonDate: string | Date;
   gradeCode?: string;
   featherCondition: string;
@@ -56,6 +57,7 @@ html, body {
     visibility: hidden;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    width: 72mm;
   }
   #printable-content {
     visibility: visible;
@@ -92,6 +94,9 @@ html, body {
 
               <div className="font-semibold">Batch No</div>
               <div className="text-right">{entry.batchNumber}</div>
+
+              <div className="font-semibold">Nama Mitra</div>
+              <div className="text-right">{entry.orderedForName || "-"}</div>
 
               <div className="font-semibold">Tgl Pecah</div>
               <div className="text-right">

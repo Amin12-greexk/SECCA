@@ -25,6 +25,8 @@
     "db:batch:normalize": "node scripts/normalize-batch-numbers.js --apply",
     "db:batch:merge:dry": "node scripts/merge-raw-batches.js",
     "db:batch:merge": "node scripts/merge-raw-batches.js --apply",
+    "db:work-items:backfill:dry": "node scripts/backfill-pecah-bon-work-items.js",
+    "db:work-items:backfill": "node scripts/backfill-pecah-bon-work-items.js --apply",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
     "prisma:studio": "prisma studio"

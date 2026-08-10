@@ -41,6 +41,11 @@ export class CreateUserDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsUUID()
+  productionRoomId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()
   useCustomUiAccess?: boolean;

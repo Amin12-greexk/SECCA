@@ -12,6 +12,10 @@ import { NumberingService } from "../../common/numbering/numbering.service";
 import { badRequest, conflict, notFound } from "../../common/errors";
 import { DEFAULT_MOISTURE_BPS, LOCATION_CODES } from "../../common/constants";
 import { roundDryWeight } from "../../common/utils/weight";
+import {
+  getFallbackRack,
+  getProductionRoomRack,
+} from "../../common/inventory/rack-location";
 import { AutoSplitDto } from "./dto/auto-split.dto";
 import { CreateLotDto } from "./dto/create-lot.dto";
 import { MoveLotDto } from "./dto/move-lot.dto";
@@ -310,7 +314,20 @@ export class LotsService {
           location: true,
           grade: true,
           workItem: {
-            select: { id: true, status: true },
+            select: {
+              id: true,
+              status: true,
+              workOrder: {
+                select: {
+                  worker: {
+                    select: {
+                      productionRoomId: true,
+                      trainer: { select: { productionRoomId: true } },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
       });
@@ -323,7 +340,16 @@ export class LotsService {
         return conflict("Lot already completed", { lotNumber: lot.lotNumber });
       }
 
-      const toLocation = await this.getRackLocation(tx, dto.toLocationCode);
+      const productionRoomId =
+        lot.productionRoomId ??
+        lot.workItem?.workOrder.worker.trainer?.productionRoomId ??
+        lot.workItem?.workOrder.worker.productionRoomId ??
+        undefined;
+      const toLocation = await this.getRackLocation(
+        tx,
+        dto.toLocationCode,
+        productionRoomId,
+      );
 
       if (lot.locationId === toLocation.id) {
         return conflict("Lot already in target location", {
@@ -332,20 +358,11 @@ export class LotsService {
         });
       }
 
-      const fromCode = lot.location.code;
-      const manualRackCodes: string[] = [
-        LOCATION_CODES.PRE_SALE,
-        LOCATION_CODES.MITRA_ORDER,
-      ];
-      if (
-        !manualRackCodes.includes(fromCode) ||
-        !manualRackCodes.includes(toLocation.code)
-      ) {
+      if (toLocation.type === RackType.WORKER) {
         return conflict(
-          "Perpindahan manual hanya boleh antara Rak Sementara dan Rak Mitra Order",
+          'Perpindahan ke rak mitra hanya bisa melalui proses assignment',
           {
             lotNumber: lot.lotNumber,
-            fromLocationCode: fromCode,
             toLocationCode: toLocation.code,
           },
         );
@@ -392,6 +409,7 @@ export class LotsService {
   private async getRackLocation(
     tx: Prisma.TransactionClient,
     code: string,
+    productionRoomId?: string,
   ) {
     if (code === LOCATION_CODES.PRE_SALE) {
       return tx.rackLocation.upsert({
@@ -406,27 +424,27 @@ export class LotsService {
     }
 
     if (code === LOCATION_CODES.MITRA_ORDER) {
-      return tx.rackLocation.upsert({
-        where: { code: LOCATION_CODES.MITRA_ORDER },
-        update: { name: "Rak Mitra Order", type: RackType.MITRA_ORDER },
-        create: {
-          code: LOCATION_CODES.MITRA_ORDER,
-          name: "Rak Mitra Order",
-          type: RackType.MITRA_ORDER,
-        },
-      });
+      if (productionRoomId) {
+        const roomRack = await getProductionRoomRack(
+          tx,
+          productionRoomId,
+          RackType.MITRA_ORDER,
+        );
+        if (roomRack) return roomRack;
+      }
+      return getFallbackRack(tx, RackType.MITRA_ORDER);
     }
 
     if (code === LOCATION_CODES.FINISHED) {
-      return tx.rackLocation.upsert({
-        where: { code: LOCATION_CODES.FINISHED },
-        update: { name: "Rak Finished", type: RackType.FINISHED },
-        create: {
-          code: LOCATION_CODES.FINISHED,
-          name: "Rak Finished",
-          type: RackType.FINISHED,
-        },
-      });
+      if (productionRoomId) {
+        const roomRack = await getProductionRoomRack(
+          tx,
+          productionRoomId,
+          RackType.FINISHED,
+        );
+        if (roomRack) return roomRack;
+      }
+      return getFallbackRack(tx, RackType.FINISHED);
     }
 
     return badRequest("Unknown location code", { code });

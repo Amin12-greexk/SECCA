@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiParam, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../auth/roles.decorator";
 import { AssignFromMitraOrderDto } from "./dto/assign-from-mitra-order.dto";
 import { CreateWorkOrderDto } from "./dto/create-work-order.dto";
+import { CancelWorkOrderDto } from "./dto/cancel-work-order.dto";
 import { WorkOrdersService } from "./work-orders.service";
 
 @ApiTags("work-orders")
@@ -24,8 +25,11 @@ export class WorkOrdersController {
   }
 
   @Get("board")
-  board(@Query("workerId") workerId: string) {
-    return this.workOrdersService.board(workerId);
+  board(
+    @Query("workerId") workerId?: string,
+    @Query("trainerId") trainerId?: string,
+  ) {
+    return this.workOrdersService.board(workerId, trainerId);
   }
 
   @Post(":id/close")
@@ -33,5 +37,12 @@ export class WorkOrdersController {
   @Roles("manager", "baku", "koreksi")
   close(@Param("id") id: string) {
     return this.workOrdersService.close(id);
+  }
+
+  @Post(":id/cancel")
+  @ApiParam({ name: "id" })
+  @Roles("trainer", "manager")
+  cancelOrder(@Param("id") id: string, @Body() dto: CancelWorkOrderDto) {
+    return this.workOrdersService.cancelOrder(id, dto);
   }
 }

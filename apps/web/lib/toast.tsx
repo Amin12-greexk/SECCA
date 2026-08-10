@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 
 interface Toast {
     id: string;
@@ -47,12 +47,17 @@ export function useToast() {
         throw new Error('useToast must be used within ToastProvider');
     }
 
-    return {
-        success: (message: string) => context.addToast(message, 'success'),
-        error: (message: string) => context.addToast(message, 'error'),
-        warning: (message: string) => context.addToast(message, 'warning'),
-        info: (message: string) => context.addToast(message, 'info'),
-    };
+    const { addToast } = context;
+
+    return useMemo(
+        () => ({
+            success: (message: string) => addToast(message, 'success'),
+            error: (message: string) => addToast(message, 'error'),
+            warning: (message: string) => addToast(message, 'warning'),
+            info: (message: string) => addToast(message, 'info'),
+        }),
+        [addToast],
+    );
 }
 
 function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: string) => void }) {

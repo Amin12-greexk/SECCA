@@ -14,6 +14,14 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { useAuth } from '@/lib/auth/AuthContext';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/lib/toast';
 import {
     createTrainerBulkOrderRequest,
@@ -36,10 +44,17 @@ function WorkerStatusBadge({
     isOrderEligible: boolean;
 }) {
     if (hasActiveWorkOrder) {
+        if (isOrderEligible) {
+            return (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                    <LoaderCircle className="h-3.5 w-3.5 animate-spin text-amber-600" />
+                    Cabut Bulu (+1 Antrian)
+                </span>
+            );
+        }
         return (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                Sedang Produksi
+            <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
+                Maksimal (2 Order)
             </span>
         );
     }
@@ -54,13 +69,45 @@ function WorkerStatusBadge({
 
     return (
         <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-600">
-            Menunggu
+            Maksimal (2 Order)
         </span>
+    );
+}
+
+function TrainerOrderStatus({ worker }: { worker: TrainerWorkerOrderCandidate }) {
+    const order = worker.trainerOrder;
+
+    if (!order) return <span className="text-xs text-gray-400">Belum ada</span>;
+
+    const isAllocated = order.assignedLots.length > 0;
+    const isFulfilled = order.status === 'FULFILLED';
+
+    return (
+        <div className="space-y-1 text-xs">
+            <p className="font-medium text-gray-900">{order.orderedGram.toLocaleString('id-ID')} gr</p>
+            <span
+                className={`inline-flex rounded-full border px-2 py-0.5 font-medium ${
+                    isFulfilled
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : isAllocated
+                            ? 'border-blue-200 bg-blue-50 text-blue-700'
+                            : 'border-amber-200 bg-amber-50 text-amber-700'
+                }`}
+            >
+                {isFulfilled ? 'Sudah dialokasikan' : isAllocated ? 'Sebagian dialokasikan' : 'Menunggu LP'}
+            </span>
+            {isAllocated && (
+                <p className="font-mono text-[11px] text-gray-600">
+                    LP: {order.assignedLots.map((lot) => lot.lpNumber).join(', ')}
+                </p>
+            )}
+        </div>
     );
 }
 
 function TrainerOrdersContent() {
     const toast = useToast();
+    const { user } = useAuth();
     const [workers, setWorkers] = useState<TrainerWorkerOrderCandidate[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -79,7 +126,12 @@ function TrainerOrdersContent() {
         }
 
         try {
-            const data = await getTrainerOrderWorkers();
+            const isTrainer = user?.role === 'trainer';
+            const params = {
+                includeUnassigned: !isTrainer,
+                trainerId: isTrainer ? user?.id : undefined,
+            };
+            const data = await getTrainerOrderWorkers(params);
             setWorkers(data);
             setSelectedWorkerIds((prev) =>
                 prev.filter((workerId) => data.some((worker) => worker.id === workerId))

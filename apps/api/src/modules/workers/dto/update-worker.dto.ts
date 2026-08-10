@@ -41,4 +41,13 @@ export class UpdateWorkerDto {
   @IsOptional()
   @IsUUID()
   trainerId?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  productionRoomId?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  isMiniplant?: boolean;
 }

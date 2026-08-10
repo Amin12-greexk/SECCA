@@ -45,6 +45,11 @@ export class UpdateUserDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsUUID()
+  productionRoomId?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()
   useCustomUiAccess?: boolean;

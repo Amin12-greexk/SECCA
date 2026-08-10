@@ -66,7 +66,7 @@ export const UI_ACCESS_MODULES: UiAccessModuleDefinition[] = [
     {
         key: 'mitra',
         label: 'Board Mitra',
-        description: 'Board pengerjaan mitra.',
+        description: 'Kartu LP pencabutan mitra.',
         levels: [
             { level: 1, label: 'Board Mitra', description: 'Lihat board kerja mitra.' },
         ],
@@ -82,12 +82,12 @@ export const UI_ACCESS_MODULES: UiAccessModuleDefinition[] = [
     },
     {
         key: 'koreksi',
-        label: 'Koreksi',
-        description: 'Menu koreksi, barang jadi, dan riwayat koreksi.',
+        label: 'Setoran',
+        description: 'Menu setoran, barang jadi, dan riwayat setoran.',
         levels: [
-            { level: 1, label: 'Data Koreksi', description: 'Akses input koreksi dan setoran.' },
+            { level: 1, label: 'Setoran', description: 'Akses input setoran dan pencatatan hasil.' },
             { level: 2, label: 'Barang Jadi', description: 'Kelola master barang jadi dan by product.' },
-            { level: 3, label: 'Riwayat Koreksi', description: 'Lihat riwayat koreksi dan barang jadi.' },
+            { level: 3, label: 'Riwayat Setoran', description: 'Lihat riwayat setoran dan barang jadi.' },
         ],
     },
     {

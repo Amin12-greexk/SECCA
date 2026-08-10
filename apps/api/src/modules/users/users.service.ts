@@ -41,6 +41,10 @@ export class UsersService {
       email: true,
       role: true,
       workerId: true,
+      productionRoomId: true,
+      productionRoom: {
+        select: { id: true, code: true, name: true, type: true },
+      },
       useCustomUiAccess: true,
       createdAt: true,
       uiAccesses: {
@@ -101,6 +105,7 @@ export class UsersService {
         role: dto.role,
         passwordHash: this.hashPassword(dto.password),
         workerId: dto.workerId ?? null,
+        productionRoomId: dto.productionRoomId ?? null,
         useCustomUiAccess: dto.useCustomUiAccess ?? false,
         uiAccesses: normalizedUiAccesses
           ? {
@@ -176,6 +181,13 @@ export class UsersService {
         data.worker = { connect: { id: dto.workerId } };
       } else {
         data.worker = { disconnect: true };
+      }
+    }
+    if (dto.productionRoomId !== undefined) {
+      if (dto.productionRoomId) {
+        data.productionRoom = { connect: { id: dto.productionRoomId } };
+      } else {
+        data.productionRoom = { disconnect: true };
       }
     }
 

@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsDateString, IsNotEmpty } from "class-validator";
+import { IsDateString, IsNotEmpty, IsOptional, IsString } from "class-validator";
 
 export class CapacityQueryDto {
     @ApiProperty({ example: "2026-01-01" })
@@ -11,4 +11,9 @@ export class CapacityQueryDto {
     @IsDateString()
     @IsNotEmpty()
     to: string;
+
+    @ApiProperty({ required: false, description: "ALL, FACTORY_ONLY, MINIPLANT_ONLY, or specific productionRoomId" })
+    @IsString()
+    @IsOptional()
+    scope?: string;
 }

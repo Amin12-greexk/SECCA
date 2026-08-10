@@ -12,6 +12,13 @@ describe("AnalyticsService", () => {
       pecahBonEntry: {
         findMany: findManyMock,
       },
+      finishReceipt: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      workOrderItem: {
+        groupBy: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+      },
     } as unknown as PrismaService;
 
     service = new AnalyticsService(prisma);

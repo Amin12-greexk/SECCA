@@ -10,8 +10,13 @@ import {
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
+import { WorkOrderAssignmentService } from "../work-orders/work-order-assignment.service";
 import { badRequest, conflict, notFound, unprocessable } from "../../common/errors";
-import { LOCATION_CODES, workerRackCode } from "../../common/constants";
+import { LOCATION_CODES } from "../../common/constants";
+import {
+  getWorkerFinishedRack,
+  getWorkerOrderRack,
+} from "../../common/inventory/rack-location";
 import {
   calcRendemenMainBps,
   calcRendemenNetBps,
@@ -30,7 +35,46 @@ export class FinishService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly movementService: InventoryMovementService,
+    private readonly assignmentService: WorkOrderAssignmentService,
   ) {}
+
+  private async assignFulfilledTrainerLotForSetoran(lot: {
+    id: string;
+    wetWeightGram: number;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const allocationLines = await tx.mitraOrderRequestLine.findMany({
+        where: {
+          weightGram: lot.wetWeightGram,
+          orderRequest: {
+            status: "FULFILLED",
+            workerId: { not: null },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+        include: {
+          workItems: { select: { id: true } },
+          orderRequest: { select: { workerId: true } },
+        },
+      });
+      const allocationLine = allocationLines.find(
+        (line) => line.workItems.length < line.lpCount && line.orderRequest.workerId,
+      );
+
+      if (!allocationLine || !allocationLine.orderRequest.workerId) {
+        return null;
+      }
+
+      return this.assignmentService.assignLot(tx, {
+        lotId: lot.id,
+        workerId: allocationLine.orderRequest.workerId,
+        lane: WorkLane.READY_TO_SUBMIT,
+        startedAt: new Date(),
+        mitraOrderRequestLineId: allocationLine.id,
+        note: "Automatic assignment from fulfilled trainer order at finish",
+      });
+    });
+  }
 
   private deriveFlowState(input: {
     status: WorkOrderItemStatus;
@@ -245,6 +289,8 @@ export class FinishService {
       });
     }
 
+    const baseRate = baseTariff.rateRpPerGram;
+
     let featherRate = 0;
     if (lot.featherGradeId) {
       const featherTariff = await tx.gradeTariff.findFirst({
@@ -275,7 +321,62 @@ export class FinishService {
       colorRate = colorTariff?.rateRpPerGram ?? 0;
     }
 
-    return baseTariff.rateRpPerGram + featherRate + colorRate;
+    return baseRate + featherRate + colorRate;
+  }
+
+  private async calculatePayrollAmount(
+    tx: Prisma.TransactionClient,
+    input: {
+      lot: { gradeId: string; featherGradeId: string | null; colorGradeId: string | null };
+      returnedAt: Date;
+      wetWeightGram: number;
+      dryInGram: number;
+      mainOutWeightGram: number;
+      byProductWeightGram: number;
+      resultGrades: Array<{ resultGradeTypeId: string; weightGram: number }>;
+    },
+  ) {
+    const rateRpPerGram = await this.resolveRateRpPerGram(tx, input.lot, input.returnedAt);
+    const rawCalcBaseSetting = await tx.systemSetting.findUnique({
+      where: { key: "RAW_MATERIAL_PAYROLL_CALC_BASE" },
+    });
+    const rawWeightGram =
+      rawCalcBaseSetting?.value === "DRY" ? input.dryInGram : input.wetWeightGram;
+    const rawMaterialCostRp = Math.round(rawWeightGram * rateRpPerGram);
+
+    let totalOutputValueRp = 0;
+    let hasMissingResultGradeTariff = false;
+    for (const item of input.resultGrades) {
+      const tariff = await tx.resultGradeTariff.findFirst({
+        where: {
+          resultGradeTypeId: item.resultGradeTypeId,
+          effectiveFrom: { lte: input.returnedAt },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gt: input.returnedAt } }],
+        },
+        orderBy: { effectiveFrom: "desc" },
+      });
+      if (!tariff) {
+        hasMissingResultGradeTariff = true;
+        continue;
+      }
+      totalOutputValueRp += Math.round(item.weightGram * tariff.rateRpPerGram);
+    }
+
+    const legacyPayroll = this.calcPayroll(
+      rateRpPerGram,
+      input.mainOutWeightGram,
+      input.byProductWeightGram,
+    );
+    const useLegacyPayroll =
+      input.resultGrades.length === 0 || hasMissingResultGradeTariff || totalOutputValueRp === 0;
+
+    return {
+      ...legacyPayroll,
+      rateRpPerGram,
+      amountRp: useLegacyPayroll
+        ? legacyPayroll.amountRp
+        : Math.max(0, totalOutputValueRp - rawMaterialCostRp),
+    };
   }
 
   async findWorkItemByLpCode(lpCode: string) {
@@ -284,7 +385,7 @@ export class FinishService {
       return badRequest("Nomor LP wajib diisi");
     }
 
-    const lot = await this.prisma.productionLot.findFirst({
+    let lot = await this.prisma.productionLot.findFirst({
       where: {
         OR: [
           { externalId: normalizedCode },
@@ -313,12 +414,38 @@ export class FinishService {
       return notFound("LP tidak ditemukan", { lpCode: normalizedCode });
     }
 
-    const workItem = lot.workItem;
+    let workItem = lot.workItem;
     if (!workItem) {
-      return conflict("LP belum di-assign ke work order", {
-        lpCode: normalizedCode,
-        lotId: lot.id,
+      const autoAssigned = await this.assignFulfilledTrainerLotForSetoran(lot);
+      if (!autoAssigned) {
+        return conflict("LP belum di-assign ke work order atau order trainer yang sudah dipenuhi", {
+          lpCode: normalizedCode,
+          lotId: lot.id,
+        });
+      }
+
+      lot = await this.prisma.productionLot.findUniqueOrThrow({
+        where: { id: lot.id },
+        include: {
+          grade: true,
+          featherGrade: true,
+          colorGrade: true,
+          location: true,
+          workItem: {
+            include: {
+              finishReceipt: true,
+              workOrder: { include: { worker: true } },
+            },
+          },
+        },
       });
+      workItem = lot.workItem;
+      if (!workItem) {
+        return conflict("Gagal membuat assignment LP untuk setoran", {
+          lpCode: normalizedCode,
+          lotId: lot.id,
+        });
+      }
     }
 
     const dryingStartedAt = workItem.dryingStartedAt ?? workItem.readyAt;
@@ -364,11 +491,7 @@ export class FinishService {
       dryingReadyAt,
       dryCheckedAt: workItem.dryCheckedAt ?? null,
       dryingRemainingMinutes,
-      canSubmit:
-        workItem.status === WorkOrderItemStatus.IN_PROGRESS &&
-        workItem.lane === WorkLane.READY_TO_SUBMIT &&
-        (!dryingReadyAt || Date.now() >= dryingReadyAt.getTime()) &&
-        (!!workItem.dryCheckedAt || !workItem.dryingStartedAt),
+      canSubmit: workItem.status === WorkOrderItemStatus.IN_PROGRESS,
     };
   }
 
@@ -481,6 +604,7 @@ export class FinishService {
         lotNumber: row.workOrderItem.lot.lotNumber,
         workerId: row.workOrderItem.workOrder.workerId,
         workerName: row.workOrderItem.workOrder.worker.name,
+        workerCode: row.workOrderItem.workOrder.worker.code ?? null,
         grade: `${row.workOrderItem.lot.grade.code}/${row.workOrderItem.lot.featherGrade?.code ?? "-"}/${row.workOrderItem.lot.colorGrade?.code ?? "-"}`,
         barangJadi: row.barangJadi
           ? {
@@ -615,18 +739,20 @@ export class FinishService {
         });
       }
 
-      const rateRpPerGram = await this.resolveRateRpPerGram(
-        tx,
-        {
+      const metrics = this.calcMetrics(dryIn, mainOut, byProduct);
+      const payroll = await this.calculatePayrollAmount(tx, {
+        lot: {
           gradeId: receipt.workOrderItem.lot.gradeId,
           featherGradeId: receipt.workOrderItem.lot.featherGradeId,
           colorGradeId: receipt.workOrderItem.lot.colorGradeId,
         },
         returnedAt,
-      );
-
-      const metrics = this.calcMetrics(dryIn, mainOut, byProduct);
-      const payroll = this.calcPayroll(rateRpPerGram, mainOut, byProduct);
+        wetWeightGram: receipt.workOrderItem.lot.wetWeightGram,
+        dryInGram: dryIn,
+        mainOutWeightGram: mainOut,
+        byProductWeightGram: byProduct,
+        resultGrades: resultGradeBreakdown.items,
+      });
 
       const updatedReceipt = await tx.finishReceipt.update({
         where: { id: receipt.id },
@@ -670,14 +796,14 @@ export class FinishService {
         update: {
           workerId: receipt.workOrderItem.workOrder.workerId,
           gradeId: receipt.workOrderItem.lot.gradeId,
-          rateRpPerGram,
+          rateRpPerGram: payroll.rateRpPerGram,
           amountRp: payroll.amountRp,
         },
         create: {
           workOrderItemId: receipt.workOrderItemId,
           workerId: receipt.workOrderItem.workOrder.workerId,
           gradeId: receipt.workOrderItem.lot.gradeId,
-          rateRpPerGram,
+          rateRpPerGram: payroll.rateRpPerGram,
           amountRp: payroll.amountRp,
         },
       });
@@ -712,7 +838,7 @@ export class FinishService {
           byProductCoefficientPercent: Number(
             (payroll.byProductCoefficientBps / 100).toFixed(2),
           ),
-          rateRpPerGram,
+          rateRpPerGram: payroll.rateRpPerGram,
           amountRp: payroll.amountRp,
         },
       };
@@ -760,20 +886,7 @@ export class FinishService {
         );
       }
 
-      const workerLocation = await tx.rackLocation.upsert({
-        where: { workerId },
-        update: {
-          code: workerRackCode(workerId),
-          name: `Rak Mitra - ${receipt.workOrderItem.workOrder.worker.name}`,
-          type: RackType.WORKER,
-        },
-        create: {
-          workerId,
-          code: workerRackCode(workerId),
-          name: `Rak Mitra - ${receipt.workOrderItem.workOrder.worker.name}`,
-          type: RackType.WORKER,
-        },
-      });
+      const orderLocation = await getWorkerOrderRack(tx, workerId);
 
       await tx.payrollEntry.deleteMany({
         where: { workOrderItemId: receipt.workOrderItemId },
@@ -795,15 +908,15 @@ export class FinishService {
         where: { id: receipt.workOrderItem.lotId },
         data: {
           status: LotStatus.IN_PROGRESS,
-          locationId: workerLocation.id,
+          locationId: orderLocation.id,
         },
       });
 
-      if (receipt.workOrderItem.lot.locationId !== workerLocation.id) {
+      if (receipt.workOrderItem.lot.locationId !== orderLocation.id) {
         await this.movementService.record(tx, {
           lotId: receipt.workOrderItem.lotId,
           fromLocationId: receipt.workOrderItem.lot.locationId,
-          toLocationId: workerLocation.id,
+          toLocationId: orderLocation.id,
           movementType: MovementType.MOVE,
           note: "Rollback finish receipt",
         });
@@ -830,7 +943,7 @@ export class FinishService {
         id: receipt.id,
         workOrderItemId: receipt.workOrderItemId,
         restoredToLane: WorkLane.READY_TO_SUBMIT,
-        restoredLocationCode: workerLocation.code,
+        restoredLocationCode: orderLocation.code,
       };
     });
   }
@@ -841,7 +954,8 @@ export class FinishService {
         where: { id: dto.workOrderItemId },
         include: {
           lot: { include: { grade: true, featherGrade: true, colorGrade: true, location: true } },
-          workOrder: { include: { worker: true } },
+          workOrder: { include: { worker: { include: { trainer: true } } } },
+          mitraOrderRequestLine: { include: { orderRequest: { include: { requestedBy: true } } } },
         },
       });
 
@@ -863,11 +977,13 @@ export class FinishService {
         });
       }
 
+      // Auto-move lane to READY_TO_SUBMIT if still in an earlier lane
       if (workItem.lane !== WorkLane.READY_TO_SUBMIT) {
-        return conflict("LP belum siap setor (lane belum READY_TO_SUBMIT)", {
-          workOrderItemId: workItem.id,
-          lane: workItem.lane,
+        await tx.workOrderItem.update({
+          where: { id: workItem.id },
+          data: { lane: WorkLane.READY_TO_SUBMIT },
         });
+        workItem.lane = WorkLane.READY_TO_SUBMIT;
       }
 
       const returnedAt = new Date(dto.returnedAt);
@@ -927,69 +1043,55 @@ export class FinishService {
       const rendemenMainPctBps = calcRendemenMainBps(dryIn, mainOut);
       const rendemenNetPctBps = calcRendemenNetBps(dryIn, mainOut, byProduct);
 
-      const baseTariff = await tx.gradeTariff.findFirst({
-        where: {
-          shapeGradeId: workItem.lot.gradeId,
-          featherGradeId: null,
-          colorGradeId: null,
-          effectiveFrom: { lte: returnedAt },
-          OR: [{ effectiveTo: null }, { effectiveTo: { gt: returnedAt } }],
+      const payroll = await this.calculatePayrollAmount(tx, {
+        lot: {
+          gradeId: workItem.lot.gradeId,
+          featherGradeId: workItem.lot.featherGradeId,
+          colorGradeId: workItem.lot.colorGradeId,
         },
-        orderBy: { effectiveFrom: "desc" },
+        returnedAt,
+        wetWeightGram: workItem.lot.wetWeightGram,
+        dryInGram: dryIn,
+        mainOutWeightGram: mainOut,
+        byProductWeightGram: byProduct,
+        resultGrades: resultGradeBreakdown.items,
       });
 
-      if (!baseTariff) {
-        return unprocessable("Tarif bentuk belum dikonfigurasi", {
-          shapeGradeId: workItem.lot.gradeId,
-          at: returnedAt.toISOString(),
+      const canonicalFinishedLocation = await getWorkerFinishedRack(
+        tx,
+        workItem.workOrder.workerId,
+      );
+      let finishedLocation;
+      if (dto.targetLocationId) {
+        finishedLocation = await tx.rackLocation.findUnique({
+          where: { id: dto.targetLocationId },
         });
+        if (!finishedLocation) {
+          return notFound("Target location not found", {
+            targetLocationId: dto.targetLocationId,
+          });
+        }
+        if (finishedLocation.type !== RackType.FINISHED) {
+          return conflict("Setoran hanya boleh masuk ke rak FINISHED", {
+            targetLocationId: dto.targetLocationId,
+          });
+        }
+        if (
+          canonicalFinishedLocation.productionRoomId &&
+          finishedLocation.productionRoomId !==
+            canonicalFinishedLocation.productionRoomId
+        ) {
+          return conflict(
+            "Rak finished harus berada di ruang produksi trainer mitra",
+            {
+              expectedLocationId: canonicalFinishedLocation.id,
+              targetLocationId: dto.targetLocationId,
+            },
+          );
+        }
+      } else {
+        finishedLocation = canonicalFinishedLocation;
       }
-
-      let featherRate = 0;
-      if (workItem.lot.featherGradeId) {
-        const featherTariff = await tx.gradeTariff.findFirst({
-          where: {
-            shapeGradeId: workItem.lot.gradeId,
-            featherGradeId: workItem.lot.featherGradeId,
-            colorGradeId: null,
-            effectiveFrom: { lte: returnedAt },
-            OR: [{ effectiveTo: null }, { effectiveTo: { gt: returnedAt } }],
-          },
-          orderBy: { effectiveFrom: "desc" },
-        });
-        featherRate = featherTariff?.rateRpPerGram ?? 0;
-      }
-
-      let colorRate = 0;
-      if (workItem.lot.featherGradeId && workItem.lot.colorGradeId) {
-        const colorTariff = await tx.gradeTariff.findFirst({
-          where: {
-            shapeGradeId: workItem.lot.gradeId,
-            featherGradeId: workItem.lot.featherGradeId,
-            colorGradeId: workItem.lot.colorGradeId,
-            effectiveFrom: { lte: returnedAt },
-            OR: [{ effectiveTo: null }, { effectiveTo: { gt: returnedAt } }],
-          },
-          orderBy: { effectiveFrom: "desc" },
-        });
-        colorRate = colorTariff?.rateRpPerGram ?? 0;
-      }
-
-      const rateRpPerGram = baseTariff.rateRpPerGram + featherRate + colorRate;
-      const byProductCoefficientBps = this.getByProductCoefficientBps();
-      // Payroll = main out + by-product berbobot koefisien (default 50%).
-      const payrollWeightedGramBps = mainOut * 10000 + byProduct * byProductCoefficientBps;
-      const payrollBaseGram = Number((payrollWeightedGramBps / 10000).toFixed(2));
-      const amountRp = Math.round((rateRpPerGram * payrollWeightedGramBps) / 10000);
-      const finishedLocation = await tx.rackLocation.upsert({
-        where: { code: LOCATION_CODES.FINISHED },
-        update: { name: "Rak Finished", type: RackType.FINISHED },
-        create: {
-          code: LOCATION_CODES.FINISHED,
-          name: "Rak Finished",
-          type: RackType.FINISHED,
-        },
-      });
 
       await tx.finishReceipt.create({
         data: {
@@ -1018,8 +1120,8 @@ export class FinishService {
           workOrderItemId: workItem.id,
           workerId: workItem.workOrder.workerId,
           gradeId: workItem.lot.gradeId,
-          rateRpPerGram,
-          amountRp,
+          rateRpPerGram: payroll.rateRpPerGram,
+          amountRp: payroll.amountRp,
         },
       });
 
@@ -1085,10 +1187,10 @@ export class FinishService {
         rendemenMainPctBps,
         rendemenNetPctBps,
         payroll: {
-          baseGram: payrollBaseGram,
-          byProductCoefficientPercent: Number((byProductCoefficientBps / 100).toFixed(2)),
-          rateRpPerGram,
-          amountRp,
+          baseGram: mainOut,
+          byProductCoefficientPercent: 50,
+          rateRpPerGram: payroll.rateRpPerGram,
+          amountRp: payroll.amountRp,
         },
       };
     });

@@ -23,5 +23,10 @@
     "prisma:studio": "pnpm --filter api exec prisma studio",
     "seed": "pnpm --filter api db:seed",
     "seed:prod": "node scripts/run-with-env.js apps/api/.env.production \"pnpm --filter api db:seed\""
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@serialport/bindings-cpp"
+    ]
   }
 }

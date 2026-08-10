@@ -21,4 +21,20 @@ export class AnalyticsController {
     getCapacity(@Query() dto: CapacityQueryDto) {
         return this.analyticsService.getCapacity(dto);
     }
+
+    @Get("manager/worker-performance")
+    getWorkerPerformance(@Query() dto: CapacityQueryDto) {
+        return this.analyticsService.getWorkerPerformance(dto);
+    }
+
+    @Get("manager/real-performa")
+    getRealPerforma(@Query() dto: CapacityQueryDto) {
+        return this.analyticsService.getRealPerforma(dto);
+    }
+
+    @Get("trainer/summary")
+    @Roles("trainer", "manager")
+    getTrainerSummary(@Query("trainerId") trainerId?: string) {
+        return this.analyticsService.getTrainerSummary(trainerId);
+    }
 }

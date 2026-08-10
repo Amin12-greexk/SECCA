@@ -1,9 +1,9 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
-import { Prisma } from "@prisma/client";
-import { CreateWorkerDto } from "./dto/create-worker.dto";
-import { UpdateWorkerDto } from "./dto/update-worker.dto";
-import { badRequest, conflict, notFound } from "../../common/errors";
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+import { CreateWorkerDto } from './dto/create-worker.dto';
+import { UpdateWorkerDto } from './dto/update-worker.dto';
+import { badRequest, conflict, notFound } from '../../common/errors';
 
 type WeeklyBucket = {
   weekStart: Date;
@@ -27,11 +27,18 @@ export class WorkersService {
         select: { id: true },
       });
       if (owner) {
-        return conflict("PIN sudah digunakan oleh worker lain", {
+        return conflict('PIN sudah digunakan oleh worker lain', {
           pin: normalizedPin,
         });
       }
     }
+
+    const trainerRoom = dto.trainerId
+      ? await this.prisma.appUser.findUnique({
+          where: { id: dto.trainerId },
+          select: { productionRoomId: true },
+        })
+      : null;
 
     try {
       return await this.prisma.worker.create({
@@ -41,12 +48,15 @@ export class WorkersService {
           pin: normalizedPin,
           capacityGram: dto.capacityGram ?? null,
           trainerId: dto.trainerId ?? null,
+          productionRoomId:
+            trainerRoom?.productionRoomId ?? dto.productionRoomId ?? null,
+          isMiniplant: dto.isMiniplant ?? false,
         },
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === "P2002") {
-          return conflict("PIN sudah digunakan oleh worker lain", {
+        if (error.code === 'P2002') {
+          return conflict('PIN sudah digunakan oleh worker lain', {
             pin: normalizedPin,
           });
         }
@@ -58,21 +68,29 @@ export class WorkersService {
   async update(id: string, dto: UpdateWorkerDto) {
     const worker = await this.prisma.worker.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, trainerId: true, productionRoomId: true },
     });
 
     if (!worker) {
-      return notFound("Worker not found", { workerId: id });
+      return notFound('Worker not found', { workerId: id });
     }
 
-    if (dto.trainerId) {
+    // Resolve the trainer that will be effective after this update. A worker
+    // assigned to a trainer must inherit that trainer's production room.
+    const nextTrainerId =
+      dto.trainerId !== undefined ? dto.trainerId : worker.trainerId;
+    let trainerRoomId: string | null | undefined;
+    if (nextTrainerId) {
       const trainer = await this.prisma.appUser.findUnique({
-        where: { id: dto.trainerId },
-        select: { id: true },
+        where: { id: nextTrainerId },
+        select: { id: true, productionRoomId: true },
       });
       if (!trainer) {
-        return badRequest("Trainer tidak ditemukan", { trainerId: dto.trainerId });
+        return badRequest('Trainer tidak ditemukan', {
+          trainerId: nextTrainerId,
+        });
       }
+      trainerRoomId = trainer.productionRoomId;
     }
 
     const data: {
@@ -81,6 +99,8 @@ export class WorkersService {
       pin?: string | null;
       capacityGram?: number | null;
       trainerId?: string | null;
+      productionRoomId?: string | null;
+      isMiniplant?: boolean;
     } = {};
 
     if (dto.name !== undefined) data.name = dto.name;
@@ -93,7 +113,7 @@ export class WorkersService {
           select: { id: true },
         });
         if (owner && owner.id !== id) {
-          return conflict("PIN sudah digunakan oleh worker lain", {
+          return conflict('PIN sudah digunakan oleh worker lain', {
             pin: normalizedPin,
           });
         }
@@ -102,6 +122,12 @@ export class WorkersService {
     }
     if (dto.capacityGram !== undefined) data.capacityGram = dto.capacityGram;
     if (dto.trainerId !== undefined) data.trainerId = dto.trainerId;
+    if (nextTrainerId) {
+      data.productionRoomId = trainerRoomId ?? null;
+    } else if (dto.productionRoomId !== undefined) {
+      data.productionRoomId = dto.productionRoomId;
+    }
+    if (dto.isMiniplant !== undefined) data.isMiniplant = dto.isMiniplant;
 
     try {
       return await this.prisma.worker.update({
@@ -110,8 +136,8 @@ export class WorkersService {
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === "P2002") {
-          return conflict("PIN sudah digunakan oleh worker lain");
+        if (error.code === 'P2002') {
+          return conflict('PIN sudah digunakan oleh worker lain');
         }
       }
       throw error;
@@ -120,13 +146,18 @@ export class WorkersService {
 
   findAll() {
     return this.prisma.worker.findMany({
-      orderBy: { createdAt: "asc" },
+      include: {
+        rackLocation: true,
+        productionRoom: true,
+        trainer: { select: { id: true, name: true, email: true } },
+      },
+      orderBy: { createdAt: 'asc' },
     });
   }
 
   async getWeeklyStats(workerId: string, weeks = 6) {
     if (!workerId) {
-      return badRequest("workerId is required");
+      return badRequest('workerId is required');
     }
 
     const worker = await this.prisma.worker.findUnique({
@@ -135,10 +166,13 @@ export class WorkersService {
     });
 
     if (!worker) {
-      return notFound("Worker not found", { workerId });
+      return notFound('Worker not found', { workerId });
     }
 
-    const safeWeeks = Math.max(1, Math.min(12, Number.isFinite(weeks) ? weeks : 6));
+    const safeWeeks = Math.max(
+      1,
+      Math.min(12, Number.isFinite(weeks) ? weeks : 6),
+    );
     const now = new Date();
     const startOfWeek = (date: Date) => {
       const start = new Date(date);
@@ -168,21 +202,23 @@ export class WorkersService {
       },
     });
 
-    const buckets: WeeklyBucket[] = Array.from({ length: safeWeeks }).map((_, index) => {
-      const weekStart = new Date(rangeStart);
-      weekStart.setDate(rangeStart.getDate() + index * 7);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 7);
-      return {
-        weekStart,
-        weekEnd,
-        totalDryInGram: 0,
-        totalMainOutGram: 0,
-        totalByProductGram: 0,
-        totalAmountRp: 0,
-        items: 0,
-      };
-    });
+    const buckets: WeeklyBucket[] = Array.from({ length: safeWeeks }).map(
+      (_, index) => {
+        const weekStart = new Date(rangeStart);
+        weekStart.setDate(rangeStart.getDate() + index * 7);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 7);
+        return {
+          weekStart,
+          weekEnd,
+          totalDryInGram: 0,
+          totalMainOutGram: 0,
+          totalByProductGram: 0,
+          totalAmountRp: 0,
+          items: 0,
+        };
+      },
+    );
 
     const weekMs = 7 * 24 * 60 * 60 * 1000;
     receipts.forEach((receipt) => {
@@ -204,6 +240,6 @@ export class WorkersService {
   }
 
   private normalizePin(pin: string) {
-    return pin.replace(/\D/g, "");
+    return pin.replace(/\D/g, '');
   }
 }

@@ -40,4 +40,13 @@ export class CreateWorkerDto {
   @IsOptional()
   @IsUUID()
   trainerId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  productionRoomId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  isMiniplant?: boolean;
 }

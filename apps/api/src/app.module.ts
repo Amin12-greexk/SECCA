@@ -23,9 +23,13 @@ import { MitraOrdersModule } from "./modules/mitra-orders/mitra-orders.module";
 import { AttendanceModule } from "./modules/attendance/attendance.module";
 import { BarangJadiModule } from "./modules/barang-jadi/barang-jadi.module";
 import { AuditDashboardModule } from "./modules/audit-dashboard/audit-dashboard.module";
+import { ReportsModule } from "./modules/reports/reports.module";
+
+import { ProductionRoomsModule } from "./modules/production-rooms/production-rooms.module";
 
 @Module({
   imports: [
+    ProductionRoomsModule,
     AuthModule,
     PrismaModule,
     CommonModule,
@@ -48,6 +52,7 @@ import { AuditDashboardModule } from "./modules/audit-dashboard/audit-dashboard.
     AttendanceModule,
     BarangJadiModule,
     AuditDashboardModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

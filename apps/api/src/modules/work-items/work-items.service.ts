@@ -1,21 +1,18 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable } from '@nestjs/common';
 import {
   LotStatus,
   MovementType,
-  RackType,
   WorkLane,
   WorkOrderItemStatus,
   WorkOrderStatus,
-} from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
-import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
-import { badRequest, conflict, notFound } from "../../common/errors";
-import { LOCATION_CODES } from "../../common/constants";
+} from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { InventoryMovementService } from '../../common/inventory/inventory-movement.service';
+import { badRequest, conflict, notFound } from '../../common/errors';
+import { getWorkerOrderRack } from '../../common/inventory/rack-location';
 
 @Injectable()
 export class WorkItemsService {
-  private static readonly DRYING_HOURS = 10;
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly movementService: InventoryMovementService,
@@ -27,15 +24,17 @@ export class WorkItemsService {
     });
 
     if (!item) {
-      return notFound("Work order item not found", { workOrderItemId: itemId });
+      return notFound('Work order item not found', { workOrderItemId: itemId });
     }
 
     if (item.status !== WorkOrderItemStatus.IN_PROGRESS) {
-      return conflict("Work order item tidak aktif", { workOrderItemId: itemId });
+      return conflict('Work order item tidak aktif', {
+        workOrderItemId: itemId,
+      });
     }
 
     if (item.lane !== WorkLane.NEXT_DAY) {
-      return conflict("Item tidak berada di lane NEXT_DAY", {
+      return conflict('Item tidak berada di lane NEXT_DAY', {
         workOrderItemId: itemId,
         lane: item.lane,
       });
@@ -56,39 +55,31 @@ export class WorkItemsService {
     });
 
     if (!item) {
-      return notFound("Work order item not found", { workOrderItemId: itemId });
+      return notFound('Work order item not found', { workOrderItemId: itemId });
     }
 
     if (item.status !== WorkOrderItemStatus.IN_PROGRESS) {
-      return conflict("Work order item tidak aktif", { workOrderItemId: itemId });
+      return conflict('Work order item tidak aktif', {
+        workOrderItemId: itemId,
+      });
     }
 
     if (item.lane !== WorkLane.IN_PROGRESS) {
-      return conflict("Item tidak berada di lane IN_PROGRESS", {
+      return conflict('Item tidak berada di lane IN_PROGRESS', {
         workOrderItemId: itemId,
         lane: item.lane,
       });
     }
 
-    if (item.dryingStartedAt) {
-      return conflict("Item sudah masuk proses pengeringan", {
-        workOrderItemId: itemId,
-        dryingStartedAt: item.dryingStartedAt,
-      });
-    }
-
     const now = new Date();
-    const dryingReadyAt = new Date(
-      now.getTime() + WorkItemsService.DRYING_HOURS * 60 * 60 * 1000,
-    );
 
     return this.prisma.workOrderItem.update({
       where: { id: itemId },
       data: {
-        lane: WorkLane.IN_PROGRESS,
+        lane: WorkLane.READY_TO_SUBMIT,
         readyAt: now,
-        dryingStartedAt: now,
-        dryingReadyAt,
+        dryingStartedAt: null,
+        dryingReadyAt: null,
         dryCheckedAt: null,
       },
     });
@@ -100,21 +91,23 @@ export class WorkItemsService {
     });
 
     if (!item) {
-      return notFound("Work order item not found", { workOrderItemId: itemId });
+      return notFound('Work order item not found', { workOrderItemId: itemId });
     }
 
     if (item.status !== WorkOrderItemStatus.IN_PROGRESS) {
-      return conflict("Work order item tidak aktif", { workOrderItemId: itemId });
+      return conflict('Work order item tidak aktif', {
+        workOrderItemId: itemId,
+      });
     }
 
     if (!item.dryingStartedAt || !item.dryingReadyAt) {
-      return conflict("Item belum masuk proses pengeringan", {
+      return conflict('Item belum masuk proses pengeringan', {
         workOrderItemId: itemId,
       });
     }
 
     if (item.dryCheckedAt) {
-      return conflict("Koreksi kering sudah selesai", {
+      return conflict('Koreksi kering sudah selesai', {
         workOrderItemId: itemId,
         dryCheckedAt: item.dryCheckedAt,
       });
@@ -125,7 +118,7 @@ export class WorkItemsService {
       const remainingMinutes = Math.ceil(
         (item.dryingReadyAt.getTime() - now.getTime()) / (60 * 1000),
       );
-      return conflict("Waktu pengeringan belum terpenuhi", {
+      return conflict('Waktu pengeringan belum terpenuhi', {
         workOrderItemId: itemId,
         dryingReadyAt: item.dryingReadyAt,
         remainingMinutes,
@@ -148,43 +141,58 @@ export class WorkItemsService {
         include: {
           lot: { include: { location: true } },
           workOrder: true,
+          finishReceipt: true,
         },
       });
 
       if (!item) {
-        return notFound("Work order item not found", { workOrderItemId: itemId });
+        return notFound('Work order item not found', {
+          workOrderItemId: itemId,
+        });
       }
 
       if (item.status !== WorkOrderItemStatus.IN_PROGRESS) {
-        return conflict("Work order item tidak aktif", { workOrderItemId: itemId });
+        return conflict('Work order item tidak aktif', {
+          workOrderItemId: itemId,
+        });
       }
 
-      if (item.lane !== WorkLane.NEXT_DAY) {
-        return conflict("Item tidak berada di lane NEXT_DAY", {
+      // Check if item has finish receipt
+      if (item.finishReceipt) {
+        return conflict('Item sudah memiliki setoran, tidak bisa di-cancel', {
           workOrderItemId: itemId,
-          lane: item.lane,
+        });
+      }
+
+      // Check 2-day age limit
+      const now = new Date();
+      const createdAt = new Date(item.createdAt);
+      const ageDays = Math.floor(
+        (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      if (ageDays > 2) {
+        return conflict('Order sudah lebih dari 2 hari, tidak bisa di-cancel', {
+          workOrderItemId: itemId,
+          ageDays,
+          createdAt: item.createdAt,
         });
       }
 
       if (!item.lot.location) {
-        return badRequest("Lot location tidak tersedia", { lotId: item.lotId });
+        return badRequest('Lot location tidak tersedia', { lotId: item.lotId });
       }
 
-      const preSaleLocation = await tx.rackLocation.upsert({
-        where: { code: LOCATION_CODES.PRE_SALE },
-        update: { name: "Rak Sementara", type: RackType.PRE_SALE },
-        create: {
-          code: LOCATION_CODES.PRE_SALE,
-          name: "Rak Sementara",
-          type: RackType.PRE_SALE,
-        },
-      });
+      // Return to the canonical order rack for the worker's trainer room.
+      const mitraOrderLocation = await getWorkerOrderRack(
+        tx,
+        item.workOrder.workerId,
+      );
 
       await tx.productionLot.update({
         where: { id: item.lotId },
         data: {
           status: LotStatus.AVAILABLE,
-          locationId: preSaleLocation.id,
+          locationId: mitraOrderLocation.id,
         },
       });
 
@@ -199,9 +207,9 @@ export class WorkItemsService {
       await this.movementService.record(tx, {
         lotId: item.lotId,
         fromLocationId: item.lot.locationId,
-        toLocationId: preSaleLocation.id,
+        toLocationId: mitraOrderLocation.id,
         movementType: MovementType.MOVE,
-        note: "Cancel work item",
+        note: 'Cancel work item - return to mitra order rack',
       });
 
       const remaining = await tx.workOrderItem.count({

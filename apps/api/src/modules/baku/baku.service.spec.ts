@@ -4,6 +4,7 @@ import { BakuService } from "./baku.service";
 import { NumberingService } from "../../common/numbering/numbering.service";
 import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { WorkOrderAssignmentService } from "../work-orders/work-order-assignment.service";
 
 jest.setTimeout(30000);
 
@@ -18,6 +19,7 @@ describe("BakuService", () => {
         PrismaService,
         NumberingService,
         InventoryMovementService,
+        WorkOrderAssignmentService,
         BakuService,
       ],
     }).compile();
@@ -32,10 +34,11 @@ describe("BakuService", () => {
   });
 
   beforeEach(async () => {
+    await prisma.lotSource.deleteMany();
+    await prisma.pecahBonEntry.deleteMany();
+    await prisma.rawBatchGradeStock.deleteMany();
     await prisma.rawBatch.deleteMany();
-    await prisma.numberSequence.deleteMany({
-      where: { key: { startsWith: "RAW:" } },
-    });
+    await prisma.numberSequence.deleteMany();
     await prisma.supplier.deleteMany();
 
     const supplier = await prisma.supplier.create({
@@ -53,6 +56,7 @@ describe("BakuService", () => {
       supplierId,
       featherCondition: "A",
       wetWeightGram: 12000,
+      invoiceWeightGram: 12000,
       moisturePercent: 17.5,
     });
 
@@ -68,6 +72,7 @@ describe("BakuService", () => {
       supplierId,
       featherCondition: "A",
       wetWeightGram: 1000,
+      invoiceWeightGram: 1000,
       moisturePercent: 12.5,
     };
 
@@ -96,6 +101,7 @@ describe("BakuService", () => {
       supplierId,
       featherCondition: "SP",
       wetWeightGram: 1500,
+      invoiceWeightGram: 1500,
       moisturePercent: 12.5,
     });
 
@@ -103,6 +109,7 @@ describe("BakuService", () => {
       supplierId,
       featherCondition: "SP",
       wetWeightGram: 1750,
+      invoiceWeightGram: 1750,
       moisturePercent: 12.5,
     });
 

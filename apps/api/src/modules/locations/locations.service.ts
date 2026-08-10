@@ -1,10 +1,15 @@
 import { Injectable } from "@nestjs/common";
 import { Prisma, RackType } from "@prisma/client";
 import { conflict, badRequest, notFound } from "../../common/errors";
-import { LOCATION_CODES, workerRackCode } from "../../common/constants";
+import { LOCATION_CODES } from "../../common/constants";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateLocationDto } from "./dto/create-location.dto";
+import { UpdateLocationDto } from "./dto/update-location.dto";
 import { FindLocationLotsQueryDto } from "./dto/find-location-lots-query.dto";
+import {
+  getFallbackRack,
+  getProductionRoomRack,
+} from "../../common/inventory/rack-location";
 
 @Injectable()
 export class LocationsService {
@@ -27,6 +32,33 @@ export class LocationsService {
       return badRequest("workerId is required for WORKER locations");
     }
 
+    if (dto.type === RackType.WORKER) {
+      return badRequest(
+        "Rak per mitra sudah tidak dibuat manual; gunakan ruang produksi dan rak order/finished.",
+      );
+    }
+
+    if (
+      (dto.type === RackType.MITRA_ORDER || dto.type === RackType.FINISHED) &&
+      !dto.productionRoomId
+    ) {
+      return badRequest(
+        "Rak order/finished harus terikat ke ruang produksi.",
+      );
+    }
+
+    if (dto.productionRoomId) {
+      const room = await this.prisma.productionRoom.findUnique({
+        where: { id: dto.productionRoomId },
+        select: { id: true },
+      });
+      if (!room) {
+        return notFound("Production room not found", {
+          productionRoomId: dto.productionRoomId,
+        });
+      }
+    }
+
     if (dto.workerId) {
       const worker = await this.prisma.worker.findUnique({
         where: { id: dto.workerId },
@@ -43,7 +75,8 @@ export class LocationsService {
           code: dto.code,
           name: dto.name,
           type: dto.type,
-          workerId: dto.type === RackType.WORKER ? dto.workerId : null,
+          workerId: null,
+          productionRoomId: dto.productionRoomId ?? null,
         },
       });
     } catch (error) {
@@ -68,60 +101,136 @@ export class LocationsService {
       },
     });
 
-    const mitraOrder = await this.prisma.rackLocation.upsert({
-      where: { code: LOCATION_CODES.MITRA_ORDER },
-      update: { name: "Rak Mitra Order", type: RackType.MITRA_ORDER },
-      create: {
-        code: LOCATION_CODES.MITRA_ORDER,
-        name: "Rak Mitra Order",
-        type: RackType.MITRA_ORDER,
-      },
+    const rooms = await this.prisma.productionRoom.findMany({
+      select: { id: true },
+      orderBy: { code: "asc" },
     });
+    const roomLocations = [] as unknown[];
+    for (const room of rooms) {
+      roomLocations.push(
+        await getProductionRoomRack(
+          this.prisma,
+          room.id,
+          RackType.MITRA_ORDER,
+        ),
+        await getProductionRoomRack(
+          this.prisma,
+          room.id,
+          RackType.FINISHED,
+        ),
+      );
+    }
 
-    const finished = await this.prisma.rackLocation.upsert({
-      where: { code: LOCATION_CODES.FINISHED },
-      update: { name: "Rak Finished", type: RackType.FINISHED },
-      create: {
-        code: LOCATION_CODES.FINISHED,
-        name: "Rak Finished",
-        type: RackType.FINISHED,
-      },
-    });
-
-    const workers = await this.prisma.worker.findMany({
-      orderBy: { createdAt: "asc" },
-    });
-
-    const workerLocations = [] as unknown[];
-    for (const worker of workers) {
-      const location = await this.prisma.rackLocation.upsert({
-        where: { workerId: worker.id },
-        update: {
-          code: workerRackCode(worker.id),
-          name: `Rak Mitra - ${worker.name}`,
-          type: RackType.WORKER,
-        },
-        create: {
-          code: workerRackCode(worker.id),
-          name: `Rak Mitra - ${worker.name}`,
-          type: RackType.WORKER,
-          workerId: worker.id,
-        },
-      });
-      workerLocations.push(location);
+    // Global racks remain only as a compatibility fallback when no room is configured.
+    const defaults = [preSale];
+    if (rooms.length === 0) {
+      defaults.push(
+        await getFallbackRack(
+          this.prisma,
+          RackType.MITRA_ORDER,
+        ),
+        await getFallbackRack(
+          this.prisma,
+          RackType.FINISHED,
+        ),
+      );
     }
 
     return {
-      defaults: [preSale, mitraOrder, finished],
-      workerLocations,
+      defaults,
+      roomLocations,
     };
   }
 
-  findAll() {
+  async findAll() {
+    const hasRooms = (await this.prisma.productionRoom.count()) > 0;
+    const where: Prisma.RackLocationWhereInput = hasRooms
+      ? {
+          AND: [
+            { type: { not: RackType.WORKER } },
+            {
+              OR: [
+                { type: { notIn: [RackType.MITRA_ORDER, RackType.FINISHED] } },
+                { productionRoomId: { not: null } },
+              ],
+            },
+          ],
+        }
+      : { type: { not: RackType.WORKER } };
+
     return this.prisma.rackLocation.findMany({
-      include: { worker: true },
-      orderBy: { createdAt: "asc" },
+      where,
+      include: {
+        worker: true,
+        productionRoom: true,
+        _count: { select: { lots: true } },
+      },
+      orderBy: [
+        { productionRoom: { code: "asc" } },
+        { type: "asc" },
+        { code: "asc" },
+      ],
     });
+  }
+
+  async update(id: string, dto: UpdateLocationDto) {
+    const location = await this.prisma.rackLocation.findUnique({ where: { id } });
+    if (!location) {
+      return notFound("Location not found", { id });
+    }
+    if (location.type === RackType.WORKER || dto.type === RackType.WORKER) {
+      return badRequest(
+        "Rak per mitra tidak dapat dibuat atau diubah melalui manajemen rak.",
+      );
+    }
+    if (
+      location.productionRoomId &&
+      (location.type === RackType.MITRA_ORDER ||
+        location.type === RackType.FINISHED)
+    ) {
+      return badRequest(
+        "Rak order/finished ruang produksi dikelola otomatis dari ruang produksi.",
+      );
+    }
+    return this.prisma.rackLocation.update({
+      where: { id },
+      data: dto,
+    });
+  }
+
+  async delete(id: string) {
+    const location = await this.prisma.rackLocation.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: { lots: true, movementsFrom: true, movementsTo: true },
+        },
+      },
+    });
+    if (!location) {
+      return notFound("Location not found", { id });
+    }
+    if (location._count.lots > 0) {
+      return conflict("Location contains lots and cannot be deleted", { id });
+    }
+    if (location._count.movementsFrom + location._count.movementsTo > 0) {
+      return conflict(
+        "Lokasi memiliki riwayat perpindahan dan tidak dapat dihapus",
+        { id },
+      );
+    }
+    if (
+      location.productionRoomId &&
+      (location.type === RackType.MITRA_ORDER ||
+        location.type === RackType.FINISHED)
+    ) {
+      return conflict(
+        "Rak canonical ruang produksi tidak dapat dihapus dari menu ini",
+        { id },
+      );
+    }
+    await this.prisma.rackLocation.delete({ where: { id } });
+    return { success: true };
   }
 
   async findLots(locationId: string) {
@@ -167,9 +276,12 @@ export class LocationsService {
 
   async findLotsByCode(code: string) {
     const location = await this.ensureLocationByCode(code);
+    const aggregateType = this.getAggregateRackType(code, location);
 
     const lots = await this.prisma.productionLot.findMany({
-      where: { locationId: location.id },
+      where: aggregateType
+        ? { location: { type: aggregateType } }
+        : { locationId: location.id },
       include: {
         grade: true,
         featherGrade: true,
@@ -209,7 +321,9 @@ export class LocationsService {
     const search = query.search?.trim();
 
     const where: Prisma.ProductionLotWhereInput = {
-      locationId: location.id,
+      ...(this.getAggregateRackType(code, location)
+        ? { location: { type: this.getAggregateRackType(code, location)! } }
+        : { locationId: location.id }),
     };
 
     if (search) {
@@ -321,6 +435,28 @@ export class LocationsService {
   }
 
   private async ensureLocationByCode(code: string) {
+    if (code === LOCATION_CODES.MITRA_ORDER) {
+      const roomRack = await this.prisma.rackLocation.findFirst({
+        where: {
+          type: RackType.MITRA_ORDER,
+          productionRoomId: { not: null },
+        },
+        orderBy: { code: "asc" },
+      });
+      if (roomRack) return roomRack;
+    }
+
+    if (code === LOCATION_CODES.FINISHED) {
+      const roomRack = await this.prisma.rackLocation.findFirst({
+        where: {
+          type: RackType.FINISHED,
+          productionRoomId: { not: null },
+        },
+        orderBy: { code: "asc" },
+      });
+      if (roomRack) return roomRack;
+    }
+
     if (code === LOCATION_CODES.PRE_SALE) {
       return this.prisma.rackLocation.upsert({
         where: { code: LOCATION_CODES.PRE_SALE },
@@ -358,5 +494,16 @@ export class LocationsService {
     }
 
     return badRequest("Unknown location code", { code });
+  }
+
+  private getAggregateRackType(
+    code: string,
+    location: { code: string; productionRoomId: string | null },
+  ) {
+    if (location.productionRoomId) {
+      if (code === LOCATION_CODES.MITRA_ORDER) return RackType.MITRA_ORDER;
+      if (code === LOCATION_CODES.FINISHED) return RackType.FINISHED;
+    }
+    return null;
   }
 }

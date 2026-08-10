@@ -50,4 +50,9 @@ export class QueryMitraOrderRequestDto {
   @Min(1)
   @Max(200)
   limit?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  parentRequestId?: string;
 }

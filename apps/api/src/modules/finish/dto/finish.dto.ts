@@ -33,6 +33,11 @@ export class FinishDto {
   @IsString()
   notes?: string;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  targetLocationId?: string;
+
   @ApiPropertyOptional({ type: [FinishResultGradeEntryDto] })
   @IsOptional()
   @IsArray()

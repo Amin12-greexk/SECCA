@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/lib/toast';
 import { getGrades, getRackLotsByCodePaginated, moveLot, getPecahBonById, markPecahBonPrinted, type ProductionLot, type PecahBonEntry } from '@/lib/api';
 
-type RackKey = 'preSale' | 'mitraOrder';
+type RackKey = 'mitraOrder';
 type ViewMode = 'grid' | 'list';
 type PrintedFilter = 'all' | 'printed' | 'unprinted';
 const LIST_PAGE_SIZE = 100;
@@ -46,24 +46,15 @@ type RackConfig = {
 };
 
 const RACKS: Record<RackKey, RackConfig> = {
-    preSale: {
-        code: 'RAK_SEMENTARA',
-        title: 'Rak Sementara',
-        description: 'LP hasil pecah bon sebelum masuk pool order mitra.',
-        headerClass: 'bg-gray-600',
-        iconBgClass: 'bg-gray-100',
-        iconTextClass: 'text-gray-700',
-        badgeClass: 'bg-gray-100 text-gray-700',
-    },
-    mitraOrder: {
-        code: 'RAK_MITRA_ORDER',
-        title: 'Rak Mitra Order',
-        description: 'LP siap assign ke mitra oleh trainer/pengawas.',
-        headerClass: 'bg-green-700',
-        iconBgClass: 'bg-green-100',
-        iconTextClass: 'text-green-700',
-        badgeClass: 'bg-green-100 text-green-700',
-    },
+  mitraOrder: {
+    code: 'RAK_MITRA_ORDER',
+    title: 'Rak Mitra Order',
+    description: 'LP yang siap untuk di-assign ke mitra.',
+    headerClass: 'bg-green-700',
+    iconBgClass: 'bg-green-100',
+    iconTextClass: 'text-green-700',
+    badgeClass: 'bg-green-100 text-green-700',
+  },
 };
 
 const formatNumber = (value: number, fractionDigits = 2) =>
@@ -91,7 +82,6 @@ function RackContent() {
     const [searchInput, setSearchInput] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [listPage, setListPage] = useState<Record<RackKey, number>>({
-        preSale: 1,
         mitraOrder: 1,
     });
     const [jumpTerm, setJumpTerm] = useState('');
@@ -101,13 +91,6 @@ function RackContent() {
     const [selectedLotIds, setSelectedLotIds] = useState<Set<string>>(new Set());
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; lotId: string; from: RackKey } | null>(null);
     const [rackState, setRackState] = useState<Record<RackKey, RackListState>>({
-        preSale: {
-            lots: [],
-            page: 1,
-            total: 0,
-            totalPages: 1,
-            totalWetWeightGram: 0,
-        },
         mitraOrder: {
             lots: [],
             page: 1,
@@ -129,26 +112,12 @@ function RackContent() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [preSale, mitraOrder] = await Promise.all([
-                getRackLotsByCodePaginated(RACKS.preSale.code, {
-                    page: listPage.preSale,
-                    limit: LIST_PAGE_SIZE,
-                    search: searchTerm || undefined,
-                }),
-                getRackLotsByCodePaginated(RACKS.mitraOrder.code, {
-                    page: listPage.mitraOrder,
-                    limit: LIST_PAGE_SIZE,
-                    search: searchTerm || undefined,
-                }),
-            ]);
+            const mitraOrder = await getRackLotsByCodePaginated(RACKS.mitraOrder.code, {
+                page: listPage.mitraOrder,
+                limit: LIST_PAGE_SIZE,
+                search: searchTerm || undefined,
+            });
             setRackState({
-                preSale: {
-                    lots: preSale.lots,
-                    page: preSale.page,
-                    total: preSale.total,
-                    totalPages: preSale.totalPages,
-                    totalWetWeightGram: preSale.totalWetWeightGram,
-                },
                 mitraOrder: {
                     lots: mitraOrder.lots,
                     page: mitraOrder.page,
@@ -158,11 +127,10 @@ function RackContent() {
                 },
             });
             setListPage((prev) => {
-                if (prev.preSale === preSale.page && prev.mitraOrder === mitraOrder.page) {
+                if (prev.mitraOrder === mitraOrder.page) {
                     return prev;
                 }
                 return {
-                    preSale: preSale.page,
                     mitraOrder: mitraOrder.page,
                 };
             });
@@ -184,7 +152,7 @@ function RackContent() {
     useEffect(() => {
         void loadData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [listPage.preSale, listPage.mitraOrder, searchTerm]);
+    }, [listPage.mitraOrder, searchTerm]);
 
     const listMeta = useMemo(() => {
         const buildMeta = (rack: RackListState) => {
@@ -205,18 +173,12 @@ function RackContent() {
         };
 
         return {
-            preSale: buildMeta(rackState.preSale),
             mitraOrder: buildMeta(rackState.mitraOrder),
         };
     }, [rackState]);
 
     const totals = useMemo(
         () => ({
-            preSale: {
-                count: listMeta.preSale.items.length,
-                weight: listMeta.preSale.totalWetWeightGram,
-                totalCount: listMeta.preSale.total,
-            },
             mitraOrder: {
                 count: listMeta.mitraOrder.items.length,
                 weight: listMeta.mitraOrder.totalWetWeightGram,
@@ -242,111 +204,6 @@ function RackContent() {
 
     const isLotMovable = (lot: ProductionLot) =>
         !moving && lot.status !== 'COMPLETED' && lot.workItem?.status !== 'IN_PROGRESS';
-
-    const handleDragStart = (
-        event: React.DragEvent<HTMLDivElement>,
-        lot: ProductionLot,
-        from: RackKey
-    ) => {
-        if (!isLotMovable(lot)) {
-            event.preventDefault();
-            return;
-        }
-        event.dataTransfer.setData(
-            'application/json',
-            JSON.stringify({ lotId: lot.id, from })
-        );
-        event.dataTransfer.effectAllowed = 'move';
-        event.currentTarget.style.opacity = '0.55';
-    };
-
-    const handleDragEnd = (event: React.DragEvent<HTMLDivElement>) => {
-        event.currentTarget.style.opacity = '1';
-    };
-
-    const handleDragOver = (event: React.DragEvent<HTMLDivElement>, target: RackKey) => {
-        event.preventDefault();
-        setDragOver(target);
-    };
-
-    const handleContextMenu = (event: React.MouseEvent, lotId: string, from: RackKey) => {
-        event.preventDefault();
-        setContextMenu({
-            x: event.clientX,
-            y: event.clientY,
-            lotId,
-            from,
-        });
-    };
-
-    const closeContextMenu = () => setContextMenu(null);
-
-    useEffect(() => {
-        const handleGlobalClick = () => closeContextMenu();
-        window.addEventListener('click', handleGlobalClick);
-        return () => window.removeEventListener('click', handleGlobalClick);
-    }, []);
-
-    const executeMove = async (lotId: string, targetRack: RackKey) => {
-        try {
-            const movedLot = await moveLot(lotId, RACKS[targetRack].code);
-
-            if (targetRack === 'mitraOrder' && movedLot.externalId) {
-                try {
-                    const entry = await getPecahBonById(movedLot.externalId);
-                    await handleAutoPrint(entry);
-                } catch (err) {
-                    console.error('Auto print failed for lot:', lotId, err);
-                    toast.error(`Pindah berhasil tapi gagal cetak otomatis untuk ${movedLot.externalId}`);
-                }
-            }
-            return true;
-        } catch (error) {
-            console.error('Failed to move lot:', lotId, error);
-            toast.error(error instanceof Error ? error.message : `Gagal memindahkan LP ${lotId}`);
-            return false;
-        }
-    };
-
-    const handleToggleSelect = (lotId: string) => {
-        setSelectedLotIds((prev) => {
-            const next = new Set(prev);
-            if (next.has(lotId)) {
-                next.delete(lotId);
-            } else {
-                next.add(lotId);
-            }
-            return next;
-        });
-    };
-
-    const handleMoveSelected = async (targetRack: RackKey) => {
-        if (selectedLotIds.size === 0) return;
-        setMoving(true);
-        let successCount = 0;
-
-        try {
-            const ids = Array.from(selectedLotIds);
-            for (const lotId of ids) {
-                const ok = await executeMove(lotId, targetRack);
-                if (ok) {
-                    successCount++;
-                    // Small delay between LPs to prevent printer job collisions
-                    if (ids.length > 1) {
-                        await new Promise((resolve) => setTimeout(resolve, 800));
-                    }
-                }
-            }
-
-            if (successCount > 0) {
-                toast.success(`${successCount} LP berhasil dipindahkan.`);
-                setSelectedLotIds(new Set());
-                await loadData();
-            }
-        } finally {
-            setMoving(false);
-        }
-    };
 
     // Print helpers (matching PecahBonPage for consistency)
     const buildPrintOptions = () => {
@@ -430,6 +287,9 @@ function RackContent() {
                         </div>
                         <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
                             <span style="font-weight:bold;">Batch No</span><span>${batchNumber}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:0.5mm;">
+                            <span style="font-weight:bold;">Nama Mitra</span><span>${entry.orderedForName || '-'}</span>
                         </div>
                         <div style="display:flex;justify-content:space-between;">
                             <span style="font-weight:bold;">Tgl Pecah</span><span>${dateStr}</span>
@@ -647,27 +507,23 @@ function RackContent() {
         }
     };
 
-    const handleDrop = async (event: React.DragEvent<HTMLDivElement>, target: RackKey) => {
+    const handleContextMenu = (event: React.MouseEvent, lotId: string, from: RackKey) => {
         event.preventDefault();
-        setDragOver(null);
-        if (moving) return;
-
-        const raw = event.dataTransfer.getData('application/json');
-        if (!raw) return;
-
-        try {
-            const payload = JSON.parse(raw) as { lotId: string; from: RackKey };
-            if (payload.from === target) return;
-            setMoving(true);
-            const ok = await executeMove(payload.lotId, target);
-            if (ok) {
-                toast.success('LP berhasil dipindahkan.');
-                await loadData();
-            }
-        } finally {
-            setMoving(false);
-        }
+        setContextMenu({
+            x: event.clientX,
+            y: event.clientY,
+            lotId,
+            from,
+        });
     };
+
+    const closeContextMenu = () => setContextMenu(null);
+
+    useEffect(() => {
+        const handleGlobalClick = () => closeContextMenu();
+        window.addEventListener('click', handleGlobalClick);
+        return () => window.removeEventListener('click', handleGlobalClick);
+    }, []);
 
     const handleQuickJump = () => {
         const keyword = jumpTerm.trim();
@@ -680,7 +536,6 @@ function RackContent() {
         setSearchInput(keyword);
         setSearchTerm(keyword);
         setListPage({
-            preSale: 1,
             mitraOrder: 1,
         });
         setPendingJumpKeyword(keyword.toUpperCase());
@@ -693,7 +548,7 @@ function RackContent() {
         if (!pendingJumpKeyword || loading) return;
 
         const target = pendingJumpKeyword.trim().toUpperCase();
-        const candidates = [...listMeta.preSale.items, ...listMeta.mitraOrder.items];
+        const candidates = [...listMeta.mitraOrder.items];
         const found = candidates.find((lot) => normalizeLotIdentifier(lot) === target)
             ?? candidates.find((lot) => normalizeLotIdentifier(lot).includes(target));
 
@@ -704,7 +559,7 @@ function RackContent() {
         }
         setPendingJumpKeyword(null);
         setPendingJumpLotId(found.id);
-    }, [listMeta.mitraOrder.items, listMeta.preSale.items, loading, pendingJumpKeyword, toast]);
+    }, [listMeta.mitraOrder.items, loading, pendingJumpKeyword, toast]);
 
     const renderLotCard = (lot: ProductionLot, from: RackKey, rack: RackConfig) => {
         const movable = isLotMovable(lot);
@@ -719,9 +574,6 @@ function RackContent() {
                 <div
                     id={`rack-lot-row-${lot.id}`}
                     key={lot.id}
-                    draggable={movable}
-                    onDragStart={(event) => handleDragStart(event, lot, from)}
-                    onDragEnd={handleDragEnd}
                     onContextMenu={(e) => movable && handleContextMenu(e, lot.id, from)}
                     className={`rounded-lg border px-3 py-2 transition ${
                         lot.id === highlightedLotId
@@ -729,18 +581,11 @@ function RackContent() {
                             : isSelected ? 'border-green-300 bg-green-50/50' : 'border-gray-200 bg-white'
                     } ${
                         movable
-                            ? 'cursor-move hover:border-gray-300 hover:shadow-sm'
+                            ? 'cursor-pointer hover:border-gray-300 hover:shadow-sm'
                             : 'cursor-not-allowed opacity-85'
                     }`}
                 >
-                    <div className="grid grid-cols-[auto_1.7fr_1.2fr_0.8fr_0.9fr_0.9fr_0.9fr] items-center gap-2 text-xs">
-                        <input 
-                            type="checkbox" 
-                            checked={isSelected}
-                            onChange={() => handleToggleSelect(lot.id)}
-                            disabled={!movable}
-                            className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
-                        />
+                    <div className="grid grid-cols-[1.7fr_1.2fr_0.8fr_0.9fr_0.9fr_0.9fr] items-center gap-2 text-xs">
                         <div className="min-w-0">
                             <p className="truncate text-sm font-semibold text-gray-900">
                                 {lot.externalId ?? lot.lotNumber}
@@ -780,27 +625,17 @@ function RackContent() {
         return (
             <div
                 key={lot.id}
-                draggable={movable}
-                onDragStart={(event) => handleDragStart(event, lot, from)}
-                onDragEnd={handleDragEnd}
                 onContextMenu={(e) => movable && handleContextMenu(e, lot.id, from)}
                 className={`rounded-xl border transition p-3.5 shadow-sm ${
                     isSelected ? 'border-green-400 bg-green-50 shadow-md' : 'border-gray-200 bg-white'
                 } ${
                     movable
-                        ? 'cursor-move hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-lg'
+                        ? 'cursor-pointer hover:border-gray-300 hover:shadow-md'
                         : 'cursor-not-allowed opacity-85'
                 }`}
             >
                 <div className="mb-2.5 flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2">
-                        <input 
-                            type="checkbox" 
-                            checked={isSelected}
-                            onChange={() => handleToggleSelect(lot.id)}
-                            disabled={!movable}
-                            className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
-                        />
                         <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${rack.iconBgClass}`}>
                             <Package className={`h-4 w-4 ${rack.iconTextClass}`} />
                         </div>
@@ -857,37 +692,9 @@ function RackContent() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Rak LP</h1>
-                        <p className="mt-1 text-sm text-gray-600">
-                            Pindahkan LP (Single Drag atau Multiple Checkbox).
-                        </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        {selectedLotIds.size > 0 && (
-                            <div className="flex items-center gap-2 rounded-lg bg-white p-1 border shadow-sm">
-                                <span className="px-2 text-xs font-bold text-green-700">{selectedLotIds.size} dipilih</span>
-                                <Button 
-                                    size="sm" 
-                                    variant="outline" 
-                                    className="h-8 border-orange-200 text-orange-700 hover:bg-orange-50"
-                                    onClick={() => handleMoveSelected('preSale')}
-                                    disabled={moving}
-                                >
-                                    Ke Rak Sementara
-                                </Button>
-                                <Button 
-                                    size="sm" 
-                                    className="h-8 bg-green-700 hover:bg-green-800"
-                                    onClick={() => handleMoveSelected('mitraOrder')}
-                                    disabled={moving}
-                                >
-                                    Ke Rak Mitra Order
-                                </Button>
-                                <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setSelectedLotIds(new Set())}>
-                                    Batal
-                                </Button>
-                            </div>
-                        )}
-                        <Button variant="outline" onClick={loadData} disabled={loading || moving}>
+                        <Button variant="outline" onClick={loadData} disabled={loading}>
                             {loading ? 'Memuat...' : 'Refresh'}
                         </Button>
                     </div>
@@ -901,7 +708,7 @@ function RackContent() {
                                 value={searchInput}
                                 onChange={(event) => {
                                     setSearchInput(event.target.value);
-                                    setListPage({ preSale: 1, mitraOrder: 1 });
+                                    setListPage({ mitraOrder: 1 });
                                 }}
                                 placeholder="Cari LP ID (TEI-...)"
                             />
@@ -959,14 +766,7 @@ function RackContent() {
                         return (
                             <div
                                 key={key}
-                                onDragOver={(event) => handleDragOver(event, key)}
-                                onDragLeave={() => setDragOver(null)}
-                                onDrop={(event) => handleDrop(event, key)}
-                                className={`flex flex-col rounded-2xl border-2 bg-white shadow-sm transition-all ${
-                                    isOver
-                                        ? 'border-green-400 shadow-lg ring-4 ring-green-400/20'
-                                        : 'border-gray-200'
-                                }`}
+                                className={`flex flex-col rounded-2xl border-2 bg-white shadow-sm transition-all border-gray-200`}
                             >
                                 <div className={`rounded-t-2xl p-4 text-white ${rack.headerClass}`}>
                                     <div className="mb-2.5 flex items-start justify-between">
@@ -1098,34 +898,26 @@ function RackContent() {
                     <div className="px-2 py-1.5 text-xs font-semibold text-gray-500 border-b mb-1 uppercase tracking-wider">
                         Opsi Rak LP
                     </div>
-                    {contextMenu.from !== 'preSale' && (
-                        <button
-                            className="flex w-full items-center rounded-sm px-2 py-2 text-sm outline-none hover:bg-slate-100 text-slate-700 transition-colors"
-                            onClick={async () => {
-                                setMoving(true);
-                                const ok = await executeMove(contextMenu.lotId, 'preSale');
-                                if (ok) await loadData();
-                                setMoving(false);
-                                closeContextMenu();
-                            }}
-                        >
-                            Pindah ke Rak Sementara
-                        </button>
-                    )}
-                    {contextMenu.from !== 'mitraOrder' && (
-                        <button
-                            className="flex w-full items-center rounded-sm px-2 py-2 text-sm outline-none hover:bg-slate-100 text-slate-700 transition-colors"
-                            onClick={async () => {
-                                setMoving(true);
-                                const ok = await executeMove(contextMenu.lotId, 'mitraOrder');
-                                if (ok) await loadData();
-                                setMoving(false);
-                                closeContextMenu();
-                            }}
-                        >
-                            Pindah ke Rak Mitra Order
-                        </button>
-                    )}
+                    <button
+                        className="flex w-full items-center rounded-sm px-2 py-2 text-sm outline-none hover:bg-slate-100 text-slate-700 transition-colors"
+                        onClick={async () => {
+                            closeContextMenu();
+                            try {
+                                const lot = listMeta.mitraOrder.items.find(l => l.id === contextMenu.lotId);
+                                if (lot?.externalId) {
+                                    const entry = await getPecahBonById(lot.externalId);
+                                    await handleAutoPrint(entry);
+                                } else {
+                                    toast.error('ID Pecah Bon tidak ditemukan untuk dicetak.');
+                                }
+                            } catch (err) {
+                                console.error('Failed to print lot:', err);
+                                toast.error('Gagal memuat data cetak.');
+                            }
+                        }}
+                    >
+                        Cetak Ulang
+                    </button>
                     <div className="h-px bg-slate-200 my-1" />
                     <button
                         className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-slate-100 text-red-600 transition-colors"

@@ -8,6 +8,7 @@ import PageTransition from '@/components/animations/PageTransition';
 import { useToast } from '@/lib/toast';
 import { getWorkerWeeklyStats, type WorkerWeeklyStatsResponse } from '@/lib/api';
 import ManagerAnalytics from './components/ManagerAnalytics';
+import TrainerAnalytics from './components/TrainerAnalytics';
 
 function DashboardContent() {
     const { user, hasModuleAccess } = useAuth();
@@ -120,13 +121,26 @@ function DashboardContent() {
     return (
         <div ref={containerRef} className="space-y-6">
             {/* Welcome Section */}
-            <div className="bg-green-600 rounded-xl p-8 text-white">
-                <h1 className="text-3xl font-bold mb-2">
-                    Selamat Datang, {user.name}!
-                </h1>
-                <p className="text-green-100">
-                    {getRoleWelcomeMessage(user.role)}
-                </p>
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 p-6 sm:p-7 text-white shadow-md border border-emerald-600/30">
+                <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1.5">
+                            <span className="rounded-full bg-emerald-400/20 px-2.5 py-0.5 text-xs font-bold text-emerald-200 border border-emerald-300/30 uppercase tracking-wide">
+                                SECCA System • Dashboard
+                            </span>
+                            <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-semibold text-white uppercase">
+                                {user.role}
+                            </span>
+                        </div>
+                        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                            Selamat Datang, {user.name}!
+                        </h1>
+                        <p className="text-sm text-emerald-100/90 mt-1 max-w-xl">
+                            {getRoleWelcomeMessage(user.role)}
+                        </p>
+                    </div>
+                </div>
             </div>
 
             {user.role === 'mitra' ? (
@@ -266,6 +280,10 @@ function DashboardContent() {
                     </div>
                 </div>
             ) : null}
+
+            {user.role === 'trainer' && (
+                <TrainerAnalytics />
+            )}
 
             {hasModuleAccess('dashboard', 2) && (
                 <ManagerAnalytics />

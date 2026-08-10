@@ -13,10 +13,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { useAuth } from '@/lib/auth/AuthContext';
 import { useToast } from '@/lib/toast';
 import { getTrainerOrderWorkers, type TrainerWorkerOrderCandidate } from '@/lib/api';
 
-type StatusFilter = 'ALL' | 'ELIGIBLE' | 'BUSY' | 'UNASSIGNED';
+type StatusFilter = 'MY_MITRA' | 'ALL' | 'ELIGIBLE' | 'BUSY' | 'UNASSIGNED';
 type StatusInfo = {
     label: string;
     className: string;
@@ -36,11 +37,14 @@ function StatusBadge({ status }: { status: StatusInfo }) {
 
 function MitraListContent() {
     const toast = useToast();
+    const { user } = useAuth();
     const [workers, setWorkers] = useState<TrainerWorkerOrderCandidate[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>(
+        user?.role === 'trainer' ? 'MY_MITRA' : 'ALL'
+    );
 
     const loadWorkers = async (refresh = false) => {
         if (refresh) {
@@ -50,7 +54,10 @@ function MitraListContent() {
         }
 
         try {
-            const data = await getTrainerOrderWorkers({ includeUnassigned: true });
+            const isTrainer = user?.role === 'trainer';
+            const data = await getTrainerOrderWorkers(
+                isTrainer ? { trainerId: user?.id } : { includeUnassigned: true }
+            );
             setWorkers(data);
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Gagal memuat daftar mitra.');
@@ -69,6 +76,7 @@ function MitraListContent() {
         const query = search.trim().toLowerCase();
         return workers
             .filter((worker) => {
+                if (statusFilter === 'MY_MITRA') return worker.trainerId === user?.id;
                 if (statusFilter === 'ELIGIBLE') return worker.isOrderEligible;
                 if (statusFilter === 'BUSY') return !worker.isOrderEligible;
                 if (statusFilter === 'UNASSIGNED') return !worker.trainerId;
@@ -220,7 +228,7 @@ function MitraListContent() {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="ALL">Semua</SelectItem>
+                                    <SelectItem value="ALL">Semua Mitra</SelectItem>
                                     <SelectItem value="ELIGIBLE">Siap Diorder</SelectItem>
                                     <SelectItem value="BUSY">Sedang Proses / Pending</SelectItem>
                                     <SelectItem value="UNASSIGNED">Belum Assign Pengawas</SelectItem>

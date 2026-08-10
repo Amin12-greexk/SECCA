@@ -20,10 +20,12 @@ import type { UiAccessModuleKey } from '@/lib/types/auth';
 import {
   createUser,
   createWorker,
+  getProductionRooms,
   getUsers,
   getWorkers,
   updateWorker,
   updateUser,
+  type ProductionRoom,
   type User,
   type Worker,
 } from '@/lib/api';
@@ -53,6 +55,7 @@ function UsersContent() {
   const [loading, setLoading] = useState(true);
   const [workersLoading, setWorkersLoading] = useState(false);
   const [workers, setWorkers] = useState<Worker[]>([]);
+  const [productionRooms, setProductionRooms] = useState<ProductionRoom[]>([]);
   const [saving, setSaving] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
@@ -63,6 +66,7 @@ function UsersContent() {
     password: '',
     role: '' as RoleOption | '',
     workerId: '' as string | '',
+    productionRoomId: '' as string | '',
     pin: '',
     useCustomUiAccess: false,
     uiAccessDraft: {} as UiAccessDraft,
@@ -73,6 +77,7 @@ function UsersContent() {
     password: '',
     role: '' as RoleOption | '',
     workerId: '' as string | '',
+    productionRoomId: '' as string | '',
     pin: '',
     useCustomUiAccess: false,
     uiAccessDraft: {} as UiAccessDraft,
@@ -102,9 +107,19 @@ function UsersContent() {
     }
   };
 
+  const loadProductionRooms = async () => {
+    try {
+      const rooms = await getProductionRooms();
+      setProductionRooms(rooms);
+    } catch (error) {
+      console.error('Gagal memuat ruang produksi:', error);
+    }
+  };
+
   useEffect(() => {
     loadUsers();
     loadWorkers();
+    loadProductionRooms();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -136,6 +151,7 @@ function UsersContent() {
         password: form.password,
         role: form.role,
         workerId,
+        productionRoomId: form.productionRoomId || undefined,
         useCustomUiAccess: form.useCustomUiAccess,
         uiAccesses: serializeUiAccessDraft(form.uiAccessDraft),
       });
@@ -146,6 +162,7 @@ function UsersContent() {
         password: '',
         role: '',
         workerId: '',
+        productionRoomId: '',
         pin: '',
         useCustomUiAccess: false,
         uiAccessDraft: {},
@@ -168,6 +185,7 @@ function UsersContent() {
       password: '',
       role: (user.role as RoleOption) ?? '',
       workerId: user.workerId ?? '',
+      productionRoomId: user.productionRoomId ?? '',
       pin: worker?.pin ?? '',
       useCustomUiAccess: user.useCustomUiAccess ?? false,
       uiAccessDraft: buildUiAccessDraft(user.uiAccesses),
@@ -205,6 +223,7 @@ function UsersContent() {
         role: editForm.role,
         password: editForm.password ? editForm.password : undefined,
         workerId,
+        productionRoomId: editForm.productionRoomId || null,
         useCustomUiAccess: editForm.useCustomUiAccess,
         uiAccesses: serializeUiAccessDraft(editForm.uiAccessDraft),
       });
@@ -272,6 +291,26 @@ function UsersContent() {
                     <SelectItem value="koreksi">Koreksi</SelectItem>
                     <SelectItem value="manager">Manager</SelectItem>
                     <SelectItem value="trainer">Trainer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Ruang Produksi (opsional)</Label>
+                <Select
+                  value={form.productionRoomId}
+                  onValueChange={(value) => setForm((prev) => ({ ...prev, productionRoomId: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih Ruang Produksi" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-- Tanpa Ruang Produksi --</SelectItem>
+                    {productionRooms.map((room) => (
+                      <SelectItem key={room.id} value={room.id}>
+                        {room.name} ({room.code}) - {room.type}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -404,19 +443,20 @@ function UsersContent() {
                     <th className="py-2">Nama</th>
                     <th className="py-2">Email</th>
                     <th className="py-2">Role</th>
+                    <th className="py-2">Ruang Produksi</th>
                     <th className="py-2 text-right">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {loading ? (
                     <tr>
-                      <td colSpan={4} className="py-6 text-center text-gray-500">
+                      <td colSpan={5} className="py-6 text-center text-gray-500">
                         Memuat data...
                       </td>
                     </tr>
                   ) : users.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="py-6 text-center text-gray-500">
+                      <td colSpan={5} className="py-6 text-center text-gray-500">
                         Belum ada akun.
                       </td>
                     </tr>
@@ -432,6 +472,15 @@ function UsersContent() {
                               <span className="text-xs text-[#059833]">Akses UI khusus</span>
                             ) : null}
                           </div>
+                        </td>
+                        <td className="py-2 text-xs">
+                          {user.productionRoom ? (
+                            <span className="rounded bg-rose-50 px-2 py-0.5 font-medium text-rose-700">
+                              {user.productionRoom.name}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
                         </td>
                         <td className="py-2 text-right">
                           <Button variant="outline" size="sm" onClick={() => openEdit(user)}>
@@ -493,6 +542,26 @@ function UsersContent() {
                   <SelectItem value="koreksi">Koreksi</SelectItem>
                   <SelectItem value="manager">Manager</SelectItem>
                   <SelectItem value="trainer">Trainer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Ruang Produksi (opsional)</Label>
+              <Select
+                value={editForm.productionRoomId}
+                onValueChange={(value) => setEditForm((prev) => ({ ...prev, productionRoomId: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih Ruang Produksi" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">-- Tanpa Ruang Produksi --</SelectItem>
+                  {productionRooms.map((room) => (
+                    <SelectItem key={room.id} value={room.id}>
+                      {room.name} ({room.code}) - {room.type}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

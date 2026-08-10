@@ -1,16 +1,37 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import {
     IsDateString,
     IsInt,
     IsNotEmpty,
     IsNumber,
+    IsOptional,
     IsString,
     IsUUID,
     Min,
 } from "class-validator";
 
 export class CreatePecahBonDto {
+  @ApiPropertyOptional({ description: "Aggregate trainer order used for this pecah bon" })
+  @IsOptional()
+  @IsUUID()
+  trainerOrderRequestId?: string;
+
+  @ApiPropertyOptional({ description: "Direct mitra order used for this pecah bon" })
+  @IsOptional()
+  @IsUUID()
+  mitraOrderRequestId?: string;
+
+    @ApiPropertyOptional({ description: 'Nama mitra yang diorder (untuk cetak kartu)' })
+    @IsString()
+    @IsOptional()
+    orderedForName?: string;
+
+    @ApiPropertyOptional()
+    @IsString()
+    @IsOptional()
+    productionRoomId?: string;
+
     @ApiProperty()
     @IsUUID()
     @IsNotEmpty()

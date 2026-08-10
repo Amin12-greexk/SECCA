@@ -8,11 +8,36 @@ import { CreatePecahBonPresetDto } from "./dto/create-pecah-bon-preset.dto";
 import { GradeTariffQueryDto } from "./dto/grade-tariff-query.dto";
 import { MoistureRuleQueryDto } from "./dto/moisture-rule-query.dto";
 
+type AuditActor = { sub?: string };
+
 @Injectable()
 export class RulesService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
-  async createGradeTariff(dto: CreateGradeTariffDto) {
+  private recordTariffAudit(input: {
+    tariffType: string;
+    tariffId: string;
+    action: "CREATE" | "UPDATE" | "DELETE";
+    previousRateRpPerGram?: number | null;
+    newRateRpPerGram?: number | null;
+    actor?: AuditActor;
+    metadata?: Record<string, unknown>;
+  }) {
+    if (!input.actor?.sub) return Promise.resolve(null);
+    return this.prisma.tariffAuditLog.create({
+      data: {
+        tariffType: input.tariffType,
+        tariffId: input.tariffId,
+        action: input.action,
+        previousRateRpPerGram: input.previousRateRpPerGram ?? null,
+        newRateRpPerGram: input.newRateRpPerGram ?? null,
+        changedByUserId: input.actor.sub,
+        metadata: input.metadata as any,
+      },
+    });
+  }
+
+  async createGradeTariff(dto: CreateGradeTariffDto, actor?: AuditActor) {
     const shapeGrade = await this.prisma.grade.findUnique({
       where: { id: dto.shapeGradeId },
     });
@@ -77,7 +102,7 @@ export class RulesService {
       return badRequest("effectiveTo must be after effectiveFrom");
     }
 
-    return this.prisma.gradeTariff.create({
+    const created = await this.prisma.gradeTariff.create({
       data: {
         shapeGradeId: dto.shapeGradeId,
         featherGradeId: dto.featherGradeId ?? null,
@@ -87,6 +112,15 @@ export class RulesService {
         effectiveTo,
       },
     });
+    await this.recordTariffAudit({
+      tariffType: "GRADE",
+      tariffId: created.id,
+      action: "CREATE",
+      newRateRpPerGram: created.rateRpPerGram,
+      actor,
+      metadata: { effectiveFrom: created.effectiveFrom.toISOString() },
+    });
+    return created;
   }
 
   async findGradeTariffs(query: GradeTariffQueryDto) {
@@ -99,9 +133,9 @@ export class RulesService {
         colorGradeId: query.colorGradeId,
         ...(at
           ? {
-            effectiveFrom: { lte: at },
-            OR: [{ effectiveTo: null }, { effectiveTo: { gt: at } }],
-          }
+              effectiveFrom: { lte: at },
+              OR: [{ effectiveTo: null }, { effectiveTo: { gt: at } }],
+            }
           : undefined),
       },
       orderBy: { effectiveFrom: "desc" },
@@ -158,9 +192,9 @@ export class RulesService {
         supplierId: query.supplierId,
         ...(at
           ? {
-            effectiveFrom: { lte: at },
-            OR: [{ effectiveTo: null }, { effectiveTo: { gt: at } }],
-          }
+              effectiveFrom: { lte: at },
+              OR: [{ effectiveTo: null }, { effectiveTo: { gt: at } }],
+            }
           : undefined),
       },
       orderBy: { effectiveFrom: "desc" },
@@ -183,7 +217,7 @@ export class RulesService {
     });
   }
 
-  async deleteGradeTariff(id: string) {
+  async deleteGradeTariff(id: string, actor?: AuditActor) {
     const existing = await this.prisma.gradeTariff.findUnique({
       where: { id },
     });
@@ -192,9 +226,17 @@ export class RulesService {
       return notFound("Grade tariff not found", { id });
     }
 
-    return this.prisma.gradeTariff.delete({
+    const deleted = await this.prisma.gradeTariff.delete({
       where: { id },
     });
+    await this.recordTariffAudit({
+      tariffType: "GRADE",
+      tariffId: deleted.id,
+      action: "DELETE",
+      previousRateRpPerGram: deleted.rateRpPerGram,
+      actor,
+    });
+    return deleted;
   }
 
   async deleteMoistureRule(id: string) {
@@ -222,6 +264,197 @@ export class RulesService {
 
     return this.prisma.pecahBonPreset.delete({
       where: { id },
+    });
+  }
+
+  async createResultGradeTariff(dto: { resultGradeTypeId: string; rateRpPerGram: number; effectiveFrom?: string }, actor?: AuditActor) {
+    const gradeType = await this.prisma.barangJadiGradeType.findUnique({
+      where: { id: dto.resultGradeTypeId },
+    });
+
+    if (!gradeType) {
+      return notFound("Grade hasil barang jadi tidak ditemukan", { id: dto.resultGradeTypeId });
+    }
+
+    const effectiveFrom = dto.effectiveFrom ? new Date(dto.effectiveFrom) : new Date();
+
+    const created = await this.prisma.resultGradeTariff.create({
+      data: {
+        resultGradeTypeId: dto.resultGradeTypeId,
+        rateRpPerGram: Math.round(Number(dto.rateRpPerGram)),
+        effectiveFrom,
+      },
+      include: {
+        resultGradeType: true,
+      },
+    });
+    await this.recordTariffAudit({
+      tariffType: "RESULT",
+      tariffId: created.id,
+      action: "CREATE",
+      newRateRpPerGram: created.rateRpPerGram,
+      actor,
+      metadata: { effectiveFrom: created.effectiveFrom.toISOString() },
+    });
+    return created;
+  }
+
+  findResultGradeTariffs() {
+    return this.prisma.resultGradeTariff.findMany({
+      orderBy: { effectiveFrom: "desc" },
+      include: {
+        resultGradeType: true,
+      },
+    });
+  }
+
+  async deleteResultGradeTariff(id: string, actor?: AuditActor) {
+    const existing = await this.prisma.resultGradeTariff.findUnique({
+      where: { id },
+    });
+    if (!existing) {
+      return notFound("Result grade tariff not found", { id });
+    }
+    const deleted = await this.prisma.resultGradeTariff.delete({
+      where: { id },
+    });
+    await this.recordTariffAudit({
+      tariffType: "RESULT",
+      tariffId: deleted.id,
+      action: "DELETE",
+      previousRateRpPerGram: deleted.rateRpPerGram,
+      actor,
+    });
+    return deleted;
+  }
+
+  async updateGradeTariff(id: string, dto: Partial<CreateGradeTariffDto>, actor?: AuditActor) {
+    const existing = await this.prisma.gradeTariff.findUnique({
+      where: { id },
+    });
+    if (!existing) {
+      return notFound("Grade tariff not found", { id });
+    }
+
+    const data: any = {};
+
+    if (dto.shapeGradeId) {
+      const shapeGrade = await this.prisma.grade.findUnique({
+        where: { id: dto.shapeGradeId },
+      });
+      if (!shapeGrade || shapeGrade.type !== GradeType.BENTUK) {
+        return badRequest("Grade bentuk tidak valid");
+      }
+      data.shapeGrade = { connect: { id: dto.shapeGradeId } };
+    }
+
+    if (dto.featherGradeId !== undefined) {
+      data.featherGrade = dto.featherGradeId
+        ? { connect: { id: dto.featherGradeId } }
+        : { disconnect: true };
+    }
+
+    if (dto.colorGradeId !== undefined) {
+      data.colorGrade = dto.colorGradeId
+        ? { connect: { id: dto.colorGradeId } }
+        : { disconnect: true };
+    }
+
+    if (dto.rateRpPerGram !== undefined) {
+      data.rateRpPerGram = Math.round(dto.rateRpPerGram);
+    }
+
+    if (dto.effectiveFrom) {
+      data.effectiveFrom = new Date(dto.effectiveFrom);
+    }
+
+    if (dto.effectiveTo !== undefined) {
+      data.effectiveTo = dto.effectiveTo ? new Date(dto.effectiveTo) : null;
+    }
+
+    const updated = await this.prisma.gradeTariff.update({
+      where: { id },
+      data,
+      include: {
+        shapeGrade: true,
+        featherGrade: true,
+        colorGrade: true,
+      },
+    });
+    await this.recordTariffAudit({
+      tariffType: "GRADE",
+      tariffId: updated.id,
+      action: "UPDATE",
+      previousRateRpPerGram: existing.rateRpPerGram,
+      newRateRpPerGram: updated.rateRpPerGram,
+      actor,
+      metadata: {
+        previousEffectiveFrom: existing.effectiveFrom.toISOString(),
+        effectiveFrom: updated.effectiveFrom.toISOString(),
+      },
+    });
+    return updated;
+  }
+
+  async updateResultGradeTariff(id: string, dto: { rateRpPerGram?: number; effectiveFrom?: string }, actor?: AuditActor) {
+    const existing = await this.prisma.resultGradeTariff.findUnique({
+      where: { id },
+    });
+    if (!existing) {
+      return notFound("Result grade tariff not found", { id });
+    }
+
+    const data: any = {};
+    if (dto.rateRpPerGram !== undefined) {
+      data.rateRpPerGram = Math.round(Number(dto.rateRpPerGram));
+    }
+    if (dto.effectiveFrom) {
+      data.effectiveFrom = new Date(dto.effectiveFrom);
+    }
+
+    const updated = await this.prisma.resultGradeTariff.update({
+      where: { id },
+      data,
+      include: {
+        resultGradeType: true,
+      },
+    });
+    await this.recordTariffAudit({
+      tariffType: "RESULT",
+      tariffId: updated.id,
+      action: "UPDATE",
+      previousRateRpPerGram: existing.rateRpPerGram,
+      newRateRpPerGram: updated.rateRpPerGram,
+      actor,
+      metadata: {
+        previousEffectiveFrom: existing.effectiveFrom.toISOString(),
+        effectiveFrom: updated.effectiveFrom.toISOString(),
+      },
+    });
+    return updated;
+  }
+
+  findTariffAudits(tariffType?: string) {
+    return this.prisma.tariffAuditLog.findMany({
+      where: tariffType ? { tariffType } : undefined,
+      orderBy: { changedAt: "desc" },
+      take: 200,
+      include: { changedBy: { select: { id: true, name: true, email: true, role: true } } },
+    });
+  }
+
+  async getSetting(key: string) {
+    const setting = await this.prisma.systemSetting.findUnique({
+      where: { key },
+    });
+    return setting ?? { key, value: key === "RAW_MATERIAL_PAYROLL_CALC_BASE" ? "WET" : "" };
+  }
+
+  async setSetting(key: string, value: string) {
+    return this.prisma.systemSetting.upsert({
+      where: { key },
+      update: { value },
+      create: { key, value },
     });
   }
 }

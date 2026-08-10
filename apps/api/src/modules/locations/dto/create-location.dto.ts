@@ -27,4 +27,9 @@ export class CreateLocationDto {
   @IsOptional()
   @IsUUID()
   workerId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  productionRoomId?: string;
 }

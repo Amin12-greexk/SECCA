@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../auth/roles.decorator";
 import { CreateGradeTariffDto } from "./dto/create-grade-tariff.dto";
@@ -16,8 +16,9 @@ export class RulesController {
   constructor(private readonly rulesService: RulesService) { }
 
   @Post("grade-tariffs")
-  createGradeTariff(@Body() dto: CreateGradeTariffDto) {
-    return this.rulesService.createGradeTariff(dto);
+  @Roles("manager")
+  createGradeTariff(@Body() dto: CreateGradeTariffDto, @Req() req: { user?: { sub?: string } }) {
+    return this.rulesService.createGradeTariff(dto, req.user);
   }
 
   @Get("grade-tariffs")
@@ -25,12 +26,20 @@ export class RulesController {
     return this.rulesService.findGradeTariffs(query);
   }
 
+  @Patch("grade-tariffs/:id")
+  @Roles("manager")
+  updateGradeTariff(@Param("id") id: string, @Body() dto: Partial<CreateGradeTariffDto>, @Req() req: { user?: { sub?: string } }) {
+    return this.rulesService.updateGradeTariff(id, dto, req.user);
+  }
+
   @Delete("grade-tariffs/:id")
-  deleteGradeTariff(@Param("id") id: string) {
-    return this.rulesService.deleteGradeTariff(id);
+  @Roles("manager")
+  deleteGradeTariff(@Param("id") id: string, @Req() req: { user?: { sub?: string } }) {
+    return this.rulesService.deleteGradeTariff(id, req.user);
   }
 
   @Post("moisture")
+  @Roles("manager")
   createMoistureRule(@Body() dto: CreateMoistureRuleDto) {
     return this.rulesService.createMoistureRule(dto);
   }
@@ -41,11 +50,13 @@ export class RulesController {
   }
 
   @Delete("moisture/:id")
+  @Roles("manager")
   deleteMoistureRule(@Param("id") id: string) {
     return this.rulesService.deleteMoistureRule(id);
   }
 
   @Post("pecah-bon-presets")
+  @Roles("manager")
   createPreset(@Body() dto: CreatePecahBonPresetDto) {
     return this.rulesService.createPecahBonPreset(dto);
   }
@@ -56,8 +67,48 @@ export class RulesController {
   }
 
   @Delete("pecah-bon-presets/:id")
+  @Roles("manager")
   deletePreset(@Param("id") id: string) {
     return this.rulesService.deletePecahBonPreset(id);
+  }
+
+  @Post("result-grade-tariffs")
+  @Roles("manager")
+  createResultGradeTariff(@Body() dto: { resultGradeTypeId: string; rateRpPerGram: number; effectiveFrom?: string }, @Req() req: { user?: { sub?: string } }) {
+    return this.rulesService.createResultGradeTariff(dto, req.user);
+  }
+
+  @Get("result-grade-tariffs")
+  findResultGradeTariffs() {
+    return this.rulesService.findResultGradeTariffs();
+  }
+
+  @Patch("result-grade-tariffs/:id")
+  @Roles("manager")
+  updateResultGradeTariff(@Param("id") id: string, @Body() dto: { rateRpPerGram?: number; effectiveFrom?: string }, @Req() req: { user?: { sub?: string } }) {
+    return this.rulesService.updateResultGradeTariff(id, dto, req.user);
+  }
+
+  @Delete("result-grade-tariffs/:id")
+  @Roles("manager")
+  deleteResultGradeTariff(@Param("id") id: string, @Req() req: { user?: { sub?: string } }) {
+    return this.rulesService.deleteResultGradeTariff(id, req.user);
+  }
+
+  @Get("tariff-audits")
+  findTariffAudits(@Query("tariffType") tariffType?: string) {
+    return this.rulesService.findTariffAudits(tariffType);
+  }
+
+  @Get("settings/:key")
+  getSetting(@Param("key") key: string) {
+    return this.rulesService.getSetting(key);
+  }
+
+  @Post("settings")
+  @Roles("manager")
+  setSetting(@Body() dto: { key: string; value: string }) {
+    return this.rulesService.setSetting(dto.key, dto.value);
   }
 }
 

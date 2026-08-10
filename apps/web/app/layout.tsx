@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { Inter } from "next/font/google";
 import Image from "next/image";
+import { useCallback, useRef } from 'react';
 import "./globals.css";
 import UserMenu from "@/components/UserMenu";
 import Sidebar from "@/components/Sidebar";
@@ -14,6 +15,47 @@ const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
 });
+
+function LogoBlock() {
+  const logoRef = useRef<HTMLDivElement>(null);
+
+  const handleClick = useCallback(() => {
+    const el = logoRef.current;
+    if (!el) return;
+    el.classList.remove('logo-bounce');
+    // force reflow
+    void el.offsetWidth;
+    el.classList.add('logo-bounce');
+  }, []);
+
+  return (
+    <div
+      ref={logoRef}
+      className="flex items-center gap-2.5 cursor-pointer select-none group"
+      onClick={handleClick}
+    >
+      {/* Glow ring + logo */}
+      <div className="relative flex h-11 w-11 items-center justify-center">
+        {/* Animated gradient ring */}
+        <div className="absolute inset-0 rounded-xl bg-gradient-to-tr from-emerald-300 via-lime-200 to-teal-300 opacity-80 blur-[2px] group-hover:opacity-100 group-hover:blur-[3px] transition-all duration-300 animate-[spin_6s_linear_infinite]" />
+        <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-md ring-1 ring-white/50">
+          <Image
+            src="/Assets/Logo-secca.png"
+            alt="SECCA"
+            width={36}
+            height={36}
+            className="h-8 w-8 object-contain drop-shadow-sm transition-transform duration-200 group-hover:scale-110"
+            priority
+          />
+        </div>
+      </div>
+      {/* Gradient text */}
+      <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-white via-lime-100 to-emerald-100 bg-clip-text text-transparent drop-shadow-sm transition-all duration-200 group-hover:tracking-widest">
+        SECCA
+      </span>
+    </div>
+  );
+}
 
 function Header() {
   const { toggleMobileMenu, isMobile } = useSidebar();
@@ -44,19 +86,7 @@ function Header() {
           )}
 
           {/* Logo */}
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white p-1 shadow-sm">
-              <Image
-                src="/Assets/Logo-secca.png"
-                alt="SECCA"
-                width={36}
-                height={36}
-                className="h-8 w-8 object-contain"
-                priority
-              />
-            </div>
-            <span className="text-xl font-bold tracking-tight">SECCA</span>
-          </div>
+          <LogoBlock />
         </div>
 
         <UserMenu />
@@ -71,7 +101,7 @@ function MainContent({ children }: { children: React.ReactNode }) {
   return (
     <main
       className={`
-        mt-[72px] min-h-[calc(100vh-72px)]
+        mt-[72px] min-h-[calc(100vh-72px)] pb-24
         transition-all duration-300 ease-in-out
         bg-green-50/40
         ${isMobile ? 'ml-0' : (isCollapsed ? 'ml-20' : 'ml-64')}
