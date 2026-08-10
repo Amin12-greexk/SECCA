@@ -252,7 +252,7 @@ function KoreksiHistoryContent() {
       "Susut Proses (%)",
       "Susut Hilang (Gr)",
       "Susut Hilang (%)",
-      "Rendemen (%)",
+      "Rendemen Utama (%)",
     ];
     const csvRows = exportRows.map((entry, index) => {
       const receipt = receiptsMap[entry.pecahBonId || entry.id];
@@ -272,7 +272,7 @@ function KoreksiHistoryContent() {
         : dryIn > 0
           ? (susutHilangG / dryIn) * 100
           : 0;
-      const netRendemen = dryIn > 0 ? ((mainOut + byProduct) / dryIn) * 100 : 0;
+      const rendemenUtama = dryIn > 0 ? (mainOut / dryIn) * 100 : 0;
 
       const gradeLabel =
         [entry.grade?.code, entry.featherGrade?.code, entry.colorGrade?.code]
@@ -306,7 +306,7 @@ function KoreksiHistoryContent() {
         receipt ? formatNumber(susutProsesPct, 2) : "-",
         receipt ? formatNumber(susutHilangG, 2) : "-",
         receipt ? formatNumber(susutHilangPct, 2) : "-",
-        receipt ? formatNumber(netRendemen, 2) : "-",
+        receipt ? formatNumber(rendemenUtama, 2) : "-",
       ]
         .map(escapeCsv)
         .join(CSV_DELIMITER);
@@ -332,7 +332,7 @@ function KoreksiHistoryContent() {
       "Susut Proses (%)",
       "Susut Hilang (Gr)",
       "Susut Hilang (%)",
-      "Rendemen (%)",
+      "Rendemen Utama (%)",
       "Tarif / Gram (Rp)",
       "Total Upah Payroll (Rp)",
     ];
@@ -353,7 +353,7 @@ function KoreksiHistoryContent() {
         : dryIn > 0
           ? (susutHilangG / dryIn) * 100
           : 0;
-      const netRendemen = dryIn > 0 ? ((mainOut + byProduct) / dryIn) * 100 : 0;
+      const rendemenUtama = dryIn > 0 ? (mainOut / dryIn) * 100 : 0;
 
       const resultGradesStr =
         item.resultGrades && item.resultGrades.length > 0
@@ -376,7 +376,7 @@ function KoreksiHistoryContent() {
         formatNumber(susutProsesPct, 2),
         formatNumber(susutHilangG, 2),
         formatNumber(susutHilangPct, 2),
-        formatNumber(netRendemen, 2),
+        formatNumber(rendemenUtama, 2),
         item.payroll?.rateRpPerGram ?? 0,
         item.payroll?.amountRp ?? 0,
       ]
@@ -666,7 +666,7 @@ function KoreksiHistoryContent() {
                       Susut Hilang
                     </th>
                     <th className="px-3 py-2.5 text-right font-bold text-indigo-700">
-                      Rendemen (%)
+                      Rendemen Utama (%)
                     </th>
                     <th className="px-3 py-2.5 text-right font-bold text-indigo-900">
                       Tarif / Gram
@@ -714,8 +714,8 @@ function KoreksiHistoryContent() {
                         : dryIn > 0
                           ? (susutHilangG / dryIn) * 100
                           : 0;
-                      const netRendemen =
-                        dryIn > 0 ? ((mainOut + byProduct) / dryIn) * 100 : 0;
+                      const rendemenUtama =
+                        dryIn > 0 ? (mainOut / dryIn) * 100 : 0;
 
                       return (
                         <tr key={item.id} className="hover:bg-gray-50">
@@ -787,7 +787,7 @@ function KoreksiHistoryContent() {
                             </span>
                           </td>
                           <td className="px-3 py-2.5 text-right font-mono font-bold text-indigo-900">
-                            {formatNumber(netRendemen, 1)}%
+                            {formatNumber(rendemenUtama, 1)}%
                           </td>
                           <td className="px-3 py-2.5 text-right font-mono font-semibold text-indigo-900">
                             {formatRp(item.payroll?.rateRpPerGram ?? 0)}/g
@@ -851,7 +851,7 @@ function KoreksiHistoryContent() {
                       Susut Hilang
                     </th>
                     <th className="px-3 py-2.5 text-right font-bold text-indigo-700">
-                      Rendemen (%)
+                      Rendemen Utama (%)
                     </th>
                   </tr>
                 </thead>
@@ -896,8 +896,8 @@ function KoreksiHistoryContent() {
                         : dryIn > 0
                           ? (susutHilangG / dryIn) * 100
                           : 0;
-                      const netRendemen =
-                        dryIn > 0 ? ((mainOut + byProduct) / dryIn) * 100 : 0;
+                      const rendemenUtama =
+                        dryIn > 0 ? (mainOut / dryIn) * 100 : 0;
                       const gradeLabel =
                         [
                           entry.grade?.code,
@@ -1007,7 +1007,7 @@ function KoreksiHistoryContent() {
                             )}
                           </td>
                           <td className="px-3 py-2.5 text-right font-mono font-bold text-indigo-900">
-                            {receipt ? `${formatNumber(netRendemen, 1)}%` : "-"}
+                            {receipt ? `${formatNumber(rendemenUtama, 1)}%` : "-"}
                           </td>
                         </tr>
                       );

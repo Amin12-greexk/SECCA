@@ -71,9 +71,11 @@ function createWindow() {
     },
   });
 
-  const targetUrl = (config && config.serverUrl && !config.serverUrl.includes('secca.tunasestaindonesia.com'))
-    ? config.serverUrl
-    : getRuntimeUrl();
+  // Packaged builds must always open the production frontend. A stale local
+  // serverUrl from a previous development run must never override it.
+  const targetUrl = app.isPackaged
+    ? productionUrl
+    : (config?.serverUrl || developmentUrl);
   mainWindow.loadURL(targetUrl);
 
   // Open DevTools for debugging (remove in production)

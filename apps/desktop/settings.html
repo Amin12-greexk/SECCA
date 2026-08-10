@@ -210,12 +210,12 @@
       <!-- Server URL Section -->
       <div>
         <h1>Pengaturan SECCA</h1>
-        <p>Konfigurasi server dan perangkat keras.</p>
+        <p>Server production dikunci pada aplikasi ter-install. Konfigurasi perangkat keras tetap dapat diubah.</p>
       </div>
 
       <div>
-        <label for="serverUrl">Server URL</label>
-        <input id="serverUrl" placeholder="http://192.168.11.246:3000" />
+        <label for="serverUrl">Server URL production</label>
+        <input id="serverUrl" placeholder="https://secca.tunasestaindonesia.com" readonly />
       </div>
 
       <div id="serverToast" class="toast"></div>
@@ -332,6 +332,13 @@
         try {
           const config = await window.seccaDesktop.getConfig();
           serverInput.value = config?.serverUrl ?? '';
+          // Packaged apps expose a read-only production endpoint.
+          const isProduction = serverInput.value.includes('secca.tunasestaindonesia.com');
+          serverInput.readOnly = isProduction;
+          saveBtn.disabled = isProduction;
+          if (isProduction) {
+            showToast(serverToast, 'success', 'Aplikasi terhubung ke server production.');
+          }
         } catch (error) {
           showToast(serverToast, 'error', 'Gagal memuat konfigurasi: ' + (error?.message || 'Unknown'));
         }
