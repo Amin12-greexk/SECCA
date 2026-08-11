@@ -8,6 +8,10 @@ dist/
 apps/desktop/dist/
 apps/desktop/dist-v2/
 apps/desktop/win-unpacked/
+.vscode/
+output/
+tmp/
+tmp_accounts.txt
 *.log
 *.tmp
 *.temp
