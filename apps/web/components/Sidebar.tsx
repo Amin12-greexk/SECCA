@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useSidebar } from '@/lib/context/SidebarContext';
+import { getMitraOrderRequests } from '@/lib/api';
 import type { UserRole, UiAccessModuleKey } from '@/lib/types/auth';
 import { gsap } from 'gsap';
 
@@ -358,6 +359,63 @@ export default function Sidebar() {
     const navRef = useRef<HTMLElement>(null);
     const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
+    // Notification states
+    const [pendingBakuCount, setPendingBakuCount] = useState(0);
+    const [fulfilledTrainerCount, setFulfilledTrainerCount] = useState(0);
+
+    const fetchNotifications = async () => {
+        if (!user) return;
+        try {
+            const userRole = user.role.toLowerCase();
+            
+            // 1. Baku / Manager: REQUESTED requests waiting for approval/split
+            if (userRole === 'baku' || userRole === 'manager') {
+                const reqs = await getMitraOrderRequests({ status: 'REQUESTED', limit: 100 });
+                setPendingBakuCount(reqs.length);
+            } else {
+                setPendingBakuCount(0);
+            }
+
+            // 2. Trainer / Manager: FULFILLED requests since last visited
+            if (userRole === 'trainer' || userRole === 'manager') {
+                const reqs = await getMitraOrderRequests({ status: 'FULFILLED', limit: 100 });
+                const lastVisitedStr = localStorage.getItem('secca_last_visited_trainer_orders');
+                
+                if (lastVisitedStr) {
+                    const lastVisited = new Date(lastVisitedStr).getTime();
+                    const unread = reqs.filter(r => new Date(r.updatedAt).getTime() > lastVisited);
+                    setFulfilledTrainerCount(unread.length);
+                } else {
+                    // Default: show requests fulfilled in the last 24 hours
+                    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+                    const unread = reqs.filter(r => new Date(r.updatedAt).getTime() > oneDayAgo);
+                    setFulfilledTrainerCount(unread.length);
+                }
+            } else {
+                setFulfilledTrainerCount(0);
+            }
+        } catch (error) {
+            console.error('Error fetching sidebar notifications:', error);
+        }
+    };
+
+    // Polling notifications
+    useEffect(() => {
+        if (user) {
+            fetchNotifications();
+            const interval = setInterval(fetchNotifications, 30000); // Poll every 30 seconds
+            return () => clearInterval(interval);
+        }
+    }, [user]);
+
+    // Clear notifications on visiting orders page
+    useEffect(() => {
+        if (pathname === '/trainer/orders') {
+            localStorage.setItem('secca_last_visited_trainer_orders', new Date().toISOString());
+            setFulfilledTrainerCount(0);
+        }
+    }, [pathname]);
+
     // Animate menu items on mount
     useEffect(() => {
         if (navRef.current && !isMobile) {
@@ -419,6 +477,17 @@ export default function Sidebar() {
         const showTooltip = false;
         const defaultColorClass = 'bg-emerald-100 text-emerald-700 border-emerald-200/70';
 
+        // Get notification badge count and colors
+        let badgeCount = 0;
+        let badgeColor = 'bg-rose-500 text-white border-rose-600';
+        if (item.name === 'Stock' || item.name === 'Data Stock') {
+            badgeCount = pendingBakuCount;
+            badgeColor = 'bg-amber-500 text-white border-amber-600 animate-pulse-subtle';
+        } else if (item.name === 'Order Mitra' || item.name === 'Order Lp untuk mitra') {
+            badgeCount = fulfilledTrainerCount;
+            badgeColor = 'bg-emerald-500 text-white border-emerald-600';
+        }
+
         if (hasChildren) {
             // Parent menu with children (dropdown)
             const isAnyChildActive = item.children?.some(child => pathname === child.href);
@@ -450,32 +519,44 @@ export default function Sidebar() {
                             `}
                         >
                             <div className={`flex items-center ${isCollapsed && !isMobile ? '' : 'gap-3'}`}>
-                                <span className={`
-                                    flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-300 border
-                                    ${isAnyChildActive
-                                        ? 'bg-emerald-500 text-white border-emerald-600 shadow-xs'
-                                        : (item.colorClass ?? defaultColorClass)
-                                    }
-                                    ${hoveredItem === item.name && !isAnyChildActive ? 'scale-110' : ''}
-                                `}>
-                                    {item.icon}
+                                <span className="relative">
+                                    <span className={`
+                                        flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-300 border
+                                        ${isAnyChildActive
+                                            ? 'bg-emerald-500 text-white border-emerald-600 shadow-xs'
+                                            : (item.colorClass ?? defaultColorClass)
+                                        }
+                                        ${hoveredItem === item.name && !isAnyChildActive ? 'scale-110' : ''}
+                                    `}>
+                                        {item.icon}
+                                    </span>
+                                    {isCollapsed && !isMobile && badgeCount > 0 && (
+                                        <span className={`absolute -top-1 -right-1 flex h-2.5 w-2.5 rounded-full border border-white ${badgeColor.split(' ')[0]}`} />
+                                    )}
                                 </span>
                                 {(!isCollapsed || isMobile) && (
                                     <span className="font-medium text-sm">{item.name}</span>
                                 )}
                             </div>
                             {(!isCollapsed || isMobile) && (
-                                <svg
-                                    className={`w-4 h-4 transition-transform duration-300 ${isOpen ? 'rotate-180 text-emerald-500' : 'text-gray-400'}`}
-                                    fill="none"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="2"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                >
-                                    <path d="M19 9l-7 7-7-7" />
-                                </svg>
+                                <div className="flex items-center gap-1.5">
+                                    {badgeCount > 0 && (
+                                        <span className={`flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[10px] font-bold border ${badgeColor}`}>
+                                            {badgeCount}
+                                        </span>
+                                    )}
+                                    <svg
+                                        className={`w-4 h-4 transition-transform duration-300 ${isOpen ? 'rotate-180 text-emerald-500' : 'text-gray-400'}`}
+                                        fill="none"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth="2"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                    >
+                                        <path d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </div>
                             )}
                         </button>
                     </Tooltip>
@@ -516,18 +597,28 @@ export default function Sidebar() {
                             {isActive && (
                                 <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-white rounded-r-full shadow-sm" />
                             )}
-                            <span className={`
-                                flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-300 border
-                                ${isActive
-                                    ? 'bg-white/20 text-white border-white/30 shadow-none'
-                                    : (item.colorClass ?? defaultColorClass)
-                                }
-                                ${hoveredItem === item.name && !isActive ? 'scale-110' : ''}
-                            `}>
-                                {item.icon}
+                            <span className="relative">
+                                <span className={`
+                                    flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-300 border
+                                    ${isActive
+                                        ? 'bg-white/20 text-white border-white/30 shadow-none'
+                                        : (item.colorClass ?? defaultColorClass)
+                                    }
+                                    ${hoveredItem === item.name && !isActive ? 'scale-110' : ''}
+                                `}>
+                                    {item.icon}
+                                </span>
+                                {isCollapsed && !isMobile && !isChild && badgeCount > 0 && (
+                                    <span className={`absolute -top-1 -right-1 flex h-2.5 w-2.5 rounded-full border border-white ${badgeColor.split(' ')[0]}`} />
+                                )}
                             </span>
                             {(!isCollapsed || isMobile || isChild) && (
                                 <span className="font-medium text-sm">{item.name}</span>
+                            )}
+                            {(!isCollapsed || isMobile || isChild) && badgeCount > 0 && (
+                                <span className={`ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[10px] font-bold border ${badgeColor}`}>
+                                    {badgeCount}
+                                </span>
                             )}
                         </Link>
                     </Tooltip>
