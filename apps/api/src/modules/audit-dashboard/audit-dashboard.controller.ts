@@ -1,4 +1,4 @@
-﻿import {
+import {
   Body,
   Controller,
   Get,
@@ -25,6 +25,7 @@ import { SummaryQueryDto } from "./dto/summary-query.dto";
 import { TrendsQueryDto } from "./dto/trends-query.dto";
 import { UpdatePersonColorDto } from "./dto/update-person-color.dto";
 
+/** Batas ukuran upload; workbook periode realistis jauh di bawah ini. */
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 @ApiTags("Audit Dashboard")
@@ -32,12 +33,21 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export class AuditDashboardController {
   constructor(private readonly auditDashboardService: AuditDashboardService) {}
 
+  /**
+   * Upload tetap protected (manager/admin), sementara endpoint GET di bawah
+   * public agar halaman /performa bisa dibuka tanpa login.
+   */
   @Post("import")
   @Roles("manager", "admin")
   @ApiBearerAuth()
   @ApiConsumes("multipart/form-data")
   @ApiOperation({ summary: "Upload workbook Excel berisi data periode" })
-  @ApiBody({ schema: { type: "object", properties: { file: { type: "string", format: "binary" } } } })
+  @ApiBody({
+    schema: {
+      type: "object",
+      properties: { file: { type: "string", format: "binary" } },
+    },
+  })
   async importWorkbook(@Req() request: FastifyRequest) {
     if (!request.isMultipart()) {
       badRequest("Request harus multipart/form-data dengan field 'file'.");
@@ -50,11 +60,21 @@ export class AuditDashboardController {
     }
 
     const buffer = await file.toBuffer();
-    if (file.file.truncated) badRequest("Ukuran file melebihi 10 MB.");
-    if (buffer.length === 0) badRequest("File kosong. Upload file Excel yang berisi data.");
+
+    if (file.file.truncated) {
+      badRequest("Ukuran file melebihi 10 MB.");
+    }
+    if (buffer.length === 0) {
+      badRequest("File kosong. Upload file Excel yang berisi data.");
+    }
 
     const user = (request as FastifyRequest & { user?: { sub?: string } }).user;
-    return this.auditDashboardService.importWorkbook({ buffer, fileName: file.filename, userId: user?.sub ?? null });
+
+    return this.auditDashboardService.importWorkbook({
+      buffer,
+      fileName: file.filename,
+      userId: user?.sub ?? null,
+    });
   }
 
   @Post("reset")
@@ -77,20 +97,6 @@ export class AuditDashboardController {
   @ApiOperation({ summary: "Ringkasan satu periode; kosongkan periodId untuk yang terbaru" })
   getSummary(@Query() query: SummaryQueryDto) {
     return this.auditDashboardService.getSummary(query.periodId);
-  }
-
-  @Get("expense-summary")
-  @Public()
-  @ApiOperation({ summary: "Ringkasan biaya mingguan berbasis payroll + produksi" })
-  getExpenseSummary(@Query() query: SummaryQueryDto) {
-    return this.auditDashboardService.getExpenseSummary(query.periodId);
-  }
-
-  @Get("monthly-expenses")
-  @Public()
-  @ApiOperation({ summary: "Ringkasan bulanan biaya mingguan dashboard performa" })
-  getMonthlyExpenseStats() {
-    return this.auditDashboardService.getMonthlyExpenseStats();
   }
 
   @Get("persons")
@@ -118,7 +124,10 @@ export class AuditDashboardController {
   @Roles("manager", "admin")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Set warna custom untuk satu mitra" })
-  updatePersonColor(@Param("id", ParseUUIDPipe) id: string, @Body() dto: UpdatePersonColorDto) {
+  updatePersonColor(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: UpdatePersonColorDto,
+  ) {
     return this.auditDashboardService.updatePersonColor(id, dto.colorHex ?? null);
   }
 }
