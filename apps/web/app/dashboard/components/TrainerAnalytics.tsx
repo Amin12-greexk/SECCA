@@ -7,6 +7,13 @@ import { getTrainerSummary, type TrainerSummaryResponse } from '@/lib/api';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useToast } from '@/lib/toast';
 
+interface TooltipParam {
+  name: string;
+  color: string;
+  seriesName: string;
+  value: number;
+}
+
 export default function TrainerAnalytics() {
   const { user } = useAuth();
   const toast = useToast();
@@ -46,10 +53,11 @@ export default function TrainerAnalytics() {
     return {
       tooltip: {
         trigger: 'axis',
-        formatter: (params: any) => {
-          if (!Array.isArray(params) || params.length === 0) return '';
-          let res = `<div style="font-weight:700; border-bottom:1px solid #e2e8f0; padding-bottom:4px; margin-bottom:4px;">${params[0].name}</div>`;
-          params.forEach((item: any) => {
+        formatter: (params: unknown) => {
+          const list = params as TooltipParam[];
+          if (!Array.isArray(list) || list.length === 0) return '';
+          let res = `<div style="font-weight:700; border-bottom:1px solid #e2e8f0; padding-bottom:4px; margin-bottom:4px;">${list[0].name}</div>`;
+          list.forEach((item) => {
             res += `<div style="display:flex; justify-content:space-between; gap:16px; font-size:12px; margin-top:2px;">
               <span style="color:${item.color}; font-weight:600;">${item.seriesName}:</span>
               <span style="font-weight:700;">${new Intl.NumberFormat('id-ID').format(item.value)} gr</span>
@@ -139,6 +147,96 @@ export default function TrainerAnalytics() {
     };
   }, [data?.weeklyTrends]);
 
+  // ECharts Rendemen & Susut Chart Option
+  const efficiencyChartOption = useMemo<EChartsOption>(() => {
+    if (!data?.weeklyTrends) return {};
+
+    const categories = data.weeklyTrends.map((t) => t.periodLabel);
+    const rendemenUtama = data.weeklyTrends.map((t) => (t.rendemenPctBps ?? 0));
+    const rendemenNet = data.weeklyTrends.map((t) => (t.rendemenNetPctBps ?? 0));
+    const susutProses = data.weeklyTrends.map((t) => (t.susutProsesPctBps ?? 0));
+    const susutHilang = data.weeklyTrends.map((t) => (t.susutHilangPctBps ?? 0));
+
+    return {
+      tooltip: {
+        trigger: 'axis',
+        valueFormatter: (v) => `${(Number(v) / 100).toFixed(1)}%`,
+      },
+      legend: {
+        data: ['Rendemen Utama %', 'Rendemen Net %', 'Susut Proses %', 'Susut Hilang %'],
+        top: 4,
+        right: 10,
+        textStyle: { color: '#475569', fontSize: 12, fontWeight: 500 },
+      },
+      grid: {
+        left: '2%',
+        right: '3%',
+        bottom: '3%',
+        top: '15%',
+        containLabel: true,
+      },
+      xAxis: {
+        type: 'category',
+        boundaryGap: false,
+        data: categories,
+        axisLine: { lineStyle: { color: '#cbd5e1' } },
+        axisLabel: { color: '#64748b', fontSize: 11 },
+      },
+      yAxis: {
+        type: 'value',
+        axisLine: { show: false },
+        splitLine: { lineStyle: { color: '#f1f5f9' } },
+        axisLabel: {
+          color: '#64748b',
+          fontSize: 11,
+          formatter: (v: number) => `${(v / 100).toFixed(0)}%`,
+        },
+      },
+      series: [
+        {
+          name: 'Rendemen Utama %',
+          type: 'line',
+          smooth: true,
+          symbol: 'circle',
+          symbolSize: 8,
+          lineStyle: { width: 2.5, color: '#059833' },
+          itemStyle: { color: '#059833' },
+          data: rendemenUtama,
+        },
+        {
+          name: 'Rendemen Net %',
+          type: 'line',
+          smooth: true,
+          symbol: 'circle',
+          symbolSize: 8,
+          lineStyle: { width: 2.5, color: '#0d9488' },
+          itemStyle: { color: '#0d9488' },
+          data: rendemenNet,
+        },
+        {
+          name: 'Susut Proses %',
+          type: 'line',
+          smooth: true,
+          symbol: 'circle',
+          symbolSize: 8,
+          lineStyle: { width: 2.5, color: '#d97706' },
+          itemStyle: { color: '#d97706' },
+          data: susutProses,
+        },
+        {
+          name: 'Susut Hilang %',
+          type: 'line',
+          smooth: true,
+          symbol: 'circle',
+          symbolSize: 8,
+          lineStyle: { width: 2.5, color: '#e11d48' },
+          itemStyle: { color: '#e11d48' },
+          data: susutHilang,
+        },
+      ],
+    };
+  }, [data?.weeklyTrends]);
+
   if (loading) {
     return (
       <div className="rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm">
@@ -218,21 +316,40 @@ export default function TrainerAnalytics() {
         </div>
       </div>
 
-      {/* Main Trend Line Graph Chart (Grafik Naik-Turun Tren) */}
-      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-100 pb-3">
-          <div>
-            <h3 className="font-bold text-gray-900 text-sm">
-              Grafik Tren Naik-Turun: Order Bon vs Hasil Setoran
-            </h3>
-            <p className="text-xs text-gray-500">
-              Pantau fluktuasi grafik tren mingguan (Order Bon biru vs Setoran hijau)
-            </p>
+      {/* Charts Grid */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Main Trend Line Graph Chart (Grafik Naik-Turun Tren) */}
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-100 pb-3">
+            <div>
+              <h3 className="font-bold text-gray-900 text-sm">
+                Grafik Tren: Order Bon vs Hasil Setoran
+              </h3>
+              <p className="text-xs text-gray-500">
+                Order Bon (biru) vs Hasil Setoran (hijau)
+              </p>
+            </div>
+          </div>
+          <div className="w-full">
+            <LazyEChart option={lineChartOption} height={320} />
           </div>
         </div>
 
-        <div className="w-full">
-          <LazyEChart option={lineChartOption} height={340} />
+        {/* Efficiency Trend Graph Chart (Rendemen & Susut) */}
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-100 pb-3">
+            <div>
+              <h3 className="font-bold text-gray-900 text-sm">
+                Grafik Efisiensi: Rendemen & Susut
+              </h3>
+              <p className="text-xs text-gray-500">
+                Rendemen Utama, Rendemen Net, Susut Proses & Hilang (%)
+              </p>
+            </div>
+          </div>
+          <div className="w-full">
+            <LazyEChart option={efficiencyChartOption} height={320} />
+          </div>
         </div>
       </div>
 
@@ -249,12 +366,16 @@ export default function TrainerAnalytics() {
                 <th className="py-2.5 px-3 text-right">Hasil Setoran (Gram)</th>
                 <th className="py-2.5 px-3 text-center">Jumlah Setoran</th>
                 <th className="py-2.5 px-3 text-right">Total Susut (Gram)</th>
+                <th className="py-2.5 px-3 text-right">Rendemen Utama</th>
+                <th className="py-2.5 px-3 text-right">Rendemen Net</th>
+                <th className="py-2.5 px-3 text-right">Susut Proses</th>
+                <th className="py-2.5 px-3 text-right">Susut Hilang</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {workerStats.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-gray-500">
+                  <td colSpan={10} className="py-6 text-center text-gray-500">
                     Tidak ada data mitra binaan.
                   </td>
                 </tr>
@@ -267,6 +388,18 @@ export default function TrainerAnalytics() {
                     <td className="py-2.5 px-3 text-right font-medium text-emerald-700">{formatNumber(w.setoranGram)} gr</td>
                     <td className="py-2.5 px-3 text-center">{w.setoranCount} Setoran</td>
                     <td className="py-2.5 px-3 text-right text-rose-600">{formatNumber(w.susutGram)} gr</td>
+                    <td className="py-2.5 px-3 text-right font-medium text-green-700">
+                      {w.rendemenPctBps ? `${(w.rendemenPctBps / 100).toFixed(1)}%` : '0.0%'}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-medium text-teal-700">
+                      {w.rendemenNetPctBps ? `${(w.rendemenNetPctBps / 100).toFixed(1)}%` : '0.0%'}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-medium text-amber-700">
+                      {w.susutProsesPctBps ? `${(w.susutProsesPctBps / 100).toFixed(1)}%` : '0.0%'}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-medium text-rose-700">
+                      {w.susutHilangPctBps ? `${(w.susutHilangPctBps / 100).toFixed(1)}%` : '0.0%'}
+                    </td>
                   </tr>
                 ))
               )}

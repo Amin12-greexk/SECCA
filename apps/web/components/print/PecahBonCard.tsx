@@ -115,6 +115,9 @@ html, body {
             <div className="text-[16px] font-bold">
               KADAR AIR: {formatNumber(entry.moisturePercent, 1)}%
             </div>
+            <div className="text-[16px] font-bold">
+              KEPING: {entry.pieceCount ?? 0} Kpg
+            </div>
           </div>
 
           <div className="mt-3 border-t border-dashed border-black" />

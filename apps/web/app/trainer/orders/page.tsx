@@ -54,7 +54,7 @@ function WorkerStatusBadge({
         }
         return (
             <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
-                Maksimal (2 Order)
+                Maksimal (3 Order)
             </span>
         );
     }
@@ -69,7 +69,7 @@ function WorkerStatusBadge({
 
     return (
         <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-600">
-            Maksimal (2 Order)
+            Maksimal (3 Order)
         </span>
     );
 }

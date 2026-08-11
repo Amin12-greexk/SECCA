@@ -69,6 +69,11 @@ enum AuditDashboardImportStatus {
   FAILED
 }
 
+enum AuditDashboardImportFormat {
+  LEGACY_SUMMARY
+  WEEKLY_PAYROLL_DETAIL
+}
+
 enum RoomType {
   FACTORY
   MINIPLANT
@@ -90,26 +95,26 @@ model ProductionRoom {
 }
 
 model AppUser {
-  id                String         @id @default(uuid())
+  id                String   @id @default(uuid())
   name              String
-  email             String         @unique
-  phone             String?        @unique
+  email             String   @unique
+  phone             String?  @unique
   passwordHash      String
   role              UserRole
-  workerId          String?        @unique
+  workerId          String?  @unique
   productionRoomId  String?
-  useCustomUiAccess Boolean        @default(false)
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  useCustomUiAccess Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  productionRoom      ProductionRoom?   @relation(fields: [productionRoomId], references: [id], onDelete: SetNull)
-  worker              Worker?           @relation("UserWorker", fields: [workerId], references: [id])
-  supervisedWorkers   Worker[]          @relation("WorkerTrainer")
-  mitraOrderRequests  MitraOrderRequest[] @relation("MitraOrderRequester")
-  mitraOrderProcessed MitraOrderRequest[] @relation("MitraOrderProcessor")
-  uiAccesses          UserUiAccess[]
+  productionRoom        ProductionRoom?        @relation(fields: [productionRoomId], references: [id], onDelete: SetNull)
+  worker                Worker?                @relation("UserWorker", fields: [workerId], references: [id])
+  supervisedWorkers     Worker[]               @relation("WorkerTrainer")
+  mitraOrderRequests    MitraOrderRequest[]    @relation("MitraOrderRequester")
+  mitraOrderProcessed   MitraOrderRequest[]    @relation("MitraOrderProcessor")
+  uiAccesses            UserUiAccess[]
   auditDashboardImports AuditDashboardImport[] @relation("AuditDashboardUploader")
-  tariffAuditLogs     TariffAuditLog[]
+  tariffAuditLogs       TariffAuditLog[]
 
   @@index([role])
 }
@@ -141,37 +146,37 @@ model Supplier {
 }
 
 model Grade {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   name      String
-  code      String   @unique
+  code      String    @unique
   type      GradeType @default(BULU)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  shapeTariffs    GradeTariff[] @relation("ShapeTariffs")
-  featherTariffs  GradeTariff[] @relation("FeatherTariffs")
-  colorTariffs    GradeTariff[] @relation("ColorTariffs")
-  moistureRules   MoistureRule[]
-  gradeStocks     RawBatchGradeStock[]
-  lots            ProductionLot[]
-  featherLots     ProductionLot[] @relation("LotFeatherGrade")
-  colorLots       ProductionLot[] @relation("LotColorGrade")
-  payrolls        PayrollEntry[]
-  pecahBonEntries PecahBonEntry[]
-  pecahBonFeatherEntries PecahBonEntry[] @relation("PecahBonFeather")
-  pecahBonColorEntries   PecahBonEntry[] @relation("PecahBonColor")
+  shapeTariffs           GradeTariff[]        @relation("ShapeTariffs")
+  featherTariffs         GradeTariff[]        @relation("FeatherTariffs")
+  colorTariffs           GradeTariff[]        @relation("ColorTariffs")
+  moistureRules          MoistureRule[]
+  gradeStocks            RawBatchGradeStock[]
+  lots                   ProductionLot[]
+  featherLots            ProductionLot[]      @relation("LotFeatherGrade")
+  colorLots              ProductionLot[]      @relation("LotColorGrade")
+  payrolls               PayrollEntry[]
+  pecahBonEntries        PecahBonEntry[]
+  pecahBonFeatherEntries PecahBonEntry[]      @relation("PecahBonFeather")
+  pecahBonColorEntries   PecahBonEntry[]      @relation("PecahBonColor")
 }
 
 model GradeTariff {
-  id              String   @id @default(uuid())
-  shapeGradeId    String
-  featherGradeId  String?
-  colorGradeId    String?
-  rateRpPerGram   Int
-  effectiveFrom   DateTime
-  effectiveTo     DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(uuid())
+  shapeGradeId   String
+  featherGradeId String?
+  colorGradeId   String?
+  rateRpPerGram  Int
+  effectiveFrom  DateTime
+  effectiveTo    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   shapeGrade   Grade  @relation("ShapeTariffs", fields: [shapeGradeId], references: [id])
   featherGrade Grade? @relation("FeatherTariffs", fields: [featherGradeId], references: [id])
@@ -181,14 +186,14 @@ model GradeTariff {
 }
 
 model MoistureRule {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   gradeId       String?
   supplierId    String?
   moistureBps   Int
   effectiveFrom DateTime
   effectiveTo   DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   grade    Grade?    @relation(fields: [gradeId], references: [id])
   supplier Supplier? @relation(fields: [supplierId], references: [id])
@@ -197,23 +202,23 @@ model MoistureRule {
 }
 
 model PecahBonPreset {
-  id        String   @id @default(uuid())
-  name      String
+  id         String   @id @default(uuid())
+  name       String
   weightGram Int
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model BarangJadi {
-  id        String          @id @default(uuid())
-  name      String          @unique
+  id            String   @id @default(uuid())
+  name          String   @unique
   byProductKeys String[]
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  byProducts BarangJadiByProduct[]
-  resultGrades BarangJadiResultGrade[]
+  byProducts     BarangJadiByProduct[]
+  resultGrades   BarangJadiResultGrade[]
   finishReceipts FinishReceipt[]
 }
 
@@ -232,7 +237,7 @@ model BarangJadiByProduct {
   byProductTypeId String
   createdAt       DateTime @default(now())
 
-  barangJadi    BarangJadi   @relation(fields: [barangJadiId], references: [id], onDelete: Cascade)
+  barangJadi    BarangJadi    @relation(fields: [barangJadiId], references: [id], onDelete: Cascade)
   byProductType ByProductType @relation(fields: [byProductTypeId], references: [id], onDelete: Restrict)
 
   @@id([barangJadiId, byProductTypeId])
@@ -255,7 +260,7 @@ model BarangJadiResultGrade {
   resultGradeTypeId String
   createdAt         DateTime @default(now())
 
-  barangJadi      BarangJadi         @relation(fields: [barangJadiId], references: [id], onDelete: Cascade)
+  barangJadi      BarangJadi          @relation(fields: [barangJadiId], references: [id], onDelete: Cascade)
   resultGradeType BarangJadiGradeType @relation(fields: [resultGradeTypeId], references: [id], onDelete: Restrict)
 
   @@id([barangJadiId, resultGradeTypeId])
@@ -263,13 +268,13 @@ model BarangJadiResultGrade {
 }
 
 model ResultGradeTariff {
-  id                String   @id @default(uuid())
+  id                String    @id @default(uuid())
   resultGradeTypeId String
   rateRpPerGram     Int
   effectiveFrom     DateTime
   effectiveTo       DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   resultGradeType BarangJadiGradeType @relation(fields: [resultGradeTypeId], references: [id], onDelete: Cascade)
 
@@ -277,13 +282,13 @@ model ResultGradeTariff {
 }
 
 model ByProductTariff {
-  id              String   @id @default(uuid())
+  id              String    @id @default(uuid())
   byProductTypeId String
   rateRpPerGram   Int
   effectiveFrom   DateTime
   effectiveTo     DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   byProductType ByProductType @relation(fields: [byProductTypeId], references: [id], onDelete: Cascade)
 
@@ -291,15 +296,15 @@ model ByProductTariff {
 }
 
 model TariffAuditLog {
-  id                   String   @id @default(uuid())
-  tariffType           String
-  tariffId             String
-  action               String
+  id                    String   @id @default(uuid())
+  tariffType            String
+  tariffId              String
+  action                String
   previousRateRpPerGram Int?
   newRateRpPerGram      Int?
-  changedByUserId      String
-  changedAt            DateTime @default(now())
-  metadata             Json?
+  changedByUserId       String
+  changedAt             DateTime @default(now())
+  metadata              Json?
 
   changedBy AppUser @relation(fields: [changedByUserId], references: [id], onDelete: Restrict)
 
@@ -316,20 +321,20 @@ model SystemSetting {
 }
 
 model RackLocation {
-  id               String          @id @default(uuid())
-  code             String          @unique
+  id               String   @id @default(uuid())
+  code             String   @unique
   name             String
   type             RackType
   workerId         String?
   productionRoomId String?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  productionRoom ProductionRoom?      @relation(fields: [productionRoomId], references: [id], onDelete: SetNull)
-  worker         Worker?              @relation(fields: [workerId], references: [id])
+  productionRoom ProductionRoom?     @relation(fields: [productionRoomId], references: [id], onDelete: SetNull)
+  worker         Worker?             @relation(fields: [workerId], references: [id])
   lots           ProductionLot[]
-  movementsFrom  InventoryMovement[]  @relation("MovementFrom")
-  movementsTo    InventoryMovement[]  @relation("MovementTo")
+  movementsFrom  InventoryMovement[] @relation("MovementFrom")
+  movementsTo    InventoryMovement[] @relation("MovementTo")
 
   @@unique([workerId])
   @@unique([productionRoomId, type])
@@ -376,11 +381,11 @@ model MitraOrderRequest {
   createdAt         DateTime                @default(now())
   updatedAt         DateTime                @updatedAt
 
-  worker        Worker?             @relation(fields: [workerId], references: [id], onDelete: SetNull)
-  requestedBy   AppUser             @relation("MitraOrderRequester", fields: [requestedByUserId], references: [id])
-  processedBy   AppUser?            @relation("MitraOrderProcessor", fields: [processedByUserId], references: [id])
-  parentRequest MitraOrderRequest?  @relation("TrainerSubRequests", fields: [parentRequestId], references: [id], onDelete: SetNull)
-  subRequests   MitraOrderRequest[] @relation("TrainerSubRequests")
+  worker        Worker?                 @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  requestedBy   AppUser                 @relation("MitraOrderRequester", fields: [requestedByUserId], references: [id])
+  processedBy   AppUser?                @relation("MitraOrderProcessor", fields: [processedByUserId], references: [id])
+  parentRequest MitraOrderRequest?      @relation("TrainerSubRequests", fields: [parentRequestId], references: [id], onDelete: SetNull)
+  subRequests   MitraOrderRequest[]     @relation("TrainerSubRequests")
   lines         MitraOrderRequestLine[]
 
   @@index([workerId, status, createdAt])
@@ -400,8 +405,8 @@ model MitraOrderRequestLine {
   orderRequest MitraOrderRequest @relation(fields: [orderRequestId], references: [id], onDelete: Cascade)
   workItems    WorkOrderItem[]
 
-  @@index([orderRequestId, sequence])
   @@unique([orderRequestId, sequence])
+  @@index([orderRequestId, sequence])
 }
 
 model NumberSequence {
@@ -413,25 +418,25 @@ model NumberSequence {
 }
 
 model RawBatch {
-  id               String   @id @default(uuid())
-  batchNumber      String   @unique
-  cardId           String   @unique
-  supplierId       String
+  id                   String    @id @default(uuid())
+  batchNumber          String    @unique
+  cardId               String    @unique
+  supplierId           String
   mergedIntoRawBatchId String?
-  mergedAt         DateTime?
-  featherCondition String
-  invoiceWeightGram Float
-  wetWeightGram    Float
-  moisturePercent  Float
-  notes            String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  mergedAt             DateTime?
+  featherCondition     String
+  invoiceWeightGram    Float
+  wetWeightGram        Float
+  moisturePercent      Float
+  notes                String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  supplier       Supplier             @relation(fields: [supplierId], references: [id])
-  mergedIntoRawBatch RawBatch?        @relation("RawBatchMerge", fields: [mergedIntoRawBatchId], references: [id])
-  mergedSourceRawBatches RawBatch[]   @relation("RawBatchMerge")
-  gradeStocks    RawBatchGradeStock[]
-  pecahBonEntries PecahBonEntry[]
+  supplier               Supplier             @relation(fields: [supplierId], references: [id])
+  mergedIntoRawBatch     RawBatch?            @relation("RawBatchMerge", fields: [mergedIntoRawBatchId], references: [id])
+  mergedSourceRawBatches RawBatch[]           @relation("RawBatchMerge")
+  gradeStocks            RawBatchGradeStock[]
+  pecahBonEntries        PecahBonEntry[]
 
   @@index([supplierId, createdAt])
   @@index([mergedIntoRawBatchId])
@@ -484,9 +489,9 @@ model RawBatchGradeStock {
 }
 
 model ProductionLot {
-  id                  String          @id @default(uuid())
-  lotNumber           String          @unique
-  externalId          String?         @unique
+  id                  String    @id @default(uuid())
+  lotNumber           String    @unique
+  externalId          String?   @unique
   gradeId             String
   featherGradeId      String?
   colorGradeId        String?
@@ -497,17 +502,17 @@ model ProductionLot {
   locationId          String
   productionRoomId    String?
   printedAt           DateTime?
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  productionRoom ProductionRoom? @relation(fields: [productionRoomId], references: [id], onDelete: SetNull)
-  grade        Grade        @relation(fields: [gradeId], references: [id])
-  featherGrade Grade?       @relation("LotFeatherGrade", fields: [featherGradeId], references: [id])
-  colorGrade   Grade?       @relation("LotColorGrade", fields: [colorGradeId], references: [id])
-  location     RackLocation @relation(fields: [locationId], references: [id])
-  sources    LotSource[]
-  workItem   WorkOrderItem?
-  movements  InventoryMovement[]
+  productionRoom ProductionRoom?     @relation(fields: [productionRoomId], references: [id], onDelete: SetNull)
+  grade          Grade               @relation(fields: [gradeId], references: [id])
+  featherGrade   Grade?              @relation("LotFeatherGrade", fields: [featherGradeId], references: [id])
+  colorGrade     Grade?              @relation("LotColorGrade", fields: [colorGradeId], references: [id])
+  location       RackLocation        @relation(fields: [locationId], references: [id])
+  sources        LotSource[]
+  workItem       WorkOrderItem?
+  movements      InventoryMovement[]
 
   @@index([locationId, createdAt])
   @@index([locationId, printedAt])
@@ -536,32 +541,32 @@ model WorkOrder {
   updatedAt   DateTime        @updatedAt
   completedAt DateTime?
 
-  worker Worker          @relation(fields: [workerId], references: [id])
-  items  WorkOrderItem[]
+  worker       Worker                 @relation(fields: [workerId], references: [id])
+  items        WorkOrderItem[]
   activeRecord WorkerActiveWorkOrder?
 }
 
 model WorkOrderItem {
-  id          String               @id @default(uuid())
-  workOrderId String
-  lotId       String               @unique
+  id                      String              @id @default(uuid())
+  workOrderId             String
+  lotId                   String              @unique
   mitraOrderRequestLineId String?
-  status      WorkOrderItemStatus  @default(IN_PROGRESS)
-  lane        WorkLane             @default(IN_PROGRESS)
-  startedAt   DateTime?
-  readyAt     DateTime?
-  dryingStartedAt DateTime?
-  dryingReadyAt   DateTime?
-  dryCheckedAt    DateTime?
-  canceledAt  DateTime?
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
+  status                  WorkOrderItemStatus @default(IN_PROGRESS)
+  lane                    WorkLane            @default(IN_PROGRESS)
+  startedAt               DateTime?
+  readyAt                 DateTime?
+  dryingStartedAt         DateTime?
+  dryingReadyAt           DateTime?
+  dryCheckedAt            DateTime?
+  canceledAt              DateTime?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
 
-  workOrder     WorkOrder     @relation(fields: [workOrderId], references: [id])
-  lot           ProductionLot @relation(fields: [lotId], references: [id])
+  workOrder             WorkOrder              @relation(fields: [workOrderId], references: [id])
+  lot                   ProductionLot          @relation(fields: [lotId], references: [id])
   mitraOrderRequestLine MitraOrderRequestLine? @relation(fields: [mitraOrderRequestLineId], references: [id], onDelete: SetNull)
-  finishReceipt FinishReceipt?
-  payrollEntry  PayrollEntry?
+  finishReceipt         FinishReceipt?
+  payrollEntry          PayrollEntry?
 
   @@index([dryingReadyAt])
   @@index([mitraOrderRequestLineId])
@@ -578,24 +583,24 @@ model WorkerActiveWorkOrder {
 }
 
 model FinishReceipt {
-  id                String   @id @default(uuid())
-  workOrderItemId   String   @unique
-  barangJadiId      String?
-  returnedAt        DateTime
-  mainOutWeightGram Int
+  id                  String   @id @default(uuid())
+  workOrderItemId     String   @unique
+  barangJadiId        String?
+  returnedAt          DateTime
+  mainOutWeightGram   Int
   byProductWeightGram Int
-  dryInGram         Int
-  susutProsesGram   Int
-  susutHilangGram   Int
-  susutProsesPctBps Int
-  susutHilangPctBps Int
-  notes             String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  dryInGram           Int
+  susutProsesGram     Int
+  susutHilangGram     Int
+  susutProsesPctBps   Int
+  susutHilangPctBps   Int
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  barangJadi   BarangJadi?   @relation(fields: [barangJadiId], references: [id])
-  workOrderItem WorkOrderItem @relation(fields: [workOrderItemId], references: [id])
-  resultGrades FinishReceiptResultGrade[]
+  barangJadi    BarangJadi?                @relation(fields: [barangJadiId], references: [id])
+  workOrderItem WorkOrderItem              @relation(fields: [workOrderItemId], references: [id])
+  resultGrades  FinishReceiptResultGrade[]
 
   @@index([barangJadiId])
 }
@@ -608,7 +613,7 @@ model FinishReceiptResultGrade {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  finishReceipt   FinishReceipt      @relation(fields: [finishReceiptId], references: [id], onDelete: Cascade)
+  finishReceipt   FinishReceipt       @relation(fields: [finishReceiptId], references: [id], onDelete: Cascade)
   resultGradeType BarangJadiGradeType @relation(fields: [resultGradeTypeId], references: [id], onDelete: Restrict)
 
   @@unique([finishReceiptId, resultGradeTypeId])
@@ -639,13 +644,14 @@ model AuditDashboardImport {
   fileHash         String?
   uploadedByUserId String?
   status           AuditDashboardImportStatus @default(PENDING)
+  format           AuditDashboardImportFormat @default(LEGACY_SUMMARY)
   totalSheets      Int                        @default(0)
   totalRows        Int                        @default(0)
   errorJson        Json?
   createdAt        DateTime                   @default(now())
   updatedAt        DateTime                   @updatedAt
 
-  uploadedBy AppUser?                @relation("AuditDashboardUploader", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  uploadedBy AppUser?               @relation("AuditDashboardUploader", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
   periods    AuditDashboardPeriod[]
 
   @@index([uploadedByUserId])
@@ -653,19 +659,22 @@ model AuditDashboardImport {
 }
 
 model AuditDashboardPeriod {
-  id        String    @id @default(uuid())
+  id        String                     @id @default(uuid())
   importId  String
   sheetName String
   label     String
+  format    AuditDashboardImportFormat @default(LEGACY_SUMMARY)
   startDate DateTime?
   endDate   DateTime?
   year      Int?
-  sortOrder Int       @default(0)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  sortOrder Int                        @default(0)
+  createdAt DateTime                   @default(now())
+  updatedAt DateTime                   @updatedAt
 
-  import  AuditDashboardImport   @relation(fields: [importId], references: [id], onDelete: Cascade)
-  metrics AuditDashboardMetric[]
+  import    AuditDashboardImport     @relation(fields: [importId], references: [id], onDelete: Cascade)
+  metrics   AuditDashboardMetric[]
+  workItems AuditDashboardWorkItem[]
+  payrolls  AuditDashboardPayroll[]
 
   @@index([importId])
   @@index([sortOrder, createdAt])
@@ -675,34 +684,37 @@ model AuditDashboardPerson {
   id             String   @id @default(uuid())
   name           String
   normalizedName String   @unique
+  pin            String?  @unique
   workerId       String?
   colorHex       String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  worker  Worker?                @relation("AuditDashboardPersonWorker", fields: [workerId], references: [id], onDelete: SetNull)
-  metrics AuditDashboardMetric[]
+  worker    Worker?                  @relation("AuditDashboardPersonWorker", fields: [workerId], references: [id], onDelete: SetNull)
+  metrics   AuditDashboardMetric[]
+  workItems AuditDashboardWorkItem[]
+  payrolls  AuditDashboardPayroll[]
 
   @@index([workerId])
 }
 
 model AuditDashboardMetric {
-  id                 String   @id @default(uuid())
-  periodId           String
-  personId           String
-  rawName            String
-  rawUserLevel       String?
-  normalizedLevel    String?
-  levelNumber        Int?
-  hk                 Float?
-  totalBakuBasah     Float?
-  totalBjd           Float?
-  rendemenPctBps     Int?
-  susutProsesPctBps  Int?
-  susutHilangPctBps  Int?
-  rawRowJson         Json?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                String   @id @default(uuid())
+  periodId          String
+  personId          String
+  rawName           String
+  rawUserLevel      String?
+  normalizedLevel   String?
+  levelNumber       Int?
+  hk                Float?
+  totalBakuBasah    Float?
+  totalBjd          Float?
+  rendemenPctBps    Int?
+  susutProsesPctBps Int?
+  susutHilangPctBps Int?
+  rawRowJson        Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   period AuditDashboardPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
   person AuditDashboardPerson @relation(fields: [personId], references: [id], onDelete: Cascade)
@@ -712,14 +724,88 @@ model AuditDashboardMetric {
   @@index([periodId])
 }
 
+model AuditDashboardWorkItem {
+  id                       String   @id @default(uuid())
+  periodId                 String
+  personId                 String
+  rowNumber                Int
+  lpNumber                 String?
+  userId                   String?
+  stockId                  String?
+  pin                      String?
+  rawName                  String
+  gradeBaku                String?
+  wetWeightGram            Float?
+  finishedWeightGram       Float?
+  mainLongPsGram           Float?
+  mainLongPsPcs            Float?
+  mainShortPsGram          Float?
+  mainShortPsPcs           Float?
+  mainShredPsGram          Float?
+  mainShredPsPcs           Float?
+  mainSortCleanBGram       Float?
+  mainSortCleanBPcs        Float?
+  byRontLpGram             Float?
+  bySrbtGram               Float?
+  byBglGram                Float?
+  byHcGram                 Float?
+  bySskGram                Float?
+  rendemenPctBps           Int?
+  susutProsesPctBps        Int?
+  susutHilangPctBps        Int?
+  rawMaterialRateRpPerGram Float?
+  rawMaterialValueRp       Float?
+  finishedGoodsValueRp     Float?
+  pieceworkWageRp          Float?
+  rawRowJson               Json?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  period AuditDashboardPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  person AuditDashboardPerson @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([periodId, personId])
+  @@index([lpNumber])
+  @@index([pin])
+}
+
+model AuditDashboardPayroll {
+  id              String   @id @default(uuid())
+  periodId        String
+  personId        String
+  rowNumber       Int
+  pin             String?
+  rawName         String
+  rawLevel        String?
+  normalizedLevel String?
+  levelNumber     Int?
+  hk              Float?
+  pieceworkWageRp Float?
+  subsidyRp       Float?
+  premiumRp       Float?
+  mealAllowanceRp Float?
+  deductionRp     Float?
+  netWageRp       Float?
+  rawRowJson      Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  period AuditDashboardPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  person AuditDashboardPerson @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, personId])
+  @@index([periodId])
+  @@index([pin])
+}
+
 model InventoryMovement {
-  id             String        @id @default(uuid())
+  id             String       @id @default(uuid())
   lotId          String
   fromLocationId String?
   toLocationId   String
   movementType   MovementType
   note           String?
-  createdAt      DateTime      @default(now())
+  createdAt      DateTime     @default(now())
 
   lot          ProductionLot @relation(fields: [lotId], references: [id])
   fromLocation RackLocation? @relation("MovementFrom", fields: [fromLocationId], references: [id])

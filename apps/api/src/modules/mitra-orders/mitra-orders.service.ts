@@ -81,109 +81,110 @@ export class MitraOrdersService {
     );
     const currentWeekStart = this.startOfWeekUtc(now);
 
-    const [activeOrders, pendingOrders, trainerOrders, receipts] = await Promise.all([
-      this.prisma.workerActiveWorkOrder.findMany({
-        where: { workerId: { in: workerIds } },
-        select: {
-          workerId: true,
-          workOrderId: true,
-          createdAt: true,
-          workOrder: {
-            select: {
-              id: true,
-              status: true,
-              createdAt: true,
-              updatedAt: true,
+    const [activeOrders, pendingOrders, trainerOrders, receipts] =
+      await Promise.all([
+        this.prisma.workerActiveWorkOrder.findMany({
+          where: { workerId: { in: workerIds } },
+          select: {
+            workerId: true,
+            workOrderId: true,
+            createdAt: true,
+            workOrder: {
+              select: {
+                id: true,
+                status: true,
+                createdAt: true,
+                updatedAt: true,
+              },
             },
           },
-        },
-      }),
-      this.prisma.mitraOrderRequest.findMany({
-        where: {
-          workerId: { in: workerIds },
-          status: {
-            in: [
-              MitraOrderRequestStatus.REQUESTED,
-              MitraOrderRequestStatus.APPROVED,
-            ],
-          },
-        },
-        orderBy: [{ createdAt: 'desc' }],
-        select: {
-          id: true,
-          workerId: true,
-          status: true,
-          requestedGram: true,
-          createdAt: true,
-          requestedBy: {
-            select: {
-              id: true,
-              name: true,
-              role: true,
+        }),
+        this.prisma.mitraOrderRequest.findMany({
+          where: {
+            workerId: { in: workerIds },
+            status: {
+              in: [
+                MitraOrderRequestStatus.REQUESTED,
+                MitraOrderRequestStatus.APPROVED,
+              ],
             },
           },
-        },
-      }),
-      this.prisma.mitraOrderRequest.findMany({
-        where: {
-          workerId: { in: workerIds },
-          parentRequestId: { not: null },
-          requestedByUserId: actorUser.id,
-          status: {
-            in: [
-              MitraOrderRequestStatus.APPROVED,
-              MitraOrderRequestStatus.FULFILLED,
-            ],
+          orderBy: [{ createdAt: 'desc' }],
+          select: {
+            id: true,
+            workerId: true,
+            status: true,
+            requestedGram: true,
+            createdAt: true,
+            requestedBy: {
+              select: {
+                id: true,
+                name: true,
+                role: true,
+              },
+            },
           },
-        },
-        orderBy: [{ createdAt: 'desc' }],
-        select: {
-          workerId: true,
-          status: true,
-          createdAt: true,
-          lines: {
-            orderBy: { sequence: 'asc' },
-            select: {
-              weightGram: true,
-              lpCount: true,
-              workItems: {
-                select: {
-                  lot: {
-                    select: {
-                      externalId: true,
-                      lotNumber: true,
+        }),
+        this.prisma.mitraOrderRequest.findMany({
+          where: {
+            workerId: { in: workerIds },
+            parentRequestId: { not: null },
+            requestedByUserId: actorUser.id,
+            status: {
+              in: [
+                MitraOrderRequestStatus.APPROVED,
+                MitraOrderRequestStatus.FULFILLED,
+              ],
+            },
+          },
+          orderBy: [{ createdAt: 'desc' }],
+          select: {
+            workerId: true,
+            status: true,
+            createdAt: true,
+            lines: {
+              orderBy: { sequence: 'asc' },
+              select: {
+                weightGram: true,
+                lpCount: true,
+                workItems: {
+                  select: {
+                    lot: {
+                      select: {
+                        externalId: true,
+                        lotNumber: true,
+                      },
                     },
                   },
                 },
               },
             },
           },
-        },
-      }),
-      this.prisma.finishReceipt.findMany({
-        where: {
-          returnedAt: { gte: monthStart, lt: nextMonthStart },
-          workOrderItem: {
-            workOrder: {
-              workerId: { in: workerIds },
+        }),
+        this.prisma.finishReceipt.findMany({
+          where: {
+            returnedAt: { gte: monthStart, lt: nextMonthStart },
+            workOrderItem: {
+              workOrder: {
+                workerId: { in: workerIds },
+              },
             },
           },
-        },
-        select: {
-          dryInGram: true,
-          returnedAt: true,
-          workOrderItem: {
-            select: {
-              workOrder: {
-                select: {
-                  workerId: true,
+          select: {
+            dryInGram: true,
+            returnedAt: true,
+            workOrderItem: {
+              select: {
+                workOrder: {
+                  select: {
+                    workerId: true,
+                  },
                 },
               },
             },
           },
-        },
-      }),
-    ]);
+        }),
+      ]);
 
     const activeByWorker = new Map(
       activeOrders.map((row) => [row.workerId, row]),
@@ -195,7 +196,10 @@ export class MitraOrdersService {
       list.push(order);
       pendingByWorker.set(order.workerId, list);
     });
-    const latestTrainerOrderByWorker = new Map<string, typeof trainerOrders[number]>();
+    const latestTrainerOrderByWorker = new Map<
+      string,
+      (typeof trainerOrders)[number]
+    >();
     trainerOrders.forEach((order) => {
       if (order.workerId && !latestTrainerOrderByWorker.has(order.workerId)) {
         latestTrainerOrderByWorker.set(order.workerId, order);
@@ -228,12 +232,14 @@ export class MitraOrdersService {
       const activeOrder = activeByWorker.get(worker.id) ?? null;
       const pending = pendingByWorker.get(worker.id) ?? [];
       const latestPending = pending[0] ?? null;
-      const latestTrainerOrder = latestTrainerOrderByWorker.get(worker.id) ?? null;
+      const latestTrainerOrder =
+        latestTrainerOrderByWorker.get(worker.id) ?? null;
       const capacity = capacityByWorker.get(worker.id);
       const weeksWithSetoran =
         (
           capacity as
-            (WorkerCapacityStats & { _weeks?: Set<string> }) | undefined
+            | (WorkerCapacityStats & { _weeks?: Set<string> })
+            | undefined
         )?._weeks?.size ?? 0;
       const monthlyDryInGram = capacity?.monthlyDryInGram ?? 0;
       const currentWeekDryInGram = capacity?.currentWeekDryInGram ?? 0;
@@ -268,7 +274,8 @@ export class MitraOrdersService {
               createdAt: latestTrainerOrder.createdAt,
               orderedGram: latestTrainerOrder.lines.reduce(
                 (total, line) =>
-                  total + line.weightGram * (line.lpCount + line.workItems.length),
+                  total +
+                  line.weightGram * (line.lpCount + line.workItems.length),
                 0,
               ),
               assignedLots: latestTrainerOrder.lines.flatMap((line) =>
@@ -278,7 +285,7 @@ export class MitraOrdersService {
               ),
             }
           : null,
-        isOrderEligible: (activeOrder ? 1 : 0) + pending.length < 2,
+        isOrderEligible: (activeOrder ? 1 : 0) + pending.length < 3,
         capacityStats: {
           monthlyDryInGram,
           currentWeekDryInGram,
@@ -369,12 +376,12 @@ export class MitraOrdersService {
     }
 
     if (worker) {
-      const [activeOrder, pendingRequest] = await Promise.all([
+      const [activeOrder, pendingRequestCount] = await Promise.all([
         this.prisma.workerActiveWorkOrder.findUnique({
           where: { workerId: worker.id },
           select: { workOrderId: true },
         }),
-        this.prisma.mitraOrderRequest.findFirst({
+        this.prisma.mitraOrderRequest.count({
           where: {
             workerId: worker.id,
             status: {
@@ -384,18 +391,16 @@ export class MitraOrdersService {
               ],
             },
           },
-          select: { id: true, status: true },
         }),
       ]);
 
-      const totalActiveCount = (activeOrder ? 1 : 0) + (pendingRequest ? 1 : 0);
-      if (totalActiveCount >= 2) {
+      const totalActiveCount = (activeOrder ? 1 : 0) + pendingRequestCount;
+      if (totalActiveCount >= 3) {
         return conflict(
-          'Mitra sudah mencapai batas maksimal order (1 aktif + 1 antrian)',
+          'Mitra sudah mencapai batas maksimal order (1 aktif + 2 antrian)',
           {
             workerId: worker.id,
             workOrderId: activeOrder?.workOrderId,
-            requestId: pendingRequest?.id,
           },
         );
       }
@@ -543,12 +548,12 @@ export class MitraOrdersService {
       const pendingCount = pendingWorkerOrders.filter(
         (p) => p.workerId === id,
       ).length;
-      return activeCount + pendingCount >= 2;
+      return activeCount + pendingCount >= 3;
     });
 
     if (overloadedWorkers.length > 0) {
       return conflict(
-        'Masih ada mitra yang sudah mencapai batas maksimal order (2 order)',
+        'Masih ada mitra yang sudah mencapai batas maksimal order (3 order)',
         {
           workerIds: overloadedWorkers,
         },

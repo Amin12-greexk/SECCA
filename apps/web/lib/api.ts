@@ -3675,15 +3675,21 @@ export async function completeDryQcWorkItem(
 
 /* ─── Dashboard Performa (data periode dari Excel) ─────────────── */
 
+/** LEGACY_SUMMARY = sheet ringkasan lama; WEEKLY_PAYROLL_DETAIL = format baru (DATA PERIODE + REKAP PAYROLL). */
+export type PerformaImportFormat = "LEGACY_SUMMARY" | "WEEKLY_PAYROLL_DETAIL";
+
 export interface PerformaPeriod {
   id: string;
   label: string;
   sheetName: string;
+  format: PerformaImportFormat;
   startDate?: string | null;
   endDate?: string | null;
   year?: number | null;
   sortOrder: number;
   totalMetrics: number;
+  totalWorkItems: number;
+  totalPayrollRows: number;
   createdAt: string;
 }
 
@@ -3705,15 +3711,18 @@ export interface PerformaRow {
   susutHilangPctBps?: number | null;
 }
 
+export interface PerformaPeriodRef {
+  id: string;
+  label: string;
+  sheetName: string;
+  format: PerformaImportFormat;
+  startDate?: string | null;
+  endDate?: string | null;
+  year?: number | null;
+}
+
 export interface PerformaSummaryResponse {
-  period: {
-    id: string;
-    label: string;
-    sheetName: string;
-    startDate?: string | null;
-    endDate?: string | null;
-    year?: number | null;
-  } | null;
+  period: PerformaPeriodRef | null;
   summary: {
     totalPeople: number;
     totalHk: number;
@@ -3725,6 +3734,66 @@ export interface PerformaSummaryResponse {
     averageSusutHilangPctBps: number | null;
   } | null;
   rows: PerformaRow[];
+}
+
+/** Baris biaya per mitra: gabungan produksi (workItems) + payroll (PIN), dipakai di panel Payroll & Biaya. */
+export interface PerformaExpenseRow {
+  personId: string;
+  name: string;
+  rawName: string;
+  pin: string | null;
+  rawUserLevel?: string | null;
+  normalizedLevel?: string | null;
+  levelNumber: number | null;
+  colorHex: string;
+  hasCustomColor: boolean;
+  hk: number | null;
+  totalBakuBasah: number | null;
+  totalBjd: number | null;
+  rendemenPctBps: number | null;
+  weightedSp: number | null;
+  weightedSh: number | null;
+  pieceworkWageRp: number | null;
+  subsidyRp: number | null;
+  premiumRp: number | null;
+  mealAllowanceRp: number | null;
+  deductionRp: number | null;
+  netWageRp: number | null;
+  workItemCount: number;
+  payrollCount: number;
+}
+
+export interface PerformaExpenseSummary {
+  totalPeople: number;
+  totalHk: number;
+  totalBakuBasah: number;
+  totalBjd: number;
+  weightedRendemenPctBps: number | null;
+  averageRendemenPctBps: number | null;
+  totalPieceworkWageRp: number;
+  totalSubsidyRp: number;
+  totalPremiumRp: number;
+  totalMealAllowanceRp: number;
+  totalDeductionRp: number;
+  totalNetWageRp: number;
+  totalWorkItems: number;
+  totalPayrollRows: number;
+}
+
+export interface PerformaExpenseSummaryResponse {
+  period: PerformaPeriodRef | null;
+  summary: PerformaExpenseSummary | null;
+  rows: PerformaExpenseRow[];
+}
+
+/** Satu baris = satu bulan (label "MM/YYYY"), gabungan dari seluruh periode WEEKLY_PAYROLL_DETAIL bulan itu. */
+export interface PerformaMonthlyExpenseStat extends PerformaExpenseSummary {
+  label: string;
+  periodCount: number;
+}
+
+export interface PerformaMonthlyExpenseStatsResponse {
+  months: PerformaMonthlyExpenseStat[];
 }
 
 export interface PerformaPerson {
@@ -3848,6 +3917,52 @@ export async function getPerformaSummary(
     return unwrap<PerformaSummaryResponse>(json);
   } catch (error) {
     console.error("Error fetching performa summary:", error);
+    throw error;
+  }
+}
+
+export async function getPerformaExpenseSummary(
+  periodId?: string,
+): Promise<PerformaExpenseSummaryResponse> {
+  try {
+    const url = `${API_BASE_URL}/api/audit-dashboard/expense-summary${buildQueryString({ periodId })}`;
+    const response = await fetch(url, {
+      headers: getAuthHeaders({ json: false }),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        await readApiError(response, "Gagal memuat ringkasan biaya periode."),
+      );
+    }
+
+    const json = await response.json();
+    return unwrap<PerformaExpenseSummaryResponse>(json);
+  } catch (error) {
+    console.error("Error fetching performa expense summary:", error);
+    throw error;
+  }
+}
+
+export async function getPerformaMonthlyExpenses(): Promise<PerformaMonthlyExpenseStatsResponse> {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/audit-dashboard/monthly-expenses`,
+      {
+        headers: getAuthHeaders({ json: false }),
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        await readApiError(response, "Gagal memuat rekap biaya bulanan."),
+      );
+    }
+
+    const json = await response.json();
+    return unwrap<PerformaMonthlyExpenseStatsResponse>(json);
+  } catch (error) {
+    console.error("Error fetching performa monthly expenses:", error);
     throw error;
   }
 }
@@ -4400,6 +4515,10 @@ export interface TrainerWorkerStat {
   setoranGram: number;
   setoranCount: number;
   susutGram: number;
+  rendemenPctBps?: number;
+  rendemenNetPctBps?: number;
+  susutProsesPctBps?: number;
+  susutHilangPctBps?: number;
 }
 
 export interface WeeklyTrendPoint {
@@ -4407,6 +4526,10 @@ export interface WeeklyTrendPoint {
   weekStart: string;
   orderGram: number;
   setoranGram: number;
+  rendemenPctBps?: number;
+  rendemenNetPctBps?: number;
+  susutProsesPctBps?: number;
+  susutHilangPctBps?: number;
 }
 
 export interface TrainerSummaryResponse {

@@ -11,12 +11,16 @@ import {
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useToast } from '@/lib/toast';
 import {
+    getPerformaExpenseSummary,
+    getPerformaMonthlyExpenses,
     getPerformaPeriodStats,
     getPerformaPeriods,
     getPerformaPersons,
     getPerformaSummary,
     importPerformaWorkbook,
     resetPerformaData,
+    type PerformaExpenseSummaryResponse,
+    type PerformaMonthlyExpenseStat,
     type PerformaPerson,
     type PerformaPeriod,
     type PerformaPeriodStat,
@@ -25,6 +29,8 @@ import {
 import DeltaBadge from './components/DeltaBadge';
 import IndividualPanel from './components/IndividualPanel';
 import MitraRanking from './components/MitraRanking';
+import MonthlyRecap from './components/MonthlyRecap';
+import PayrollExpensePanel from './components/PayrollExpensePanel';
 import PeriodTrends from './components/PeriodTrends';
 import TurnoverAndShifts from './components/TurnoverAndShifts';
 
@@ -198,9 +204,11 @@ export default function PerformaPage() {
     const [periods, setPeriods] = useState<PerformaPeriod[]>([]);
     const [persons, setPersons] = useState<PerformaPerson[]>([]);
     const [periodStats, setPeriodStats] = useState<PerformaPeriodStat[]>([]);
+    const [monthlyExpenses, setMonthlyExpenses] = useState<PerformaMonthlyExpenseStat[]>([]);
     const [periodId, setPeriodId] = useState('');
     const [summary, setSummary] = useState<PerformaSummaryResponse | null>(null);
     const [prevSummary, setPrevSummary] = useState<PerformaSummaryResponse | null>(null);
+    const [expenseSummary, setExpenseSummary] = useState<PerformaExpenseSummaryResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
@@ -209,14 +217,16 @@ export default function PerformaPage() {
     const canManage = isAuthenticated && hasModuleAccess('dashboard', 2);
 
     const loadBase = useCallback(async () => {
-        const [periodList, personList, statsResponse] = await Promise.all([
+        const [periodList, personList, statsResponse, monthlyResponse] = await Promise.all([
             getPerformaPeriods(),
             getPerformaPersons(),
             getPerformaPeriodStats(),
+            getPerformaMonthlyExpenses(),
         ]);
         setPeriods(periodList);
         setPersons(personList);
         setPeriodStats(statsResponse.periods);
+        setMonthlyExpenses(monthlyResponse.months);
         return periodList;
     }, []);
 
@@ -227,9 +237,13 @@ export default function PerformaPage() {
             const periodList = await loadBase();
             // Periode terbaru = sortOrder terbesar (backend memakai default yang sama).
             const targetId = periodId || periodList[periodList.length - 1]?.id || '';
-            const data = await getPerformaSummary(targetId || undefined);
+            const [data, expenseData] = await Promise.all([
+                getPerformaSummary(targetId || undefined),
+                getPerformaExpenseSummary(targetId || undefined),
+            ]);
             setSummary(data);
-            
+            setExpenseSummary(expenseData);
+
             const currentIndex = periodList.findIndex(p => p.id === (data.period?.id ?? targetId));
             const prevId = currentIndex > 0 ? periodList[currentIndex - 1].id : null;
             if (prevId) {
@@ -257,8 +271,12 @@ export default function PerformaPage() {
         setLoading(true);
         setError(null);
         try {
-            const data = await getPerformaSummary(nextId || undefined);
+            const [data, expenseData] = await Promise.all([
+                getPerformaSummary(nextId || undefined),
+                getPerformaExpenseSummary(nextId || undefined),
+            ]);
             setSummary(data);
+            setExpenseSummary(expenseData);
 
             const currentIndex = periods.findIndex(p => p.id === (data.period?.id ?? nextId));
             const prevId = currentIndex > 0 ? periods[currentIndex - 1].id : null;
@@ -300,9 +318,13 @@ export default function PerformaPage() {
         try {
             const periodList = await loadBase();
             const latest = periodList[periodList.length - 1]?.id;
-            const data = await getPerformaSummary(latest);
+            const [data, expenseData] = await Promise.all([
+                getPerformaSummary(latest),
+                getPerformaExpenseSummary(latest),
+            ]);
             setSummary(data);
-            
+            setExpenseSummary(expenseData);
+
             const prevId = periodList.length > 1 ? periodList[periodList.length - 2].id : null;
             if (prevId) {
                 setPrevSummary(await getPerformaSummary(prevId));
@@ -489,6 +511,16 @@ export default function PerformaPage() {
 
                 {/* 03 — Tren antar periode */}
                 {periodStats.length > 0 ? <PeriodTrends stats={periodStats} /> : null}
+
+                {/* 04 — Payroll & biaya perusahaan (periode WEEKLY_PAYROLL_DETAIL) */}
+                <PayrollExpensePanel
+                    data={expenseSummary}
+                    periodLabel={summary?.period?.label}
+                    onSelect={selectPerson}
+                />
+
+                {/* 05 — Rekap bulanan */}
+                <MonthlyRecap months={monthlyExpenses} />
             </div>
         </div>
     );

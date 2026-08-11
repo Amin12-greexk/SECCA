@@ -610,6 +610,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                     <div style="border:1.5px solid #000;padding:1.5mm;margin-top:1mm;text-align:center;width:100%;box-sizing:border-box;">
                         <div style="font-size:10pt;font-weight:bold;">BERAT: ${formatNumber(entry.initialWeightGram, 2)} Gr</div>
                         <div style="font-size:10pt;font-weight:bold;">KADAR AIR: ${formatNumber(entry.moisturePercent, 1)}%</div>
+                        <div style="font-size:10pt;font-weight:bold;">KEPING: ${entry.pieceCount ?? 0} Kpg</div>
                     </div>
                 `,
       },
