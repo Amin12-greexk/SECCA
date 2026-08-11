@@ -1025,29 +1025,59 @@ export class MitraOrdersService {
     const actorUser = await this.resolveActor(actor);
     const request = await this.prisma.mitraOrderRequest.findUnique({
       where: { id },
+      include: {
+        subRequests: true,
+      },
     });
 
     if (!request) {
       return notFound('Order request not found', { requestId: id });
     }
 
-    if (request.status !== MitraOrderRequestStatus.REQUESTED) {
-      return conflict('Hanya order berstatus REQUESTED yang dapat dibatalkan', {
-        requestId: id,
-        status: request.status,
+    const isPrivileged = ['BAKU', 'MANAGER', 'TRAINER', 'KOREKSI'].includes(
+      actorUser.role.toUpperCase(),
+    );
+
+    if (!isPrivileged) {
+      if (request.status !== MitraOrderRequestStatus.REQUESTED) {
+        return conflict(
+          'Hanya order berstatus REQUESTED yang dapat dibatalkan oleh Mitra',
+          {
+            requestId: id,
+            status: request.status,
+          },
+        );
+      }
+
+      // Check ownership if actor is mitra
+      if (request.workerId !== actorUser.workerId) {
+        return conflict(
+          'Anda hanya dapat membatalkan order milik Anda sendiri',
+        );
+      }
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const childIds = request.subRequests.map((c) => c.id);
+      if (childIds.length > 0) {
+        await tx.mitraOrderRequestLine.deleteMany({
+          where: { orderRequestId: { in: childIds } },
+        });
+        await tx.mitraOrderRequest.deleteMany({
+          where: { id: { in: childIds } },
+        });
+      }
+
+      await tx.mitraOrderRequestLine.deleteMany({
+        where: { orderRequestId: id },
       });
-    }
 
-    // Check ownership if actor is mitra
-    if (actorUser.role === 'MITRA' && request.workerId !== actorUser.workerId) {
-      return conflict('Anda hanya dapat membatalkan order milik Anda sendiri');
-    }
+      await tx.mitraOrderRequest.delete({
+        where: { id },
+      });
 
-    await this.prisma.mitraOrderRequest.delete({
-      where: { id },
+      return { success: true };
     });
-
-    return { success: true };
   }
 
   async updateRequest(
@@ -1065,16 +1095,25 @@ export class MitraOrdersService {
       return notFound('Order request not found', { requestId: id });
     }
 
-    if (request.status !== MitraOrderRequestStatus.REQUESTED) {
-      return conflict('Hanya order berstatus REQUESTED yang dapat diubah', {
-        requestId: id,
-        status: request.status,
-      });
-    }
+    const isPrivileged = ['BAKU', 'MANAGER', 'TRAINER', 'KOREKSI'].includes(
+      actorUser.role.toUpperCase(),
+    );
 
-    // Check ownership if actor is mitra
-    if (actorUser.role === 'MITRA' && request.workerId !== actorUser.workerId) {
-      return conflict('Anda hanya dapat mengubah order milik Anda sendiri');
+    if (!isPrivileged) {
+      if (request.status !== MitraOrderRequestStatus.REQUESTED) {
+        return conflict(
+          'Hanya order berstatus REQUESTED yang dapat diubah oleh Mitra',
+          {
+            requestId: id,
+            status: request.status,
+          },
+        );
+      }
+
+      // Check ownership if actor is mitra
+      if (request.workerId !== actorUser.workerId) {
+        return conflict('Anda hanya dapat mengubah order milik Anda sendiri');
+      }
     }
 
     const inputWeight = Math.round(dto.requestedGram);

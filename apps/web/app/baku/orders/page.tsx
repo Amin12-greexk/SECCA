@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -22,14 +22,17 @@ import {
 import { useToast } from '@/lib/toast';
 import {
     approveMitraOrderRequest,
+    cancelMitraOrderRequest,
     fulfillMitraOrderRequest,
     getMitraOrderRequests,
     getWorkers,
     rejectMitraOrderRequest,
+    updateMitraOrderRequest,
     type MitraOrderRequest,
     type MitraOrderRequestStatus,
     type Worker,
 } from '@/lib/api';
+import { Input } from '@/components/ui/input';
 
 type StatusFilter = MitraOrderRequestStatus | 'ALL';
 
@@ -53,6 +56,17 @@ function BakuOrdersContent() {
     const [rejectTarget, setRejectTarget] = useState<MitraOrderRequest | null>(null);
     const [rejectReason, setRejectReason] = useState('');
     const [rejectSubmitting, setRejectSubmitting] = useState(false);
+
+    const [editOpen, setEditOpen] = useState(false);
+    const [editTarget, setEditTarget] = useState<MitraOrderRequest | null>(null);
+    const [editGram, setEditGram] = useState('');
+    const [editLpCount, setEditLpCount] = useState('');
+    const [editNote, setEditNote] = useState('');
+    const [editSubmitting, setEditSubmitting] = useState(false);
+
+    const [deleteOpen, setDeleteOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<MitraOrderRequest | null>(null);
+    const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
     const loadWorkers = async () => {
         try {
@@ -165,6 +179,67 @@ function BakuOrdersContent() {
             toast.error(error instanceof Error ? error.message : 'Gagal menolak order.');
         } finally {
             setRejectSubmitting(false);
+        }
+    };
+
+    const openEditDialog = (request: MitraOrderRequest) => {
+        setEditTarget(request);
+        const firstLine = request.lines && request.lines.length > 0 ? request.lines[0] : null;
+        setEditGram(firstLine ? String(firstLine.weightGram) : String(request.requestedGram));
+        setEditLpCount(firstLine ? String(firstLine.lpCount) : '1');
+        setEditNote(request.note ?? '');
+        setEditOpen(true);
+    };
+
+    const handleUpdateOrder = async () => {
+        if (!editTarget) return;
+        const gram = Number(editGram);
+        const lpCount = Number(editLpCount);
+        if (!gram || gram <= 0) {
+            toast.error('Gram per LP harus lebih dari 0');
+            return;
+        }
+        if (!lpCount || lpCount <= 0) {
+            toast.error('Jumlah LP harus lebih dari 0');
+            return;
+        }
+
+        setEditSubmitting(true);
+        try {
+            await updateMitraOrderRequest(editTarget.id, {
+                requestedGram: gram,
+                lpCount: lpCount,
+                note: editNote.trim() || undefined,
+            });
+            toast.success('Order berhasil diperbarui.');
+            setEditOpen(false);
+            setEditTarget(null);
+            await loadRequests();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Gagal memperbarui order.');
+        } finally {
+            setEditSubmitting(false);
+        }
+    };
+
+    const openDeleteDialog = (request: MitraOrderRequest) => {
+        setDeleteTarget(request);
+        setDeleteOpen(true);
+    };
+
+    const handleDeleteOrder = async () => {
+        if (!deleteTarget) return;
+        setDeleteSubmitting(true);
+        try {
+            await cancelMitraOrderRequest(deleteTarget.id);
+            toast.success('Order berhasil dihapus.');
+            setDeleteOpen(false);
+            setDeleteTarget(null);
+            await loadRequests();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Gagal menghapus order.');
+        } finally {
+            setDeleteSubmitting(false);
         }
     };
 
@@ -334,6 +409,25 @@ function BakuOrdersContent() {
                                                 {isBusy ? 'Memproses...' : 'Mark Fulfilled'}
                                             </Button>
                                         )}
+                                        {(request.status === 'REQUESTED' || request.status === 'APPROVED') && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => openEditDialog(request)}
+                                                disabled={isBusy}
+                                            >
+                                                Edit Order
+                                            </Button>
+                                        )}
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            className="bg-rose-600 hover:bg-rose-700 text-white"
+                                            onClick={() => openDeleteDialog(request)}
+                                            disabled={isBusy}
+                                        >
+                                            Hapus Order
+                                        </Button>
                                     </div>
                                 </div>
                             );
@@ -361,6 +455,82 @@ function BakuOrdersContent() {
                         </Button>
                         <Button variant="destructive" onClick={handleReject} disabled={rejectSubmitting}>
                             {rejectSubmitting ? 'Menyimpan...' : 'Tolak Order'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Order Dialog */}
+            <Dialog open={editOpen} onOpenChange={setEditOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit Order Mitra</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-1.5">
+                            <Label>Gram Target Per LP</Label>
+                            <Input
+                                type="number"
+                                min={1}
+                                value={editGram}
+                                onChange={(e) => setEditGram(e.target.value)}
+                                placeholder="Contoh: 39"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Jumlah LP</Label>
+                            <Input
+                                type="number"
+                                min={1}
+                                value={editLpCount}
+                                onChange={(e) => setEditLpCount(e.target.value)}
+                                placeholder="Contoh: 1"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Catatan (opsional)</Label>
+                            <Textarea
+                                value={editNote}
+                                onChange={(e) => setEditNote(e.target.value)}
+                                placeholder="Catatan tambahan"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditOpen(false)}>
+                            Batal
+                        </Button>
+                        <Button onClick={handleUpdateOrder} disabled={editSubmitting}>
+                            {editSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Order Confirmation Dialog */}
+            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Hapus / Batal Order</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-2 py-2">
+                        <p className="text-sm text-gray-700">
+                            Apakah Anda yakin ingin menghapus order dari{' '}
+                            <span className="font-bold text-gray-900">
+                                {deleteTarget?.requestedBy?.name ?? deleteTarget?.worker?.name ?? 'Mitra'}
+                            </span>{' '}
+                            sebesar <span className="font-bold text-gray-900">{deleteTarget?.requestedGram} gram</span>?
+                        </p>
+                        <p className="text-xs text-rose-600 font-medium">
+                            Tindakan ini akan menghapus order dan antrian terkait secara permanen.
+                        </p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+                            Batal
+                        </Button>
+                        <Button variant="destructive" onClick={handleDeleteOrder} disabled={deleteSubmitting}>
+                            {deleteSubmitting ? 'Menghapus...' : 'Hapus Permanen'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

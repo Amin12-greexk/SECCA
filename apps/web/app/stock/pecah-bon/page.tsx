@@ -49,6 +49,7 @@ import {
   getPecahBonEntriesPaginated,
   getPecahBonById,
   getMitraOrderRequests,
+  cancelMitraOrderRequest,
   updatePecahBonEntry,
   markPecahBonPrinted,
   deletePecahBonEntry,
@@ -2718,10 +2719,37 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                     Tinggal isi grading.
                   </p>
                   {selectedTemplateRequestId !== "NONE" && (
-                    <p className="text-[11px] text-green-700">
-                      Saat grading di baris pertama dipilih, baris bawah
-                      otomatis mengikuti. Bisa diubah per baris.
-                    </p>
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <p className="text-[11px] text-green-700">
+                        Saat grading di baris pertama dipilih, baris bawah otomatis mengikuti.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!selectedTemplateRequestId || selectedTemplateRequestId === "NONE") return;
+                          const selectedTemplate = trainerOrderTemplates.find((t) => t.id === selectedTemplateRequestId);
+                          const label = selectedTemplate
+                            ? `${selectedTemplate.requestedBy?.name ?? "Trainer"} (${selectedTemplate.requestedGram}g)`
+                            : "order ini";
+
+                          if (!window.confirm(`Apakah Anda yakin ingin menghapus/membatalkan template ${label}? Order akan dihapus dari antrian Baku.`)) {
+                            return;
+                          }
+
+                          try {
+                            await cancelMitraOrderRequest(selectedTemplateRequestId);
+                            toast.success("Template order berhasil dihapus.");
+                            setSelectedTemplateRequestId("NONE");
+                            await loadData(batchPage, { withTemplates: true });
+                          } catch (error) {
+                            toast.error(error instanceof Error ? error.message : "Gagal menghapus template order.");
+                          }
+                        }}
+                        className="rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition shadow-sm"
+                      >
+                        Hapus Order Ini
+                      </button>
+                    </div>
                   )}
                 </div>
                 <div className="space-y-1">
