@@ -3083,7 +3083,7 @@ export async function getManagerGradeUsage(
     if (params.metric) url.searchParams.set("metric", params.metric);
     if (params.top) url.searchParams.set("top", String(params.top));
     if (params.productionScope && params.productionScope !== 'ALL') {
-      url.searchParams.set("productionScope", params.productionScope);
+      url.searchParams.set("scope", params.productionScope);
     }
 
     const response = await fetch(url.toString(), {
@@ -3114,7 +3114,7 @@ export async function getManagerCapacity(
     url.searchParams.set("from", params.from);
     url.searchParams.set("to", params.to);
     if (params.productionScope && params.productionScope !== 'ALL') {
-      url.searchParams.set("productionScope", params.productionScope);
+      url.searchParams.set("scope", params.productionScope);
     }
 
     const response = await fetch(url.toString(), {
@@ -3206,7 +3206,7 @@ export async function getManagerRealPerforma(
     url.searchParams.set("from", params.from);
     url.searchParams.set("to", params.to);
     if (params.productionScope && params.productionScope !== 'ALL') {
-      url.searchParams.set("productionScope", params.productionScope);
+      url.searchParams.set("scope", params.productionScope);
     }
 
     const response = await fetch(url.toString(), {
@@ -3238,7 +3238,7 @@ export async function getManagerWorkerPerformance(
     url.searchParams.set("from", params.from);
     url.searchParams.set("to", params.to);
     if (params.productionScope && params.productionScope !== 'ALL') {
-      url.searchParams.set("productionScope", params.productionScope);
+      url.searchParams.set("scope", params.productionScope);
     }
 
     const response = await fetch(url.toString(), {

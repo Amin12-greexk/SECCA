@@ -412,7 +412,7 @@ export default function Sidebar() {
         }
     };
 
-    const renderMenuItem = (item: MenuItem, isChild = false, index = 0) => {
+    const renderMenuItem = (item: MenuItem, isChild = false) => {
         const hasChildren = item.children && item.children.length > 0;
         const isOpen = openMenus.includes(item.name);
         const isActive = item.href ? pathname === item.href : false;
@@ -443,8 +443,8 @@ export default function Sidebar() {
                                 flex items-center w-full rounded-xl transition-all duration-200 active:scale-95 will-change-transform
                                 ${isCollapsed && !isMobile ? 'justify-center px-2.5 py-2.5' : 'justify-between px-3 py-2.5'}
                                 ${isAnyChildActive
-                                    ? 'bg-gradient-to-r from-emerald-500/15 to-emerald-50/80 text-[#059833] font-semibold border border-emerald-500/20 shadow-xs'
-                                    : 'text-gray-700 hover:bg-emerald-50/50 hover:text-emerald-800'
+                                    ? 'bg-gradient-to-r from-emerald-500/15 to-emerald-50/80 text-emerald-700 font-semibold border border-emerald-400/30 shadow-xs'
+                                    : 'text-gray-700 hover:bg-emerald-50/60 hover:text-emerald-700'
                                 }
                                 ${hoveredItem === item.name ? 'scale-[1.02]' : ''}
                             `}
@@ -453,7 +453,7 @@ export default function Sidebar() {
                                 <span className={`
                                     flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-300 border
                                     ${isAnyChildActive
-                                        ? 'bg-[#059833] text-white border-emerald-600 shadow-xs'
+                                        ? 'bg-emerald-500 text-white border-emerald-600 shadow-xs'
                                         : (item.colorClass ?? defaultColorClass)
                                     }
                                     ${hoveredItem === item.name && !isAnyChildActive ? 'scale-110' : ''}
@@ -466,7 +466,7 @@ export default function Sidebar() {
                             </div>
                             {(!isCollapsed || isMobile) && (
                                 <svg
-                                    className={`w-4 h-4 transition-transform duration-300 ${isOpen ? 'rotate-180 text-[#059833]' : 'text-gray-400'}`}
+                                    className={`w-4 h-4 transition-transform duration-300 ${isOpen ? 'rotate-180 text-emerald-500' : 'text-gray-400'}`}
                                     fill="none"
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
@@ -482,10 +482,10 @@ export default function Sidebar() {
 
                     {/* Dropdown children with animation */}
                     {isOpen && (!isCollapsed || isMobile) && (
-                        <div className="mt-1 ml-3 pl-2.5 border-l-2 border-emerald-200/80 space-y-1">
+                        <div className="mt-1 ml-3 pl-2.5 border-l-2 border-emerald-300/70 space-y-1">
                             {(item.children ?? [])
                                 .filter((child) => isMenuVisible(child))
-                                .map((child, childIndex) => renderMenuItem(child, true, childIndex))}
+                                .map((child) => renderMenuItem(child, true))}
                         </div>
                     )}
                 </div>
@@ -507,8 +507,8 @@ export default function Sidebar() {
                                 ${isCollapsed && !isMobile && !isChild ? 'justify-center px-2.5 py-2.5' : 'px-3 py-2.5 gap-3'}
                                 ${isChild ? 'text-sm py-2' : ''}
                                 ${isActive
-                                    ? 'bg-gradient-to-r from-[#059833] via-emerald-600 to-teal-600 text-white font-semibold shadow-md shadow-emerald-600/30'
-                                    : 'text-gray-700 hover:bg-emerald-50/60 hover:text-emerald-800'
+                                    ? 'bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 text-white font-semibold shadow-md shadow-emerald-500/30'
+                                    : 'text-gray-700 hover:bg-emerald-50/60 hover:text-emerald-700'
                                 }
                                 ${hoveredItem === item.name && !isActive ? 'scale-[1.02] bg-emerald-50/40' : ''}
                             `}
@@ -553,7 +553,7 @@ export default function Sidebar() {
                 className={`
                     fixed top-[72px] bottom-0 left-0 z-40
                     bg-white/95 backdrop-blur-xl
-                    border-r border-gray-200/80
+                    border-r border-emerald-200/60
                     transition-all duration-300 ease-in-out
                     flex flex-col
                     ${isCollapsed && !isMobile ? 'w-20' : 'w-64'}
@@ -582,7 +582,7 @@ export default function Sidebar() {
 
                 {/* Navigation */}
                 <nav ref={navRef} className="flex-1 p-4 space-y-1.5 overflow-y-auto scrollbar-thin">
-                    {visibleMenuItems.map((item, index) => renderMenuItem(item, false, index))}
+                    {visibleMenuItems.map((item) => renderMenuItem(item, false))}
                 </nav>
 
                 {/* Footer */}
@@ -594,7 +594,7 @@ export default function Sidebar() {
                         flex items-center gap-3 px-3 py-2 rounded-xl bg-gray-50
                         ${isCollapsed && !isMobile ? 'justify-center' : ''}
                     `}>
-                        <div className="w-8 h-8 bg-[#059833] rounded-lg flex items-center justify-center text-white font-semibold text-sm shadow-lg shadow-[rgba(5,152,51,0.25)]">
+                        <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center text-white font-semibold text-sm shadow-lg shadow-emerald-500/30">
                             {user.name.charAt(0).toUpperCase()}
                         </div>
                         {(!isCollapsed || isMobile) && (

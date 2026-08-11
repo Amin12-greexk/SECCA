@@ -61,7 +61,7 @@ function Header() {
   const { toggleMobileMenu, isMobile } = useSidebar();
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 h-[72px] bg-[#059833] text-white shadow-lg">
+    <header className="fixed top-0 left-0 right-0 z-50 h-[72px] bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 text-white shadow-lg">
       <div className="h-full flex items-center justify-between px-5">
         <div className="flex items-center gap-3 pl-1">
           {/* Hamburger Menu (Mobile only) */}
@@ -103,7 +103,7 @@ function MainContent({ children }: { children: React.ReactNode }) {
       className={`
         mt-[72px] min-h-[calc(100vh-72px)] pb-24
         transition-all duration-300 ease-in-out
-        bg-green-50/40
+        bg-emerald-50/50
         ${isMobile ? 'ml-0' : (isCollapsed ? 'ml-20' : 'ml-64')}
       `}
     >

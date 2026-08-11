@@ -268,28 +268,27 @@ function UsersContent() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-72px)] bg-gray-50 p-6">
-      <div className="mx-auto max-w-5xl space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Manajemen Akun</h1>
-          <p className="text-sm text-gray-600">
-            Manager dapat membuat akun baru dan menentukan rolenya.
-          </p>
-        </div>
+    <div className="min-h-[calc(100vh-72px)] bg-emerald-50/50 p-6">
+      <div className="mx-auto max-w-6xl space-y-6">
 
-        <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+        {/* Page Header */}
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">Manajemen Akun</h1>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Manager dapat membuat akun baru dan menentukan rolenya.
+            </p>
+          </div>
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Register Akun Baru</h2>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Buat akun dan hubungkan ke mitra tanpa memenuhi halaman utama.
-                  </p>
-                </div>
-                <Button onClick={() => setCreateOpen(true)}>Tambah Akun</Button>
-              </div>
-            </div>
+            <Button
+              onClick={() => setCreateOpen(true)}
+              className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                <path d="M12 4v16m8-8H4" />
+              </svg>
+              Tambah Akun
+            </Button>
             <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Register Akun Baru</DialogTitle>
@@ -440,7 +439,7 @@ function UsersContent() {
                           <p className="text-xs text-gray-500">{module.description}</p>
                         </div>
                         <select
-                          className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#059833]"
+                          className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500"
                           value={String(form.uiAccessDraft[module.key] ?? 0)}
                           onChange={(event) =>
                             setForm((prev) => ({
@@ -474,106 +473,136 @@ function UsersContent() {
               </div>
             </DialogContent>
           </Dialog>
+        </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Daftar Akun</h2>
-              <Button variant="outline" size="sm" onClick={loadUsers} disabled={loading}>
-                Refresh
-              </Button>
+        {/* Full-width Table Card */}
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          {/* Table Header bar */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Daftar Akun</h2>
+              <p className="text-xs text-gray-400 mt-0.5">{filteredUsers.length} akun terdaftar</p>
             </div>
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
               <Input
-                className="sm:max-w-xs"
-                placeholder="Cari nama, email, role, atau ruang..."
+                className="w-64"
+                placeholder="Cari nama, email, role..."
                 value={userQuery}
                 onChange={(event) => setUserQuery(event.target.value)}
               />
-              <span className="text-xs text-gray-500">
-                {filteredUsers.length} akun · halaman {userPage} dari {totalUserPages}
-              </span>
+              <Button variant="outline" size="sm" onClick={loadUsers} disabled={loading}>
+                <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                  <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </Button>
             </div>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs uppercase tracking-wide text-gray-500">
-                    <th className="py-2">Nama</th>
-                    <th className="py-2">Email</th>
-                    <th className="py-2">Role</th>
-                    <th className="py-2">Ruang Produksi</th>
-                    <th className="py-2 text-right">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr className="text-left text-xs uppercase tracking-wider text-gray-500">
+                  <th className="px-6 py-3 font-semibold">Nama</th>
+                  <th className="px-6 py-3 font-semibold">Email</th>
+                  <th className="px-6 py-3 font-semibold">Role</th>
+                  <th className="px-6 py-3 font-semibold">Ruang Produksi</th>
+                  <th className="px-6 py-3 font-semibold text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
                   {loading ? (
                     <tr>
-                      <td colSpan={5} className="py-6 text-center text-gray-500">
-                        Memuat data...
+                      <td colSpan={5} className="px-6 py-12 text-center">
+                        <div className="flex flex-col items-center gap-2 text-gray-400">
+                          <svg className="w-8 h-8 animate-spin text-emerald-400" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3V4a10 10 0 100 20v-4l-3 3 3 3v-4a8 8 0 01-8-8z"/>
+                          </svg>
+                          <span className="text-sm">Memuat data...</span>
+                        </div>
                       </td>
                     </tr>
                   ) : filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-6 text-center text-gray-500">
-                        {userQuery ? 'Tidak ada akun yang cocok.' : 'Belum ada akun.'}
+                      <td colSpan={5} className="px-6 py-12 text-center">
+                        <div className="flex flex-col items-center gap-2 text-gray-400">
+                          <svg className="w-10 h-10" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" viewBox="0 0 24 24" stroke="currentColor">
+                            <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <span className="text-sm">{userQuery ? 'Tidak ada akun yang cocok.' : 'Belum ada akun.'}</span>
+                        </div>
                       </td>
                     </tr>
                   ) : (
-                    visibleUsers.map((user) => (
-                      <tr key={user.id} className="text-gray-700">
-                        <td className="py-2 font-medium">{user.name}</td>
-                        <td className="py-2">{user.email}</td>
-                        <td className="py-2">
-                          <div className="flex flex-col">
-                            <span className="capitalize">{user.role}</span>
-                            {user.useCustomUiAccess ? (
-                              <span className="text-xs text-[#059833]">Akses UI khusus</span>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className="py-2 text-xs">
-                          {user.productionRoom ? (
-                            <span className="rounded bg-rose-50 px-2 py-0.5 font-medium text-rose-700">
-                              {user.productionRoom.name}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="py-2 text-right">
-                          <Button variant="outline" size="sm" onClick={() => openEdit(user)}>
-                            Edit
-                          </Button>
-                        </td>
-                      </tr>
-                    ))
+                    visibleUsers.map((user) => {
+                      const roleColors: Record<string, string> = {
+                        manager: 'bg-purple-50 text-purple-700 border-purple-200',
+                        baku: 'bg-amber-50 text-amber-700 border-amber-200',
+                        mitra: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                        koreksi: 'bg-teal-50 text-teal-700 border-teal-200',
+                        trainer: 'bg-blue-50 text-blue-700 border-blue-200',
+                      };
+                      const roleColor = roleColors[user.role] ?? 'bg-gray-100 text-gray-600 border-gray-200';
+                      return (
+                        <tr key={user.id} className="hover:bg-emerald-50/40 transition-colors duration-150">
+                          <td className="px-6 py-3.5 font-medium text-gray-900">{user.name}</td>
+                          <td className="px-6 py-3.5 text-gray-500">{user.email}</td>
+                          <td className="px-6 py-3.5">
+                            <div className="flex flex-col gap-1">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${roleColor} w-fit capitalize`}>
+                                {user.role}
+                              </span>
+                              {user.useCustomUiAccess ? (
+                                <span className="text-xs text-emerald-600 font-medium">Akses UI khusus</span>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="px-6 py-3.5 text-xs">
+                            {user.productionRoom ? (
+                              <span className="rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 font-medium text-rose-700">
+                                {user.productionRoom.name}
+                              </span>
+                            ) : (
+                              <span className="text-gray-300">—</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-3.5 text-right">
+                            <Button variant="outline" size="sm" onClick={() => openEdit(user)} className="text-xs">
+                              Edit
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3">
-              <span className="text-xs text-gray-500">
-                Menampilkan {filteredUsers.length === 0 ? 0 : (userPage - 1) * USERS_PER_PAGE + 1}
-                {' '}-{' '}
-                {Math.min(userPage * USERS_PER_PAGE, filteredUsers.length)} dari {filteredUsers.length}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setUserPage((page) => Math.max(1, page - 1))}
-                  disabled={userPage <= 1}
-                >
-                  Sebelumnya
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setUserPage((page) => Math.min(totalUserPages, page + 1))}
-                  disabled={userPage >= totalUserPages}
-                >
-                  Berikutnya
-                </Button>
-              </div>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Footer */}
+          <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 bg-gray-50/60">
+            <span className="text-xs text-gray-500">
+              Menampilkan {filteredUsers.length === 0 ? 0 : (userPage - 1) * USERS_PER_PAGE + 1}–{Math.min(userPage * USERS_PER_PAGE, filteredUsers.length)} dari {filteredUsers.length} akun
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setUserPage((page) => Math.max(1, page - 1))}
+                disabled={userPage <= 1}
+              >
+                ← Sebelumnya
+              </Button>
+              <span className="text-xs text-gray-500 px-1">Hal {userPage} / {totalUserPages}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setUserPage((page) => Math.min(totalUserPages, page + 1))}
+                disabled={userPage >= totalUserPages}
+              >
+                Berikutnya →
+              </Button>
             </div>
           </div>
         </div>
@@ -728,7 +757,7 @@ function UsersContent() {
                         <p className="text-xs text-gray-500">{module.description}</p>
                       </div>
                       <select
-                        className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#059833]"
+                        className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500"
                         value={String(editForm.uiAccessDraft[module.key] ?? 0)}
                         onChange={(event) =>
                           setEditForm((prev) => ({

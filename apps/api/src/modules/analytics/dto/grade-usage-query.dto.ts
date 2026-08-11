@@ -6,6 +6,7 @@ import {
     IsInt,
     IsNotEmpty,
     IsOptional,
+    IsString,
     Min,
 } from "class-validator";
 
@@ -36,4 +37,9 @@ export class GradeUsageQueryDto {
     @IsInt()
     @Min(1)
     top?: number;
+
+    @ApiPropertyOptional({ description: "ALL, FACTORY_ONLY, MINIPLANT_ONLY, or specific productionRoomId" })
+    @IsString()
+    @IsOptional()
+    scope?: string;
 }
