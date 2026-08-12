@@ -1,6 +1,6 @@
-import { Global, Module } from "@nestjs/common";
-import { InventoryMovementService } from "./inventory/inventory-movement.service";
-import { NumberingService } from "./numbering/numbering.service";
+import { Global, Module } from '@nestjs/common';
+import { InventoryMovementService } from './inventory/inventory-movement.service';
+import { NumberingService } from './numbering/numbering.service';
 
 @Global()
 @Module({

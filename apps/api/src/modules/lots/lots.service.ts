@@ -1,24 +1,24 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable } from '@nestjs/common';
 import {
   LotStatus,
   MovementType,
   Prisma,
   RackType,
   WorkOrderItemStatus,
-} from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
-import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
-import { NumberingService } from "../../common/numbering/numbering.service";
-import { badRequest, conflict, notFound } from "../../common/errors";
-import { DEFAULT_MOISTURE_BPS, LOCATION_CODES } from "../../common/constants";
-import { roundDryWeight } from "../../common/utils/weight";
+} from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { InventoryMovementService } from '../../common/inventory/inventory-movement.service';
+import { NumberingService } from '../../common/numbering/numbering.service';
+import { badRequest, conflict, notFound } from '../../common/errors';
+import { DEFAULT_MOISTURE_BPS, LOCATION_CODES } from '../../common/constants';
+import { roundDryWeight } from '../../common/utils/weight';
 import {
   getFallbackRack,
   getProductionRoomRack,
-} from "../../common/inventory/rack-location";
-import { AutoSplitDto } from "./dto/auto-split.dto";
-import { CreateLotDto } from "./dto/create-lot.dto";
-import { MoveLotDto } from "./dto/move-lot.dto";
+} from '../../common/inventory/rack-location';
+import { AutoSplitDto } from './dto/auto-split.dto';
+import { CreateLotDto } from './dto/create-lot.dto';
+import { MoveLotDto } from './dto/move-lot.dto';
 
 @Injectable()
 export class LotsService {
@@ -30,14 +30,14 @@ export class LotsService {
 
   async createLot(dto: CreateLotDto) {
     if (dto.sources.length === 0) {
-      return badRequest("sources is required");
+      return badRequest('sources is required');
     }
 
     return this.prisma.$transaction(async (tx) => {
       const sourceIds = dto.sources.map((source) => source.gradedStockId);
       const uniqueIds = new Set(sourceIds);
       if (uniqueIds.size !== sourceIds.length) {
-        return badRequest("Duplicate gradedStockId in sources");
+        return badRequest('Duplicate gradedStockId in sources');
       }
       const stocks = await tx.rawBatchGradeStock.findMany({
         where: { id: { in: sourceIds } },
@@ -45,25 +45,30 @@ export class LotsService {
       });
 
       if (stocks.length !== sourceIds.length) {
-        return notFound("One or more graded stocks not found");
+        return notFound('One or more graded stocks not found');
       }
 
-      const gradeMismatch = stocks.find((stock) => stock.gradeId !== dto.gradeId);
+      const gradeMismatch = stocks.find(
+        (stock) => stock.gradeId !== dto.gradeId,
+      );
       if (gradeMismatch) {
-        return badRequest("All sources must match the requested grade", {
+        return badRequest('All sources must match the requested grade', {
           gradeId: dto.gradeId,
           gradedStockId: gradeMismatch.id,
         });
       }
 
       const requestMap = new Map(
-        dto.sources.map((source) => [source.gradedStockId, source.wetWeightGram]),
+        dto.sources.map((source) => [
+          source.gradedStockId,
+          source.wetWeightGram,
+        ]),
       );
 
       for (const stock of stocks) {
         const requested = requestMap.get(stock.id) ?? 0;
         if (requested <= 0) {
-          return badRequest("Source weight must be greater than 0", {
+          return badRequest('Source weight must be greater than 0', {
             gradedStockId: stock.id,
           });
         }
@@ -77,7 +82,7 @@ export class LotsService {
         });
 
         if (updated.count === 0) {
-          return conflict("Insufficient remaining weight", {
+          return conflict('Insufficient remaining weight', {
             gradedStockId: stock.id,
             remaining: stock.remainingWetWeightGram,
             requested,
@@ -133,7 +138,7 @@ export class LotsService {
         fromLocationId: null,
         toLocationId: location.id,
         movementType: MovementType.IN,
-        note: "Create lot",
+        note: 'Create lot',
       });
 
       return {
@@ -156,7 +161,7 @@ export class LotsService {
       });
 
       if (!gradedStock) {
-        return notFound("Graded stock not found", {
+        return notFound('Graded stock not found', {
           gradedStockId: dto.gradedStockId,
         });
       }
@@ -165,7 +170,7 @@ export class LotsService {
       const remainingAfterSplit =
         gradedStock.remainingWetWeightGram - totalWeight;
       if (remainingAfterSplit < 0) {
-        return conflict("Insufficient remaining weight", {
+        return conflict('Insufficient remaining weight', {
           gradedStockId: gradedStock.id,
           remaining: gradedStock.remainingWetWeightGram,
           requested: totalWeight,
@@ -185,7 +190,7 @@ export class LotsService {
       });
 
       if (updated.count === 0) {
-        return conflict("Insufficient remaining weight", {
+        return conflict('Insufficient remaining weight', {
           gradedStockId: gradedStock.id,
           remaining: gradedStock.remainingWetWeightGram,
           requested: totalDecrement,
@@ -240,7 +245,7 @@ export class LotsService {
           fromLocationId: null,
           toLocationId: location.id,
           movementType: MovementType.IN,
-          note: "Auto split lot",
+          note: 'Auto split lot',
         });
 
         lots.push({
@@ -286,7 +291,7 @@ export class LotsService {
           fromLocationId: null,
           toLocationId: location.id,
           movementType: MovementType.IN,
-          note: "Auto split remainder",
+          note: 'Auto split remainder',
         });
 
         lots.push({
@@ -333,11 +338,11 @@ export class LotsService {
       });
 
       if (!lot) {
-        return notFound("Lot not found", { lotId });
+        return notFound('Lot not found', { lotId });
       }
 
       if (lot.status === LotStatus.COMPLETED) {
-        return conflict("Lot already completed", { lotNumber: lot.lotNumber });
+        return conflict('Lot already completed', { lotNumber: lot.lotNumber });
       }
 
       const productionRoomId =
@@ -352,7 +357,7 @@ export class LotsService {
       );
 
       if (lot.locationId === toLocation.id) {
-        return conflict("Lot already in target location", {
+        return conflict('Lot already in target location', {
           lotNumber: lot.lotNumber,
           location: toLocation.code,
         });
@@ -369,7 +374,7 @@ export class LotsService {
       }
 
       if (lot.workItem?.status === WorkOrderItemStatus.IN_PROGRESS) {
-        return conflict("Lot sudah masuk work order aktif", {
+        return conflict('Lot sudah masuk work order aktif', {
           lotNumber: lot.lotNumber,
         });
       }
@@ -395,7 +400,7 @@ export class LotsService {
         fromLocationId: lot.locationId,
         toLocationId: toLocation.id,
         movementType: MovementType.MOVE,
-        note: "Manual rack move",
+        note: 'Manual rack move',
       });
 
       return updated;
@@ -414,10 +419,10 @@ export class LotsService {
     if (code === LOCATION_CODES.PRE_SALE) {
       return tx.rackLocation.upsert({
         where: { code: LOCATION_CODES.PRE_SALE },
-        update: { name: "Rak Sementara", type: RackType.PRE_SALE },
+        update: { name: 'Rak Sementara', type: RackType.PRE_SALE },
         create: {
           code: LOCATION_CODES.PRE_SALE,
-          name: "Rak Sementara",
+          name: 'Rak Sementara',
           type: RackType.PRE_SALE,
         },
       });
@@ -447,7 +452,7 @@ export class LotsService {
       return getFallbackRack(tx, RackType.FINISHED);
     }
 
-    return badRequest("Unknown location code", { code });
+    return badRequest('Unknown location code', { code });
   }
 
   private async resolveMoistureBps(
@@ -464,7 +469,7 @@ export class LotsService {
           effectiveFrom: { lte: at },
           OR: [{ effectiveTo: null }, { effectiveTo: { gt: at } }],
         },
-        orderBy: { effectiveFrom: "desc" },
+        orderBy: { effectiveFrom: 'desc' },
       });
 
       if (rule) {
@@ -479,7 +484,7 @@ export class LotsService {
         effectiveFrom: { lte: at },
         OR: [{ effectiveTo: null }, { effectiveTo: { gt: at } }],
       },
-      orderBy: { effectiveFrom: "desc" },
+      orderBy: { effectiveFrom: 'desc' },
     });
 
     if (gradeRule) {
@@ -493,7 +498,7 @@ export class LotsService {
         effectiveFrom: { lte: at },
         OR: [{ effectiveTo: null }, { effectiveTo: { gt: at } }],
       },
-      orderBy: { effectiveFrom: "desc" },
+      orderBy: { effectiveFrom: 'desc' },
     });
 
     if (defaultRule) {

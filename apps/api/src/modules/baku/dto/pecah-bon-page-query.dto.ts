@@ -1,6 +1,6 @@
-import { ApiPropertyOptional } from "@nestjs/swagger";
-import { Type } from "class-transformer";
-import { IsInt, IsOptional, Max, Min } from "class-validator";
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export class PecahBonPageQueryDto {
   @ApiPropertyOptional({ minimum: 1, default: 1 })
@@ -18,4 +18,3 @@ export class PecahBonPageQueryDto {
   @Max(100)
   limit?: number;
 }
-

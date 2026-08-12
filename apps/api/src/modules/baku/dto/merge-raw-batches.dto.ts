@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { Type } from "class-transformer";
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   ArrayUnique,
@@ -13,7 +13,7 @@ import {
   Max,
   Min,
   MinLength,
-} from "class-validator";
+} from 'class-validator';
 
 export class MergeRawBatchesDto {
   @ApiProperty({ type: [String], minItems: 2 })

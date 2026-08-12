@@ -1,8 +1,8 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
-import { badRequest } from "../../common/errors";
-import { toBps } from "../../common/utils/weight";
-import { WeeklyReportQueryDto } from "./dto/weekly-report-query.dto";
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { badRequest } from '../../common/errors';
+import { toBps } from '../../common/utils/weight';
+import { WeeklyReportQueryDto } from './dto/weekly-report-query.dto';
 
 type WorkerBucket = {
   workerId: string;
@@ -31,7 +31,7 @@ type DayBucket = {
 export class ReportsService {
   private static readonly ATTENDANCE_TIMEOUT_MS = 10_000;
   private static readonly ATTENDANCE_TOKEN =
-    "dff4f683-ed10-11f0-af43-f89e94d63c41";
+    'dff4f683-ed10-11f0-af43-f89e94d63c41';
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -56,7 +56,7 @@ export class ReportsService {
           },
         },
       },
-      orderBy: { returnedAt: "asc" },
+      orderBy: { returnedAt: 'asc' },
     });
 
     // ─── Aggregate per worker ───────────────────────────────────
@@ -119,10 +119,7 @@ export class ReportsService {
           byProductGram: w.byProductGram,
           payrollAmountRp: w.payrollAmountRp,
           rendemenMainBps: toBps(w.mainOutGram, w.dryInGram),
-          rendemenNetBps: toBps(
-            w.mainOutGram + w.byProductGram,
-            w.dryInGram,
-          ),
+          rendemenNetBps: toBps(w.mainOutGram + w.byProductGram, w.dryInGram),
           attendanceDays,
           workDayCount,
           isFullAttendance,
@@ -140,8 +137,7 @@ export class ReportsService {
         acc.totalByProductGram += r.byProductWeightGram;
         acc.totalSusutProsesGram += r.susutProsesGram;
         acc.totalSusutHilangGram += r.susutHilangGram;
-        acc.totalPayrollRp +=
-          r.workOrderItem.payrollEntry?.amountRp ?? 0;
+        acc.totalPayrollRp += r.workOrderItem.payrollEntry?.amountRp ?? 0;
         return acc;
       },
       {
@@ -180,8 +176,7 @@ export class ReportsService {
         day.receiptCount += 1;
         day.dryInGram += receipt.dryInGram;
         day.mainOutGram += receipt.mainOutWeightGram;
-        day.payrollRp +=
-          receipt.workOrderItem.payrollEntry?.amountRp ?? 0;
+        day.payrollRp += receipt.workOrderItem.payrollEntry?.amountRp ?? 0;
       }
     }
 
@@ -198,10 +193,7 @@ export class ReportsService {
       },
       summary: {
         ...totals,
-        rendemenMainBps: toBps(
-          totals.totalMainOutGram,
-          totals.totalDryInGram,
-        ),
+        rendemenMainBps: toBps(totals.totalMainOutGram, totals.totalDryInGram),
         rendemenNetBps: toBps(
           totals.totalMainOutGram + totals.totalByProductGram,
           totals.totalDryInGram,
@@ -234,7 +226,11 @@ export class ReportsService {
         const parsed = JSON.parse(workDaysJson);
         if (Array.isArray(parsed)) {
           return parsed
-            .filter((d: unknown) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d as string))
+            .filter(
+              (d: unknown) =>
+                typeof d === 'string' &&
+                /^\d{4}-\d{2}-\d{2}$/.test(d as string),
+            )
             .sort();
         }
       } catch {
@@ -280,7 +276,7 @@ export class ReportsService {
 
     const map = new Map<string, number>();
     for (const result of results) {
-      if (result.status === "fulfilled" && result.value.days !== null) {
+      if (result.status === 'fulfilled' && result.value.days !== null) {
         map.set(result.value.workerId, result.value.days);
       }
     }
@@ -288,17 +284,19 @@ export class ReportsService {
   }
 
   private resolveApiConfig() {
-    const apiUrl = this.pickEnv([
-      "ABSEN_API_URL",
-      "ATTENDANCE_API_URL",
-      "ABSENSI_API_URL",
-    ]) || "https://spl.estaindonesia.com/apiv2/absen";
-    const apiToken = this.pickEnv([
-      "ABSEN_API_TOKEN",
-      "ATTENDANCE_API_TOKEN",
-      "ABSENSI_API_TOKEN",
-      "ABSEN_TOKEN",
-    ]) || "dff4f683-ed10-11f0-af43-f89e94d63c41";
+    const apiUrl =
+      this.pickEnv([
+        'ABSEN_API_URL',
+        'ATTENDANCE_API_URL',
+        'ABSENSI_API_URL',
+      ]) || 'https://spl.estaindonesia.com/apiv2/absen';
+    const apiToken =
+      this.pickEnv([
+        'ABSEN_API_TOKEN',
+        'ATTENDANCE_API_TOKEN',
+        'ABSENSI_API_TOKEN',
+        'ABSEN_TOKEN',
+      ]) || 'dff4f683-ed10-11f0-af43-f89e94d63c41';
 
     return { apiUrl, apiToken };
   }
@@ -321,17 +319,17 @@ export class ReportsService {
   ): Promise<number | null> {
     try {
       const { apiUrl, apiToken } = this.resolveApiConfig();
-      
+
       let endpoint: URL;
       try {
         endpoint = new URL(apiUrl);
       } catch {
-        endpoint = new URL("https://spl.estaindonesia.com/apiv2/absen");
+        endpoint = new URL('https://spl.estaindonesia.com/apiv2/absen');
       }
 
-      endpoint.searchParams.set("pin", pin.trim());
+      endpoint.searchParams.set('pin', pin.trim());
       if (apiToken) {
-        endpoint.searchParams.set("token", apiToken);
+        endpoint.searchParams.set('token', apiToken);
       }
 
       const controller = new AbortController();
@@ -343,11 +341,11 @@ export class ReportsService {
       try {
         let response = await fetch(endpoint.toString(), {
           headers: {
-            Accept: "application/json",
+            Accept: 'application/json',
             ...(apiToken
               ? {
                   Authorization: `Bearer ${apiToken}`,
-                  "X-API-TOKEN": apiToken,
+                  'X-API-TOKEN': apiToken,
                   token: apiToken,
                 }
               : {}),
@@ -358,7 +356,7 @@ export class ReportsService {
         if (!response || !response.ok) {
           const fallbackUrl = new URL(endpoint.toString());
           if (apiToken) {
-            fallbackUrl.searchParams.set("token", apiToken);
+            fallbackUrl.searchParams.set('token', apiToken);
           }
           response = await fetch(fallbackUrl.toString(), {
             signal: controller.signal,
@@ -396,21 +394,18 @@ export class ReportsService {
     const from = new Date(`${fromValue}T00:00:00.000`);
     const to = new Date(`${toValue}T23:59:59.999`);
 
-    if (
-      Number.isNaN(from.getTime()) ||
-      Number.isNaN(to.getTime())
-    ) {
-      return badRequest("Format tanggal tidak valid", {
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+      return badRequest('Format tanggal tidak valid', {
         from: fromValue,
         to: toValue,
       });
     }
 
     if (from.getTime() > to.getTime()) {
-      return badRequest(
-        "Rentang tanggal tidak valid: from harus <= to",
-        { from: fromValue, to: toValue },
-      );
+      return badRequest('Rentang tanggal tidak valid: from harus <= to', {
+        from: fromValue,
+        to: toValue,
+      });
     }
 
     return { from, to };

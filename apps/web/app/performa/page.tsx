@@ -11,6 +11,7 @@ import {
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useToast } from '@/lib/toast';
 import {
+    getPerformaExpenseSummary,
     getPerformaPeriodStats,
     getPerformaPeriods,
     getPerformaPersons,
@@ -21,10 +22,12 @@ import {
     type PerformaPeriod,
     type PerformaPeriodStat,
     type PerformaSummaryResponse,
+    type PerformaExpenseSummaryResponse,
 } from '@/lib/api';
 import DeltaBadge from './components/DeltaBadge';
 import IndividualPanel from './components/IndividualPanel';
 import MitraRanking from './components/MitraRanking';
+import PayrollExpensePanel from './components/PayrollExpensePanel';
 import PeriodTrends from './components/PeriodTrends';
 import TurnoverAndShifts from './components/TurnoverAndShifts';
 
@@ -100,7 +103,20 @@ function StatTile({
 
 /* ─── Upload card ─────────────────────────────────────────────── */
 
-function UploadCard({ onUploaded }: { onUploaded: () => void }) {
+function UploadCard({
+    onUploaded,
+    onWarnings,
+}: {
+    onUploaded: () => void;
+    onWarnings: (
+        warnings: Array<{
+            rowNumber: number;
+            rawName: string;
+            column: string;
+            message: string;
+        }> | null,
+    ) => void;
+}) {
     const toast = useToast();
     const inputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
@@ -114,6 +130,7 @@ function UploadCard({ onUploaded }: { onUploaded: () => void }) {
         try {
             const res = await resetPerformaData();
             toast.success(res.message);
+            onWarnings(null);
             onUploaded(); // this will trigger reload of data
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Gagal mereset data.');
@@ -131,6 +148,11 @@ function UploadCard({ onUploaded }: { onUploaded: () => void }) {
                 `${result.totalSheets} periode • ${result.totalRows} baris dimuat` +
                     (replaced > 0 ? ` (${replaced} periode diperbarui)` : ''),
             );
+            if (result.warnings && result.warnings.length > 0) {
+                onWarnings(result.warnings);
+            } else {
+                onWarnings(null);
+            }
             onUploaded();
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Gagal mengunggah file.');
@@ -201,9 +223,16 @@ export default function PerformaPage() {
     const [periodId, setPeriodId] = useState('');
     const [summary, setSummary] = useState<PerformaSummaryResponse | null>(null);
     const [prevSummary, setPrevSummary] = useState<PerformaSummaryResponse | null>(null);
+    const [expenseSummary, setExpenseSummary] = useState<PerformaExpenseSummaryResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+    const [importWarnings, setImportWarnings] = useState<Array<{
+        rowNumber: number;
+        rawName: string;
+        column: string;
+        message: string;
+    }> | null>(null);
     const panelRef = useRef<HTMLDivElement>(null);
 
     const canManage = isAuthenticated && hasModuleAccess('dashboard', 2);
@@ -227,8 +256,12 @@ export default function PerformaPage() {
             const periodList = await loadBase();
             // Periode terbaru = sortOrder terbesar (backend memakai default yang sama).
             const targetId = periodId || periodList[periodList.length - 1]?.id || '';
-            const data = await getPerformaSummary(targetId || undefined);
+            const [data, expenseData] = await Promise.all([
+                getPerformaSummary(targetId || undefined),
+                getPerformaExpenseSummary(targetId || undefined).catch(() => null),
+            ]);
             setSummary(data);
+            setExpenseSummary(expenseData);
             
             const currentIndex = periodList.findIndex(p => p.id === (data.period?.id ?? targetId));
             const prevId = currentIndex > 0 ? periodList[currentIndex - 1].id : null;
@@ -257,8 +290,12 @@ export default function PerformaPage() {
         setLoading(true);
         setError(null);
         try {
-            const data = await getPerformaSummary(nextId || undefined);
+            const [data, expenseData] = await Promise.all([
+                getPerformaSummary(nextId || undefined),
+                getPerformaExpenseSummary(nextId || undefined).catch(() => null),
+            ]);
             setSummary(data);
+            setExpenseSummary(expenseData);
 
             const currentIndex = periods.findIndex(p => p.id === (data.period?.id ?? nextId));
             const prevId = currentIndex > 0 ? periods[currentIndex - 1].id : null;
@@ -300,8 +337,12 @@ export default function PerformaPage() {
         try {
             const periodList = await loadBase();
             const latest = periodList[periodList.length - 1]?.id;
-            const data = await getPerformaSummary(latest);
+            const [data, expenseData] = await Promise.all([
+                getPerformaSummary(latest),
+                getPerformaExpenseSummary(latest).catch(() => null),
+            ]);
             setSummary(data);
+            setExpenseSummary(expenseData);
             
             const prevId = periodList.length > 1 ? periodList[periodList.length - 2].id : null;
             if (prevId) {
@@ -396,7 +437,41 @@ export default function PerformaPage() {
                     </div>
                 </div>
 
-                {canManage ? <UploadCard onUploaded={handleUploaded} /> : null}
+                {canManage ? <UploadCard onUploaded={handleUploaded} onWarnings={setImportWarnings} /> : null}
+
+                {importWarnings && importWarnings.length > 0 ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                        <div className="flex items-center justify-between">
+                            <div className="font-semibold flex items-center gap-1.5">
+                                ⚠️ Perhatian: {importWarnings.length} formula Excel belum ter-recalculate di file sumber
+                            </div>
+                            <button 
+                                onClick={() => setImportWarnings(null)}
+                                className="text-xs text-amber-600 hover:text-amber-900 font-medium underline"
+                            >
+                                Tutup
+                            </button>
+                        </div>
+                        <p className="mt-1 text-xs text-amber-700">
+                            Beberapa sel pada kolom payroll (mis. Subsidi, Premi, Potongan, Gaji/Upah Bersih) tidak memiliki cached value (mungkin mereferensi file/workbook luar yang tidak terhubung).
+                        </p>
+                        <ul className="mt-2 list-disc pl-5 space-y-0.5 text-xs text-amber-700">
+                            {importWarnings.slice(0, 5).map((warn, i) => (
+                                <li key={i}>
+                                    Baris {warn.rowNumber} ({warn.rawName}) • Kolom: {warn.column === 'netWage' ? 'Upah Bersih' : warn.column === 'pieceworkWage' ? 'Upah Borong' : warn.column === 'subsidy' ? 'Subsidi' : warn.column === 'premium' ? 'Premi' : warn.column === 'mealAllowance' ? 'Uang Makan' : warn.column === 'deduction' ? 'Potongan' : warn.column}
+                                </li>
+                            ))}
+                            {importWarnings.length > 5 ? (
+                                <li className="list-none font-medium mt-1">
+                                    + {importWarnings.length - 5} sel lainnya...
+                                </li>
+                            ) : null}
+                        </ul>
+                        <div className="mt-2 text-xs font-semibold">
+                            SOP: Buka file di Excel → tekan <kbd className="bg-amber-100 px-1 py-0.5 rounded border border-amber-300">Ctrl+Alt+F9</kbd> untuk full recalculate → simpan ulang file, lalu upload kembali file tersebut.
+                        </div>
+                    </div>
+                ) : null}
 
                 {error ? (
                     <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -427,7 +502,7 @@ export default function PerformaPage() {
                         <StatTile
                             label="Rendemen"
                             value={fmtBps(stats.weightedRendemenPctBps)}
-                            hint={`Rata-rata SP ${fmtBps(stats.averageSusutProsesPctBps)} · SH ${fmtBps(stats.averageSusutHilangPctBps)}`}
+                            hint={`SP ${fmtBps(stats.weightedSusutProsesPctBps)} · SH ${fmtBps(stats.weightedSusutHilangPctBps)}`}
                             delta={
                                 currentStat?.deltaRendemenPctBps == null
                                     ? null
@@ -474,6 +549,13 @@ export default function PerformaPage() {
                 {canManage && prevSummary && (
                     <TurnoverAndShifts currentSummary={summary} prevSummary={prevSummary} />
                 )}
+
+                {/* Payroll & Biaya Perusahaan / Rekap Payroll Anak Borong */}
+                <PayrollExpensePanel
+                    data={expenseSummary}
+                    periodLabel={summary?.period?.label}
+                    onSelect={selectPerson}
+                />
 
                 {/* 02 — Detail anak terpilih */}
                 <div ref={panelRef} className="scroll-mt-24">

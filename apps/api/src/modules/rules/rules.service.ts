@@ -1,12 +1,12 @@
-import { Injectable } from "@nestjs/common";
-import { GradeType } from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
-import { badRequest, notFound } from "../../common/errors";
-import { CreateGradeTariffDto } from "./dto/create-grade-tariff.dto";
-import { CreateMoistureRuleDto } from "./dto/create-moisture-rule.dto";
-import { CreatePecahBonPresetDto } from "./dto/create-pecah-bon-preset.dto";
-import { GradeTariffQueryDto } from "./dto/grade-tariff-query.dto";
-import { MoistureRuleQueryDto } from "./dto/moisture-rule-query.dto";
+import { Injectable } from '@nestjs/common';
+import { GradeType } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { badRequest, notFound } from '../../common/errors';
+import { CreateGradeTariffDto } from './dto/create-grade-tariff.dto';
+import { CreateMoistureRuleDto } from './dto/create-moisture-rule.dto';
+import { CreatePecahBonPresetDto } from './dto/create-pecah-bon-preset.dto';
+import { GradeTariffQueryDto } from './dto/grade-tariff-query.dto';
+import { MoistureRuleQueryDto } from './dto/moisture-rule-query.dto';
 
 type AuditActor = { sub?: string };
 
@@ -17,7 +17,7 @@ export class RulesService {
   private recordTariffAudit(input: {
     tariffType: string;
     tariffId: string;
-    action: "CREATE" | "UPDATE" | "DELETE";
+    action: 'CREATE' | 'UPDATE' | 'DELETE';
     previousRateRpPerGram?: number | null;
     newRateRpPerGram?: number | null;
     actor?: AuditActor;
@@ -43,13 +43,13 @@ export class RulesService {
     });
 
     if (!shapeGrade) {
-      return notFound("Grade bentuk tidak ditemukan", {
+      return notFound('Grade bentuk tidak ditemukan', {
         gradeId: dto.shapeGradeId,
       });
     }
 
     if (shapeGrade.type !== GradeType.BENTUK) {
-      return badRequest("Grade bentuk tidak sesuai", {
+      return badRequest('Grade bentuk tidak sesuai', {
         gradeId: dto.shapeGradeId,
         expected: GradeType.BENTUK,
         actual: shapeGrade.type,
@@ -57,7 +57,7 @@ export class RulesService {
     }
 
     if (dto.colorGradeId && !dto.featherGradeId) {
-      return badRequest("Grade warna harus memiliki grade bulu");
+      return badRequest('Grade warna harus memiliki grade bulu');
     }
 
     if (dto.featherGradeId) {
@@ -65,12 +65,12 @@ export class RulesService {
         where: { id: dto.featherGradeId },
       });
       if (!featherGrade) {
-        return notFound("Grade bulu tidak ditemukan", {
+        return notFound('Grade bulu tidak ditemukan', {
           gradeId: dto.featherGradeId,
         });
       }
       if (featherGrade.type !== GradeType.BULU) {
-        return badRequest("Grade bulu tidak sesuai", {
+        return badRequest('Grade bulu tidak sesuai', {
           gradeId: dto.featherGradeId,
           expected: GradeType.BULU,
           actual: featherGrade.type,
@@ -83,12 +83,12 @@ export class RulesService {
         where: { id: dto.colorGradeId },
       });
       if (!colorGrade) {
-        return notFound("Grade warna tidak ditemukan", {
+        return notFound('Grade warna tidak ditemukan', {
           gradeId: dto.colorGradeId,
         });
       }
       if (colorGrade.type !== GradeType.WARNA) {
-        return badRequest("Grade warna tidak sesuai", {
+        return badRequest('Grade warna tidak sesuai', {
           gradeId: dto.colorGradeId,
           expected: GradeType.WARNA,
           actual: colorGrade.type,
@@ -99,7 +99,7 @@ export class RulesService {
     const effectiveFrom = new Date(dto.effectiveFrom);
     const effectiveTo = dto.effectiveTo ? new Date(dto.effectiveTo) : null;
     if (effectiveTo && effectiveTo <= effectiveFrom) {
-      return badRequest("effectiveTo must be after effectiveFrom");
+      return badRequest('effectiveTo must be after effectiveFrom');
     }
 
     const created = await this.prisma.gradeTariff.create({
@@ -113,9 +113,9 @@ export class RulesService {
       },
     });
     await this.recordTariffAudit({
-      tariffType: "GRADE",
+      tariffType: 'GRADE',
       tariffId: created.id,
-      action: "CREATE",
+      action: 'CREATE',
       newRateRpPerGram: created.rateRpPerGram,
       actor,
       metadata: { effectiveFrom: created.effectiveFrom.toISOString() },
@@ -138,7 +138,7 @@ export class RulesService {
             }
           : undefined),
       },
-      orderBy: { effectiveFrom: "desc" },
+      orderBy: { effectiveFrom: 'desc' },
       include: {
         shapeGrade: true,
         featherGrade: true,
@@ -153,7 +153,7 @@ export class RulesService {
         where: { id: dto.gradeId },
       });
       if (!grade) {
-        return notFound("Grade not found", { gradeId: dto.gradeId });
+        return notFound('Grade not found', { gradeId: dto.gradeId });
       }
     }
 
@@ -162,14 +162,14 @@ export class RulesService {
         where: { id: dto.supplierId },
       });
       if (!supplier) {
-        return notFound("Supplier not found", { supplierId: dto.supplierId });
+        return notFound('Supplier not found', { supplierId: dto.supplierId });
       }
     }
 
     const effectiveFrom = new Date(dto.effectiveFrom);
     const effectiveTo = dto.effectiveTo ? new Date(dto.effectiveTo) : null;
     if (effectiveTo && effectiveTo <= effectiveFrom) {
-      return badRequest("effectiveTo must be after effectiveFrom");
+      return badRequest('effectiveTo must be after effectiveFrom');
     }
 
     return this.prisma.moistureRule.create({
@@ -197,7 +197,7 @@ export class RulesService {
             }
           : undefined),
       },
-      orderBy: { effectiveFrom: "desc" },
+      orderBy: { effectiveFrom: 'desc' },
     });
   }
 
@@ -213,7 +213,7 @@ export class RulesService {
 
   findPecahBonPresets() {
     return this.prisma.pecahBonPreset.findMany({
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: 'asc' },
     });
   }
 
@@ -223,16 +223,16 @@ export class RulesService {
     });
 
     if (!existing) {
-      return notFound("Grade tariff not found", { id });
+      return notFound('Grade tariff not found', { id });
     }
 
     const deleted = await this.prisma.gradeTariff.delete({
       where: { id },
     });
     await this.recordTariffAudit({
-      tariffType: "GRADE",
+      tariffType: 'GRADE',
       tariffId: deleted.id,
-      action: "DELETE",
+      action: 'DELETE',
       previousRateRpPerGram: deleted.rateRpPerGram,
       actor,
     });
@@ -245,7 +245,7 @@ export class RulesService {
     });
 
     if (!existing) {
-      return notFound("Moisture rule not found", { id });
+      return notFound('Moisture rule not found', { id });
     }
 
     return this.prisma.moistureRule.delete({
@@ -259,7 +259,7 @@ export class RulesService {
     });
 
     if (!existing) {
-      return notFound("Pecah bon preset not found", { id });
+      return notFound('Pecah bon preset not found', { id });
     }
 
     return this.prisma.pecahBonPreset.delete({
@@ -267,16 +267,27 @@ export class RulesService {
     });
   }
 
-  async createResultGradeTariff(dto: { resultGradeTypeId: string; rateRpPerGram: number; effectiveFrom?: string }, actor?: AuditActor) {
+  async createResultGradeTariff(
+    dto: {
+      resultGradeTypeId: string;
+      rateRpPerGram: number;
+      effectiveFrom?: string;
+    },
+    actor?: AuditActor,
+  ) {
     const gradeType = await this.prisma.barangJadiGradeType.findUnique({
       where: { id: dto.resultGradeTypeId },
     });
 
     if (!gradeType) {
-      return notFound("Grade hasil barang jadi tidak ditemukan", { id: dto.resultGradeTypeId });
+      return notFound('Grade hasil barang jadi tidak ditemukan', {
+        id: dto.resultGradeTypeId,
+      });
     }
 
-    const effectiveFrom = dto.effectiveFrom ? new Date(dto.effectiveFrom) : new Date();
+    const effectiveFrom = dto.effectiveFrom
+      ? new Date(dto.effectiveFrom)
+      : new Date();
 
     const created = await this.prisma.resultGradeTariff.create({
       data: {
@@ -289,9 +300,9 @@ export class RulesService {
       },
     });
     await this.recordTariffAudit({
-      tariffType: "RESULT",
+      tariffType: 'RESULT',
       tariffId: created.id,
-      action: "CREATE",
+      action: 'CREATE',
       newRateRpPerGram: created.rateRpPerGram,
       actor,
       metadata: { effectiveFrom: created.effectiveFrom.toISOString() },
@@ -301,7 +312,7 @@ export class RulesService {
 
   findResultGradeTariffs() {
     return this.prisma.resultGradeTariff.findMany({
-      orderBy: { effectiveFrom: "desc" },
+      orderBy: { effectiveFrom: 'desc' },
       include: {
         resultGradeType: true,
       },
@@ -313,27 +324,31 @@ export class RulesService {
       where: { id },
     });
     if (!existing) {
-      return notFound("Result grade tariff not found", { id });
+      return notFound('Result grade tariff not found', { id });
     }
     const deleted = await this.prisma.resultGradeTariff.delete({
       where: { id },
     });
     await this.recordTariffAudit({
-      tariffType: "RESULT",
+      tariffType: 'RESULT',
       tariffId: deleted.id,
-      action: "DELETE",
+      action: 'DELETE',
       previousRateRpPerGram: deleted.rateRpPerGram,
       actor,
     });
     return deleted;
   }
 
-  async updateGradeTariff(id: string, dto: Partial<CreateGradeTariffDto>, actor?: AuditActor) {
+  async updateGradeTariff(
+    id: string,
+    dto: Partial<CreateGradeTariffDto>,
+    actor?: AuditActor,
+  ) {
     const existing = await this.prisma.gradeTariff.findUnique({
       where: { id },
     });
     if (!existing) {
-      return notFound("Grade tariff not found", { id });
+      return notFound('Grade tariff not found', { id });
     }
 
     const data: any = {};
@@ -343,7 +358,7 @@ export class RulesService {
         where: { id: dto.shapeGradeId },
       });
       if (!shapeGrade || shapeGrade.type !== GradeType.BENTUK) {
-        return badRequest("Grade bentuk tidak valid");
+        return badRequest('Grade bentuk tidak valid');
       }
       data.shapeGrade = { connect: { id: dto.shapeGradeId } };
     }
@@ -382,9 +397,9 @@ export class RulesService {
       },
     });
     await this.recordTariffAudit({
-      tariffType: "GRADE",
+      tariffType: 'GRADE',
       tariffId: updated.id,
-      action: "UPDATE",
+      action: 'UPDATE',
       previousRateRpPerGram: existing.rateRpPerGram,
       newRateRpPerGram: updated.rateRpPerGram,
       actor,
@@ -396,12 +411,16 @@ export class RulesService {
     return updated;
   }
 
-  async updateResultGradeTariff(id: string, dto: { rateRpPerGram?: number; effectiveFrom?: string }, actor?: AuditActor) {
+  async updateResultGradeTariff(
+    id: string,
+    dto: { rateRpPerGram?: number; effectiveFrom?: string },
+    actor?: AuditActor,
+  ) {
     const existing = await this.prisma.resultGradeTariff.findUnique({
       where: { id },
     });
     if (!existing) {
-      return notFound("Result grade tariff not found", { id });
+      return notFound('Result grade tariff not found', { id });
     }
 
     const data: any = {};
@@ -420,9 +439,9 @@ export class RulesService {
       },
     });
     await this.recordTariffAudit({
-      tariffType: "RESULT",
+      tariffType: 'RESULT',
       tariffId: updated.id,
-      action: "UPDATE",
+      action: 'UPDATE',
       previousRateRpPerGram: existing.rateRpPerGram,
       newRateRpPerGram: updated.rateRpPerGram,
       actor,
@@ -437,9 +456,13 @@ export class RulesService {
   findTariffAudits(tariffType?: string) {
     return this.prisma.tariffAuditLog.findMany({
       where: tariffType ? { tariffType } : undefined,
-      orderBy: { changedAt: "desc" },
+      orderBy: { changedAt: 'desc' },
       take: 200,
-      include: { changedBy: { select: { id: true, name: true, email: true, role: true } } },
+      include: {
+        changedBy: {
+          select: { id: true, name: true, email: true, role: true },
+        },
+      },
     });
   }
 
@@ -447,7 +470,12 @@ export class RulesService {
     const setting = await this.prisma.systemSetting.findUnique({
       where: { key },
     });
-    return setting ?? { key, value: key === "RAW_MATERIAL_PAYROLL_CALC_BASE" ? "WET" : "" };
+    return (
+      setting ?? {
+        key,
+        value: key === 'RAW_MATERIAL_PAYROLL_CALC_BASE' ? 'WET' : '',
+      }
+    );
   }
 
   async setSetting(key: string, value: string) {

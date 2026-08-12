@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { Transform } from "class-transformer";
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   IsArray,
   IsInt,
@@ -9,8 +9,8 @@ import {
   MaxLength,
   Min,
   ValidateNested,
-} from "class-validator";
-import { Type } from "class-transformer";
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateMitraOrderRequestLineDto {
   @ApiProperty({ example: 75 })
@@ -28,14 +28,14 @@ export class CreateMitraOrderRequestLineDto {
 
 export class CreateMitraOrderRequestDto {
   @ApiPropertyOptional({
-    description: "Target worker untuk order (wajib untuk role selain trainer)",
+    description: 'Target worker untuk order (wajib untuk role selain trainer)',
   })
   @IsOptional()
   @IsUUID()
   workerId?: string;
 
   @ApiPropertyOptional({
-    description: "Target gram order mitra (berat basah operasional)",
+    description: 'Target gram order mitra (berat basah operasional)',
     example: 75,
     required: false,
   })
@@ -47,7 +47,7 @@ export class CreateMitraOrderRequestDto {
 
   @ApiPropertyOptional({
     type: [CreateMitraOrderRequestLineDto],
-    description: "Template order per LP, misal 75 gr x 5 LP",
+    description: 'Template order per LP, misal 75 gr x 5 LP',
   })
   @IsOptional()
   @IsArray()
@@ -57,7 +57,7 @@ export class CreateMitraOrderRequestDto {
 
   @ApiProperty({
     required: false,
-    description: "Catatan tambahan dari mitra/pengawas",
+    description: 'Catatan tambahan dari mitra/pengawas',
   })
   @IsOptional()
   @IsString()

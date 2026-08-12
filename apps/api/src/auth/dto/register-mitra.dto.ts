@@ -1,12 +1,12 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { Transform } from "class-transformer";
+import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   IsEmail,
   IsNumberString,
   IsString,
   MaxLength,
   MinLength,
-} from "class-validator";
+} from 'class-validator';
 
 export class RegisterMitraDto {
   @ApiProperty()
@@ -20,8 +20,8 @@ export class RegisterMitraDto {
   email: string;
 
   @ApiProperty({
-    description: "Nomor WhatsApp (gunakan format angka atau +62...)",
-    example: "628123456789",
+    description: 'Nomor WhatsApp (gunakan format angka atau +62...)',
+    example: '628123456789',
   })
   @IsString()
   @MinLength(8)
@@ -33,8 +33,8 @@ export class RegisterMitraDto {
   password: string;
 
   @ApiProperty({
-    description: "PIN mesin finger mitra (3-6 digit angka)",
-    example: "123456",
+    description: 'PIN mesin finger mitra (3-6 digit angka)',
+    example: '123456',
   })
   @IsNumberString()
   @MinLength(3)

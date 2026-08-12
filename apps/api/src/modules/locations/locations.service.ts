@@ -1,15 +1,15 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma, RackType } from "@prisma/client";
-import { conflict, badRequest, notFound } from "../../common/errors";
-import { LOCATION_CODES } from "../../common/constants";
-import { PrismaService } from "../../prisma/prisma.service";
-import { CreateLocationDto } from "./dto/create-location.dto";
-import { UpdateLocationDto } from "./dto/update-location.dto";
-import { FindLocationLotsQueryDto } from "./dto/find-location-lots-query.dto";
+import { Injectable } from '@nestjs/common';
+import { Prisma, RackType } from '@prisma/client';
+import { conflict, badRequest, notFound } from '../../common/errors';
+import { LOCATION_CODES } from '../../common/constants';
+import { PrismaService } from '../../prisma/prisma.service';
+import { CreateLocationDto } from './dto/create-location.dto';
+import { UpdateLocationDto } from './dto/update-location.dto';
+import { FindLocationLotsQueryDto } from './dto/find-location-lots-query.dto';
 import {
   getFallbackRack,
   getProductionRoomRack,
-} from "../../common/inventory/rack-location";
+} from '../../common/inventory/rack-location';
 
 @Injectable()
 export class LocationsService {
@@ -21,7 +21,7 @@ export class LocationsService {
     }
 
     if (!dto.code || !dto.name || !dto.type) {
-      return badRequest("code, name, and type are required", {
+      return badRequest('code, name, and type are required', {
         code: dto.code,
         name: dto.name,
         type: dto.type,
@@ -29,12 +29,12 @@ export class LocationsService {
     }
 
     if (dto.type === RackType.WORKER && !dto.workerId) {
-      return badRequest("workerId is required for WORKER locations");
+      return badRequest('workerId is required for WORKER locations');
     }
 
     if (dto.type === RackType.WORKER) {
       return badRequest(
-        "Rak per mitra sudah tidak dibuat manual; gunakan ruang produksi dan rak order/finished.",
+        'Rak per mitra sudah tidak dibuat manual; gunakan ruang produksi dan rak order/finished.',
       );
     }
 
@@ -42,9 +42,7 @@ export class LocationsService {
       (dto.type === RackType.MITRA_ORDER || dto.type === RackType.FINISHED) &&
       !dto.productionRoomId
     ) {
-      return badRequest(
-        "Rak order/finished harus terikat ke ruang produksi.",
-      );
+      return badRequest('Rak order/finished harus terikat ke ruang produksi.');
     }
 
     if (dto.productionRoomId) {
@@ -53,7 +51,7 @@ export class LocationsService {
         select: { id: true },
       });
       if (!room) {
-        return notFound("Production room not found", {
+        return notFound('Production room not found', {
           productionRoomId: dto.productionRoomId,
         });
       }
@@ -65,7 +63,7 @@ export class LocationsService {
       });
 
       if (!worker) {
-        return notFound("Worker not found", { workerId: dto.workerId });
+        return notFound('Worker not found', { workerId: dto.workerId });
       }
     }
 
@@ -81,8 +79,8 @@ export class LocationsService {
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === "P2002") {
-          return conflict("Location already exists", { code: dto.code });
+        if (error.code === 'P2002') {
+          return conflict('Location already exists', { code: dto.code });
         }
       }
 
@@ -93,31 +91,23 @@ export class LocationsService {
   async createDefaults() {
     const preSale = await this.prisma.rackLocation.upsert({
       where: { code: LOCATION_CODES.PRE_SALE },
-      update: { name: "Rak Sementara", type: RackType.PRE_SALE },
+      update: { name: 'Rak Sementara', type: RackType.PRE_SALE },
       create: {
         code: LOCATION_CODES.PRE_SALE,
-        name: "Rak Sementara",
+        name: 'Rak Sementara',
         type: RackType.PRE_SALE,
       },
     });
 
     const rooms = await this.prisma.productionRoom.findMany({
       select: { id: true },
-      orderBy: { code: "asc" },
+      orderBy: { code: 'asc' },
     });
     const roomLocations = [] as unknown[];
     for (const room of rooms) {
       roomLocations.push(
-        await getProductionRoomRack(
-          this.prisma,
-          room.id,
-          RackType.MITRA_ORDER,
-        ),
-        await getProductionRoomRack(
-          this.prisma,
-          room.id,
-          RackType.FINISHED,
-        ),
+        await getProductionRoomRack(this.prisma, room.id, RackType.MITRA_ORDER),
+        await getProductionRoomRack(this.prisma, room.id, RackType.FINISHED),
       );
     }
 
@@ -125,14 +115,8 @@ export class LocationsService {
     const defaults = [preSale];
     if (rooms.length === 0) {
       defaults.push(
-        await getFallbackRack(
-          this.prisma,
-          RackType.MITRA_ORDER,
-        ),
-        await getFallbackRack(
-          this.prisma,
-          RackType.FINISHED,
-        ),
+        await getFallbackRack(this.prisma, RackType.MITRA_ORDER),
+        await getFallbackRack(this.prisma, RackType.FINISHED),
       );
     }
 
@@ -166,21 +150,23 @@ export class LocationsService {
         _count: { select: { lots: true } },
       },
       orderBy: [
-        { productionRoom: { code: "asc" } },
-        { type: "asc" },
-        { code: "asc" },
+        { productionRoom: { code: 'asc' } },
+        { type: 'asc' },
+        { code: 'asc' },
       ],
     });
   }
 
   async update(id: string, dto: UpdateLocationDto) {
-    const location = await this.prisma.rackLocation.findUnique({ where: { id } });
+    const location = await this.prisma.rackLocation.findUnique({
+      where: { id },
+    });
     if (!location) {
-      return notFound("Location not found", { id });
+      return notFound('Location not found', { id });
     }
     if (location.type === RackType.WORKER || dto.type === RackType.WORKER) {
       return badRequest(
-        "Rak per mitra tidak dapat dibuat atau diubah melalui manajemen rak.",
+        'Rak per mitra tidak dapat dibuat atau diubah melalui manajemen rak.',
       );
     }
     if (
@@ -189,7 +175,7 @@ export class LocationsService {
         location.type === RackType.FINISHED)
     ) {
       return badRequest(
-        "Rak order/finished ruang produksi dikelola otomatis dari ruang produksi.",
+        'Rak order/finished ruang produksi dikelola otomatis dari ruang produksi.',
       );
     }
     return this.prisma.rackLocation.update({
@@ -208,14 +194,14 @@ export class LocationsService {
       },
     });
     if (!location) {
-      return notFound("Location not found", { id });
+      return notFound('Location not found', { id });
     }
     if (location._count.lots > 0) {
-      return conflict("Location contains lots and cannot be deleted", { id });
+      return conflict('Location contains lots and cannot be deleted', { id });
     }
     if (location._count.movementsFrom + location._count.movementsTo > 0) {
       return conflict(
-        "Lokasi memiliki riwayat perpindahan dan tidak dapat dihapus",
+        'Lokasi memiliki riwayat perpindahan dan tidak dapat dihapus',
         { id },
       );
     }
@@ -225,7 +211,7 @@ export class LocationsService {
         location.type === RackType.FINISHED)
     ) {
       return conflict(
-        "Rak canonical ruang produksi tidak dapat dihapus dari menu ini",
+        'Rak canonical ruang produksi tidak dapat dihapus dari menu ini',
         { id },
       );
     }
@@ -239,7 +225,7 @@ export class LocationsService {
     });
 
     if (!location) {
-      return notFound("Location not found", { locationId });
+      return notFound('Location not found', { locationId });
     }
 
     const lots = await this.prisma.productionLot.findMany({
@@ -265,7 +251,7 @@ export class LocationsService {
           },
         },
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: 'asc' },
     });
 
     return {
@@ -303,7 +289,7 @@ export class LocationsService {
           },
         },
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: 'asc' },
     });
 
     return {
@@ -328,8 +314,8 @@ export class LocationsService {
 
     if (search) {
       where.OR = [
-        { lotNumber: { contains: search, mode: "insensitive" } },
-        { externalId: { contains: search, mode: "insensitive" } },
+        { lotNumber: { contains: search, mode: 'insensitive' } },
+        { externalId: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -337,11 +323,11 @@ export class LocationsService {
       where.gradeId = query.gradeId;
     }
 
-    if (query.printed === "printed") {
+    if (query.printed === 'printed') {
       where.printedAt = { not: null };
     }
 
-    if (query.printed === "unprinted") {
+    if (query.printed === 'unprinted') {
       where.printedAt = null;
     }
 
@@ -360,7 +346,7 @@ export class LocationsService {
       where,
       skip,
       take: limit,
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: {
         id: true,
         lotNumber: true,
@@ -441,7 +427,7 @@ export class LocationsService {
           type: RackType.MITRA_ORDER,
           productionRoomId: { not: null },
         },
-        orderBy: { code: "asc" },
+        orderBy: { code: 'asc' },
       });
       if (roomRack) return roomRack;
     }
@@ -452,7 +438,7 @@ export class LocationsService {
           type: RackType.FINISHED,
           productionRoomId: { not: null },
         },
-        orderBy: { code: "asc" },
+        orderBy: { code: 'asc' },
       });
       if (roomRack) return roomRack;
     }
@@ -460,10 +446,10 @@ export class LocationsService {
     if (code === LOCATION_CODES.PRE_SALE) {
       return this.prisma.rackLocation.upsert({
         where: { code: LOCATION_CODES.PRE_SALE },
-        update: { name: "Rak Sementara", type: RackType.PRE_SALE },
+        update: { name: 'Rak Sementara', type: RackType.PRE_SALE },
         create: {
           code: LOCATION_CODES.PRE_SALE,
-          name: "Rak Sementara",
+          name: 'Rak Sementara',
           type: RackType.PRE_SALE,
         },
       });
@@ -472,10 +458,10 @@ export class LocationsService {
     if (code === LOCATION_CODES.MITRA_ORDER) {
       return this.prisma.rackLocation.upsert({
         where: { code: LOCATION_CODES.MITRA_ORDER },
-        update: { name: "Rak Mitra Order", type: RackType.MITRA_ORDER },
+        update: { name: 'Rak Mitra Order', type: RackType.MITRA_ORDER },
         create: {
           code: LOCATION_CODES.MITRA_ORDER,
-          name: "Rak Mitra Order",
+          name: 'Rak Mitra Order',
           type: RackType.MITRA_ORDER,
         },
       });
@@ -484,16 +470,16 @@ export class LocationsService {
     if (code === LOCATION_CODES.FINISHED) {
       return this.prisma.rackLocation.upsert({
         where: { code: LOCATION_CODES.FINISHED },
-        update: { name: "Rak Finished", type: RackType.FINISHED },
+        update: { name: 'Rak Finished', type: RackType.FINISHED },
         create: {
           code: LOCATION_CODES.FINISHED,
-          name: "Rak Finished",
+          name: 'Rak Finished',
           type: RackType.FINISHED,
         },
       });
     }
 
-    return badRequest("Unknown location code", { code });
+    return badRequest('Unknown location code', { code });
   }
 
   private getAggregateRackType(

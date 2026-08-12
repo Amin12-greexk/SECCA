@@ -1,6 +1,6 @@
-import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsEnum, IsOptional, IsString } from "class-validator";
-import { RackType } from "@prisma/client";
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { RackType } from '@prisma/client';
 
 export class UpdateLocationDto {
   @ApiPropertyOptional()

@@ -1,24 +1,33 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
-import { ApiBearerAuth, ApiParam, ApiTags } from "@nestjs/swagger";
-import { Roles } from "../../auth/roles.decorator";
-import { ReceiveRawBatchDto } from "./dto/receive-raw-batch.dto";
-import { CreatePecahBonDto } from "./dto/create-pecah-bon.dto";
-import { UpdatePecahBonDto } from "./dto/update-pecah-bon.dto";
-import { UpdateRawBatchDto } from "./dto/update-raw-batch.dto";
-import { RawBatchPageQueryDto } from "./dto/raw-batch-page-query.dto";
-import { PecahBonPageQueryDto } from "./dto/pecah-bon-page-query.dto";
-import { PecahBonHistoryQueryDto } from "./dto/pecah-bon-history-query.dto";
-import { MergeRawBatchesDto } from "./dto/merge-raw-batches.dto";
-import { BakuService } from "./baku.service";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Roles } from '../../auth/roles.decorator';
+import { ReceiveRawBatchDto } from './dto/receive-raw-batch.dto';
+import { CreatePecahBonDto } from './dto/create-pecah-bon.dto';
+import { UpdatePecahBonDto } from './dto/update-pecah-bon.dto';
+import { UpdateRawBatchDto } from './dto/update-raw-batch.dto';
+import { RawBatchPageQueryDto } from './dto/raw-batch-page-query.dto';
+import { PecahBonPageQueryDto } from './dto/pecah-bon-page-query.dto';
+import { PecahBonHistoryQueryDto } from './dto/pecah-bon-history-query.dto';
+import { MergeRawBatchesDto } from './dto/merge-raw-batches.dto';
+import { BakuService } from './baku.service';
 
-@ApiTags("Baku")
+@ApiTags('Baku')
 @ApiBearerAuth()
-@Roles("manager", "baku", "mitra", "koreksi")
-@Controller("baku")
+@Roles('manager', 'baku', 'mitra', 'koreksi')
+@Controller('baku')
 export class BakuController {
-  constructor(private readonly bakuService: BakuService) { }
+  constructor(private readonly bakuService: BakuService) {}
 
-  @Post("receive")
+  @Post('receive')
   receive(@Body() dto: ReceiveRawBatchDto) {
     return this.bakuService.receive(dto);
   }
@@ -28,82 +37,82 @@ export class BakuController {
     return this.bakuService.findAll();
   }
 
-  @Get("paginated")
+  @Get('paginated')
   findAllPaginated(@Query() query: RawBatchPageQueryDto) {
     return this.bakuService.findAllPaginated(query);
   }
 
-  @Get("pecah-bon/history")
+  @Get('pecah-bon/history')
   getPecahBonHistory(@Query() query: PecahBonHistoryQueryDto) {
     return this.bakuService.getPecahBonHistory(query);
   }
 
-  @Get("pecah-bon/:pecahBonId")
-  @ApiParam({ name: "pecahBonId" })
-  findPecahBonById(@Param("pecahBonId") pecahBonId: string) {
+  @Get('pecah-bon/:pecahBonId')
+  @ApiParam({ name: 'pecahBonId' })
+  findPecahBonById(@Param('pecahBonId') pecahBonId: string) {
     return this.bakuService.findPecahBonById(pecahBonId);
   }
 
-  @Get(":cardId")
-  @ApiParam({ name: "cardId" })
-  findByCardId(@Param("cardId") cardId: string) {
+  @Get(':cardId')
+  @ApiParam({ name: 'cardId' })
+  findByCardId(@Param('cardId') cardId: string) {
     return this.bakuService.findByCardId(cardId);
   }
 
-  @Post(":id/pecah-bon")
-  @ApiParam({ name: "id" })
-  createPecahBon(@Param("id") id: string, @Body() dto: CreatePecahBonDto) {
+  @Post(':id/pecah-bon')
+  @ApiParam({ name: 'id' })
+  createPecahBon(@Param('id') id: string, @Body() dto: CreatePecahBonDto) {
     return this.bakuService.createPecahBon(id, dto);
   }
 
-  @Patch("pecah-bon-entry/:id")
-  @ApiParam({ name: "id" })
-  updatePecahBonEntry(@Param("id") id: string, @Body() dto: UpdatePecahBonDto) {
+  @Patch('pecah-bon-entry/:id')
+  @ApiParam({ name: 'id' })
+  updatePecahBonEntry(@Param('id') id: string, @Body() dto: UpdatePecahBonDto) {
     return this.bakuService.updatePecahBonEntry(id, dto);
   }
 
-  @Patch("raw-batch/:id")
-  @ApiParam({ name: "id" })
-  updateRawBatch(@Param("id") id: string, @Body() dto: UpdateRawBatchDto) {
+  @Patch('raw-batch/:id')
+  @ApiParam({ name: 'id' })
+  updateRawBatch(@Param('id') id: string, @Body() dto: UpdateRawBatchDto) {
     return this.bakuService.updateRawBatch(id, dto);
   }
 
-  @Delete("raw-batch/:id")
-  @ApiParam({ name: "id" })
-  @Roles("manager", "baku")
-  deleteRawBatch(@Param("id") id: string) {
+  @Delete('raw-batch/:id')
+  @ApiParam({ name: 'id' })
+  @Roles('manager', 'baku')
+  deleteRawBatch(@Param('id') id: string) {
     return this.bakuService.deleteRawBatch(id);
   }
 
-  @Post("raw-batch/merge")
-  @Roles("manager", "baku")
+  @Post('raw-batch/merge')
+  @Roles('manager', 'baku')
   mergeRawBatches(@Body() dto: MergeRawBatchesDto) {
     return this.bakuService.mergeRawBatches(dto);
   }
 
-  @Post("pecah-bon-entry/:id/printed")
-  @ApiParam({ name: "id" })
-  markPecahBonPrinted(@Param("id") id: string) {
+  @Post('pecah-bon-entry/:id/printed')
+  @ApiParam({ name: 'id' })
+  markPecahBonPrinted(@Param('id') id: string) {
     return this.bakuService.markPecahBonPrinted(id);
   }
 
-  @Delete("pecah-bon/:id")
-  @ApiParam({ name: "id" })
-  @Roles("manager", "baku")
-  deletePecahBonEntry(@Param("id") id: string) {
+  @Delete('pecah-bon/:id')
+  @ApiParam({ name: 'id' })
+  @Roles('manager', 'baku')
+  deletePecahBonEntry(@Param('id') id: string) {
     return this.bakuService.deletePecahBonEntry(id);
   }
 
-  @Get(":id/pecah-bon")
-  @ApiParam({ name: "id" })
-  getPecahBonEntries(@Param("id") id: string) {
+  @Get(':id/pecah-bon')
+  @ApiParam({ name: 'id' })
+  getPecahBonEntries(@Param('id') id: string) {
     return this.bakuService.getPecahBonEntries(id);
   }
 
-  @Get(":id/pecah-bon/paginated")
-  @ApiParam({ name: "id" })
+  @Get(':id/pecah-bon/paginated')
+  @ApiParam({ name: 'id' })
   getPecahBonEntriesPaginated(
-    @Param("id") id: string,
+    @Param('id') id: string,
     @Query() query: PecahBonPageQueryDto,
   ) {
     return this.bakuService.getPecahBonEntriesPaginated(id, query);

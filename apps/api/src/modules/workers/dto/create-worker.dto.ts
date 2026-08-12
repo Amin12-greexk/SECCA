@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsInt,
   IsNumberString,
@@ -8,7 +8,7 @@ import {
   MaxLength,
   Min,
   MinLength,
-} from "class-validator";
+} from 'class-validator';
 
 export class CreateWorkerDto {
   @ApiProperty()
@@ -22,7 +22,7 @@ export class CreateWorkerDto {
   code?: string;
 
   @ApiPropertyOptional({
-    description: "PIN karyawan/mitra untuk pendaftaran mandiri",
+    description: 'PIN karyawan/mitra untuk pendaftaran mandiri',
   })
   @IsOptional()
   @IsNumberString()

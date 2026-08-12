@@ -1,8 +1,8 @@
-import { CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
-import { JwtService } from "@nestjs/jwt";
-import { Reflector } from "@nestjs/core";
-import { IS_PUBLIC_KEY } from "./auth.constants";
-import { PrismaService } from "../prisma/prisma.service";
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { Reflector } from '@nestjs/core';
+import { IS_PUBLIC_KEY } from './auth.constants';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -23,7 +23,7 @@ export class JwtAuthGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const authHeader = request.headers?.authorization as string | undefined;
-    const token = authHeader?.startsWith("Bearer ")
+    const token = authHeader?.startsWith('Bearer ')
       ? authHeader.slice(7).trim()
       : undefined;
 

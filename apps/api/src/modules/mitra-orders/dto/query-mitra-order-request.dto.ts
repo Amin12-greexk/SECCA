@@ -1,6 +1,6 @@
-import { ApiPropertyOptional } from "@nestjs/swagger";
-import { MitraOrderRequestStatus, UserRole } from "@prisma/client";
-import { Transform } from "class-transformer";
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { MitraOrderRequestStatus, UserRole } from '@prisma/client';
+import { Transform } from 'class-transformer';
 import {
   IsBoolean,
   IsEnum,
@@ -9,7 +9,7 @@ import {
   IsUUID,
   Max,
   Min,
-} from "class-validator";
+} from 'class-validator';
 
 export class QueryMitraOrderRequestDto {
   @ApiPropertyOptional()
@@ -29,14 +29,14 @@ export class QueryMitraOrderRequestDto {
 
   @ApiPropertyOptional({
     default: false,
-    description: "Hanya ambil request template agregat (workerId = null)",
+    description: 'Hanya ambil request template agregat (workerId = null)',
   })
   @IsOptional()
   @Transform(({ value }) => {
-    if (value === undefined || value === null || value === "") return undefined;
-    if (typeof value === "boolean") return value;
+    if (value === undefined || value === null || value === '') return undefined;
+    if (typeof value === 'boolean') return value;
     const normalized = String(value).toLowerCase();
-    return normalized === "true" || normalized === "1";
+    return normalized === 'true' || normalized === '1';
   })
   @IsBoolean()
   aggregateOnly?: boolean = false;
@@ -44,7 +44,9 @@ export class QueryMitraOrderRequestDto {
   @ApiPropertyOptional({ default: 50, minimum: 1, maximum: 200 })
   @IsOptional()
   @Transform(({ value }) =>
-    value === undefined || value === null || value === "" ? undefined : Number(value),
+    value === undefined || value === null || value === ''
+      ? undefined
+      : Number(value),
   )
   @IsInt()
   @Min(1)

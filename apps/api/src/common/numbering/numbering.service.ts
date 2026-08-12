@@ -1,7 +1,7 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
-import { COMPANY_CODE } from "../constants";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { COMPANY_CODE } from '../constants';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class NumberingService {
@@ -20,7 +20,7 @@ export class NumberingService {
       `RAW:${year}`,
       maxSequence,
     );
-    let cardNumber = `K${String(sequence).padStart(4, "0")}/${COMPANY_CODE}/${yearShort}`;
+    let cardNumber = `K${String(sequence).padStart(4, '0')}/${COMPANY_CODE}/${yearShort}`;
 
     let existing = await tx.rawBatch.findFirst({
       where: {
@@ -31,7 +31,7 @@ export class NumberingService {
 
     while (existing) {
       sequence++;
-      cardNumber = `K${String(sequence).padStart(4, "0")}/${COMPANY_CODE}/${yearShort}`;
+      cardNumber = `K${String(sequence).padStart(4, '0')}/${COMPANY_CODE}/${yearShort}`;
       existing = await tx.rawBatch.findFirst({
         where: {
           OR: [{ cardId: cardNumber }, { batchNumber: cardNumber }],
@@ -61,7 +61,7 @@ export class NumberingService {
       `LOT:${year}`,
       maxSequence,
     );
-    let lotNumber = `LP${String(sequence).padStart(6, "0")}/${yearShort}`;
+    let lotNumber = `LP${String(sequence).padStart(6, '0')}/${yearShort}`;
 
     let existing = await tx.productionLot.findUnique({
       where: { lotNumber },
@@ -70,7 +70,7 @@ export class NumberingService {
 
     while (existing) {
       sequence++;
-      lotNumber = `LP${String(sequence).padStart(6, "0")}/${yearShort}`;
+      lotNumber = `LP${String(sequence).padStart(6, '0')}/${yearShort}`;
       existing = await tx.productionLot.findUnique({
         where: { lotNumber },
         select: { id: true },

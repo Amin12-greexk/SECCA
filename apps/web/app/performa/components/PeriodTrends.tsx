@@ -340,14 +340,14 @@ function EfficiencyCard({ stats }: { stats: PerformaPeriodStat[] }) {
                 lineSeries({
                     name: 'Susut Proses',
                     color: SP_COLOR,
-                    data: visible.map((stat) => pct(stat.averageSusutProsesPctBps)),
+                    data: visible.map((stat) => pct(stat.weightedSusutProsesPctBps)),
                     labelPosition: 'top',
                     showLabel,
                 }),
                 lineSeries({
                     name: 'Susut Hilang',
                     color: SH_COLOR,
-                    data: visible.map((stat) => pct(stat.averageSusutHilangPctBps)),
+                    data: visible.map((stat) => pct(stat.weightedSusutHilangPctBps)),
                     labelPosition: 'bottom',
                     showLabel,
                 }),

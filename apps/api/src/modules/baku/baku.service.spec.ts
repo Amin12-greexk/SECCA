@@ -1,14 +1,14 @@
-import "dotenv/config";
-import { Test } from "@nestjs/testing";
-import { BakuService } from "./baku.service";
-import { NumberingService } from "../../common/numbering/numbering.service";
-import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
-import { PrismaService } from "../../prisma/prisma.service";
-import { WorkOrderAssignmentService } from "../work-orders/work-order-assignment.service";
+import 'dotenv/config';
+import { Test } from '@nestjs/testing';
+import { BakuService } from './baku.service';
+import { NumberingService } from '../../common/numbering/numbering.service';
+import { InventoryMovementService } from '../../common/inventory/inventory-movement.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { WorkOrderAssignmentService } from '../work-orders/work-order-assignment.service';
 
 jest.setTimeout(30000);
 
-describe("BakuService", () => {
+describe('BakuService', () => {
   let bakuService: BakuService;
   let prisma: PrismaService;
   let supplierId: string;
@@ -42,19 +42,19 @@ describe("BakuService", () => {
     await prisma.supplier.deleteMany();
 
     const supplier = await prisma.supplier.create({
-      data: { name: "Supplier Test", code: "SUP-TEST" },
+      data: { name: 'Supplier Test', code: 'SUP-TEST' },
     });
     supplierId = supplier.id;
   });
 
-  it("creates raw batch successfully", async () => {
+  it('creates raw batch successfully', async () => {
     const now = new Date();
     const yearShort = String(now.getUTCFullYear()).slice(-2);
-    const monthCode = String(now.getUTCMonth() + 1).padStart(2, "0");
+    const monthCode = String(now.getUTCMonth() + 1).padStart(2, '0');
 
     const result = await bakuService.receive({
       supplierId,
-      featherCondition: "A",
+      featherCondition: 'A',
       wetWeightGram: 12000,
       invoiceWeightGram: 12000,
       moisturePercent: 17.5,
@@ -67,10 +67,10 @@ describe("BakuService", () => {
     expect(result.moisturePercent).toBe(17.5);
   });
 
-  it("generates unique batch and card IDs for parallel requests", async () => {
+  it('generates unique batch and card IDs for parallel requests', async () => {
     const payload = {
       supplierId,
-      featherCondition: "A",
+      featherCondition: 'A',
       wetWeightGram: 1000,
       invoiceWeightGram: 1000,
       moisturePercent: 12.5,
@@ -91,15 +91,15 @@ describe("BakuService", () => {
     expect(sequences).toEqual([1, 2]);
 
     const cardSequences = results
-      .map((item) => Number(item.cardId.split("-").pop()))
+      .map((item) => Number(item.cardId.split('-').pop()))
       .sort((a, b) => a - b);
     expect(cardSequences).toEqual([1, 2]);
   });
 
-  it("allows reclaiming a merged source batch number on the surviving batch", async () => {
+  it('allows reclaiming a merged source batch number on the surviving batch', async () => {
     const first = await bakuService.receive({
       supplierId,
-      featherCondition: "SP",
+      featherCondition: 'SP',
       wetWeightGram: 1500,
       invoiceWeightGram: 1500,
       moisturePercent: 12.5,
@@ -107,7 +107,7 @@ describe("BakuService", () => {
 
     const second = await bakuService.receive({
       supplierId,
-      featherCondition: "SP",
+      featherCondition: 'SP',
       wetWeightGram: 1750,
       invoiceWeightGram: 1750,
       moisturePercent: 12.5,
@@ -116,7 +116,7 @@ describe("BakuService", () => {
     const merged = await bakuService.mergeRawBatches({
       sourceRawBatchIds: [first.id, second.id],
       supplierId,
-      featherCondition: "SP",
+      featherCondition: 'SP',
       moisturePercent: 12.5,
       confirmSupplier: true,
       confirmFeatherCondition: true,
@@ -137,7 +137,9 @@ describe("BakuService", () => {
 
     expect(archivedSource?.mergedIntoRawBatchId).toBe(merged.id);
     expect(archivedSource?.batchNumber).toMatch(
-      new RegExp(`^${first.batchNumber.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}#MERGED#`),
+      new RegExp(
+        `^${first.batchNumber.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}#MERGED#`,
+      ),
     );
   });
 });

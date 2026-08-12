@@ -1,9 +1,9 @@
-import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsOptional, IsUUID } from "class-validator";
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsUUID } from 'class-validator';
 
 export class SummaryQueryDto {
   @ApiPropertyOptional({
-    description: "Kosongkan untuk memakai periode terbaru.",
+    description: 'Kosongkan untuk memakai periode terbaru.',
   })
   @IsOptional()
   @IsUUID()

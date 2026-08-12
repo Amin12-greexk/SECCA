@@ -1,10 +1,13 @@
-import { Test, TestingModule } from "@nestjs/testing";
-import { INestApplication } from "@nestjs/common";
-import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
-import request from "supertest";
-import { App } from "supertest/types";
-import { AppModule } from "../src/app.module";
-import { ResponseInterceptor } from "../src/common/interceptors/response.interceptor";
+import { Test, TestingModule } from '@nestjs/testing';
+import { INestApplication } from '@nestjs/common';
+import {
+  FastifyAdapter,
+  NestFastifyApplication,
+} from '@nestjs/platform-fastify';
+import request from 'supertest';
+import { App } from 'supertest/types';
+import { AppModule } from '../src/app.module';
+import { ResponseInterceptor } from '../src/common/interceptors/response.interceptor';
 import {
   PrismaClient,
   GradeType,
@@ -12,11 +15,11 @@ import {
   WorkLane,
   RackType,
   WorkOrderStatus,
-} from "@prisma/client";
-import { JwtService } from "@nestjs/jwt";
-import { LOCATION_CODES } from "../src/common/constants";
+} from '@prisma/client';
+import { JwtService } from '@nestjs/jwt';
+import { LOCATION_CODES } from '../src/common/constants';
 
-describe("Work orders (e2e)", () => {
+describe('Work orders (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaClient;
   let token: string;
@@ -54,7 +57,7 @@ describe("Work orders (e2e)", () => {
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter(),
     );
-    app.setGlobalPrefix("api");
+    app.setGlobalPrefix('api');
     app.useGlobalInterceptors(new ResponseInterceptor());
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
@@ -62,7 +65,7 @@ describe("Work orders (e2e)", () => {
     prisma = new PrismaClient();
 
     const jwtService = moduleFixture.get(JwtService);
-    token = jwtService.sign({ sub: "e2e", role: "manager" });
+    token = jwtService.sign({ sub: 'e2e', role: 'manager' });
 
     const testId = `e2e-${Date.now()}`;
 
@@ -85,10 +88,10 @@ describe("Work orders (e2e)", () => {
 
     const preSale = await prisma.rackLocation.upsert({
       where: { code: LOCATION_CODES.PRE_SALE },
-      update: { name: "Rak Sementara", type: RackType.PRE_SALE },
+      update: { name: 'Rak Sementara', type: RackType.PRE_SALE },
       create: {
         code: LOCATION_CODES.PRE_SALE,
-        name: "Rak Sementara",
+        name: 'Rak Sementara',
         type: RackType.PRE_SALE,
       },
     });
@@ -100,7 +103,7 @@ describe("Work orders (e2e)", () => {
         featherGradeId: null,
         colorGradeId: null,
         rateRpPerGram: 10,
-        effectiveFrom: new Date("2020-01-01"),
+        effectiveFrom: new Date('2020-01-01'),
         effectiveTo: null,
       },
     });
@@ -138,12 +141,12 @@ describe("Work orders (e2e)", () => {
     await app.close();
   });
 
-  it("gating: second order for same worker is rejected", async () => {
-    const lot1 = await createLot("A1");
+  it('gating: second order for same worker is rejected', async () => {
+    const lot1 = await createLot('A1');
 
     const createRes = await request(app.getHttpServer())
-      .post("/api/work-orders")
-      .set("Authorization", `Bearer ${token}`)
+      .post('/api/work-orders')
+      .set('Authorization', `Bearer ${token}`)
       .send({ workerId, lotNumbers: [lot1] })
       .expect(201);
 
@@ -152,19 +155,19 @@ describe("Work orders (e2e)", () => {
     createdWorkOrders.push(workOrderId);
     createdWorkItems.push(itemId);
 
-    const lot2 = await createLot("A2");
+    const lot2 = await createLot('A2');
     await request(app.getHttpServer())
-      .post("/api/work-orders")
-      .set("Authorization", `Bearer ${token}`)
+      .post('/api/work-orders')
+      .set('Authorization', `Bearer ${token}`)
       .send({ workerId, lotNumbers: [lot2] })
       .expect(409);
   });
 
-  it("release gating after finish, then allow new order", async () => {
+  it('release gating after finish, then allow new order', async () => {
     const workItemId = createdWorkItems[0];
     await request(app.getHttpServer())
-      .post("/api/finish")
-      .set("Authorization", `Bearer ${token}`)
+      .post('/api/finish')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         workOrderItemId: workItemId,
         returnedAt: new Date().toISOString(),
@@ -173,10 +176,10 @@ describe("Work orders (e2e)", () => {
       })
       .expect(201);
 
-    const lot3 = await createLot("B1");
+    const lot3 = await createLot('B1');
     const createRes = await request(app.getHttpServer())
-      .post("/api/work-orders")
-      .set("Authorization", `Bearer ${token}`)
+      .post('/api/work-orders')
+      .set('Authorization', `Bearer ${token}`)
       .send({ workerId, lotNumbers: [lot3] })
       .expect(201);
 
@@ -186,14 +189,14 @@ describe("Work orders (e2e)", () => {
     createdWorkItems.push(itemId);
   });
 
-  it("cancel NEXT_DAY item returns lot and closes order", async () => {
+  it('cancel NEXT_DAY item returns lot and closes order', async () => {
     const itemId = createdWorkItems[1];
     const cancelRes = await request(app.getHttpServer())
       .post(`/api/work-items/${itemId}/cancel`)
-      .set("Authorization", `Bearer ${token}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(201);
 
-    expect(cancelRes.body.data.status).toBe("CANCELED");
+    expect(cancelRes.body.data.status).toBe('CANCELED');
 
     const item = await prisma.workOrderItem.findUnique({
       where: { id: itemId },
@@ -209,11 +212,11 @@ describe("Work orders (e2e)", () => {
     expect(active).toBeNull();
   });
 
-  it("lane transitions NEXT_DAY -> IN_PROGRESS -> READY_TO_SUBMIT", async () => {
-    const lot4 = await createLot("C1");
+  it('lane transitions NEXT_DAY -> IN_PROGRESS -> READY_TO_SUBMIT', async () => {
+    const lot4 = await createLot('C1');
     const createRes = await request(app.getHttpServer())
-      .post("/api/work-orders")
-      .set("Authorization", `Bearer ${token}`)
+      .post('/api/work-orders')
+      .set('Authorization', `Bearer ${token}`)
       .send({ workerId, lotNumbers: [lot4], lane: WorkLane.NEXT_DAY })
       .expect(201);
 
@@ -224,19 +227,19 @@ describe("Work orders (e2e)", () => {
 
     const startRes = await request(app.getHttpServer())
       .post(`/api/work-items/${itemId}/start`)
-      .set("Authorization", `Bearer ${token}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(201);
-    expect(startRes.body.data.lane).toBe("IN_PROGRESS");
+    expect(startRes.body.data.lane).toBe('IN_PROGRESS');
 
     const readyRes = await request(app.getHttpServer())
       .post(`/api/work-items/${itemId}/mark-ready`)
-      .set("Authorization", `Bearer ${token}`)
+      .set('Authorization', `Bearer ${token}`)
       .expect(201);
-    expect(readyRes.body.data.lane).toBe("READY_TO_SUBMIT");
+    expect(readyRes.body.data.lane).toBe('READY_TO_SUBMIT');
 
     await request(app.getHttpServer())
-      .post("/api/finish")
-      .set("Authorization", `Bearer ${token}`)
+      .post('/api/finish')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         workOrderItemId: itemId,
         returnedAt: new Date().toISOString(),

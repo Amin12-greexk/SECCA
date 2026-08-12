@@ -1,17 +1,17 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { Transform } from "class-transformer";
-import { ArrayUnique, IsArray, IsString, MinLength } from "class-validator";
+import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { ArrayUnique, IsArray, IsString, MinLength } from 'class-validator';
 
 export class CreateBarangJadiDto {
-  @ApiProperty({ example: "INDOMIE" })
-  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @ApiProperty({ example: 'INDOMIE' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MinLength(1)
   name: string;
 
   @ApiProperty({
     type: [String],
-    example: ["uuid-1", "uuid-2"],
+    example: ['uuid-1', 'uuid-2'],
   })
   @Transform(({ value }) =>
     Array.isArray(value)
@@ -19,7 +19,7 @@ export class CreateBarangJadiDto {
           new Set(
             value.filter(
               (item): item is string =>
-                typeof item === "string" && item.trim().length > 0,
+                typeof item === 'string' && item.trim().length > 0,
             ),
           ),
         ).map((item) => item.trim())
@@ -32,7 +32,7 @@ export class CreateBarangJadiDto {
 
   @ApiProperty({
     type: [String],
-    example: ["uuid-3", "uuid-4"],
+    example: ['uuid-3', 'uuid-4'],
   })
   @Transform(({ value }) =>
     Array.isArray(value)
@@ -40,7 +40,7 @@ export class CreateBarangJadiDto {
           new Set(
             value.filter(
               (item): item is string =>
-                typeof item === "string" && item.trim().length > 0,
+                typeof item === 'string' && item.trim().length > 0,
             ),
           ),
         ).map((item) => item.trim())

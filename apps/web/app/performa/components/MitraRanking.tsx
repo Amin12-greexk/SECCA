@@ -10,7 +10,9 @@ import {
     Search,
     TrendingUp,
     Trophy,
+    Wallet,
 } from 'lucide-react';
+import MitraPayrollModal from './MitraPayrollModal';
 import LazyEChart from '@/components/charts/LazyEChart';
 import { fmtBpsId, fmtId, stripPeriode } from '@/components/charts/chart-theme';
 import { useToast } from '@/lib/toast';
@@ -316,6 +318,7 @@ export default function MitraRanking({
     /** Filter daftar anak berdasar band kapasitas gram/HK; null = semua. */
     const [bandFilter, setBandFilter] = useState<CapacityBand['key'] | null>(null);
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [activePayrollModalRow, setActivePayrollModalRow] = useState<PerformaRow | null>(null);
     const [trend, setTrend] = useState<PersonTrend | null>(null);
     const [loadingTrend, setLoadingTrend] = useState(false);
     /** Jumlah HK untuk estimasi barang jadi; default 5 hari kerja. */
@@ -391,10 +394,23 @@ export default function MitraRanking({
     const sorted = useMemo(() => {
         const query = search.trim().toLowerCase();
         return rows
+            .filter((row) => {
+                return (
+                    (row.hk ?? 0) > 0 ||
+                    (row.totalBjd ?? 0) > 0 ||
+                    (row.totalBakuBasah ?? 0) > 0 ||
+                    (row.netWageRp ?? 0) !== 0 ||
+                    (row.pieceworkWageRp ?? 0) !== 0
+                );
+            })
             .filter((row) => (query ? row.name.toLowerCase().includes(query) : true))
-            .filter((row) =>
-                bandFilter ? classifyCapacity(perDayOf(row, 'totalBjd'))?.key === bandFilter : true,
-            )
+            .filter((row) => {
+                if (!bandFilter) return true;
+                const isBulanan = /bulanan/i.test(row.normalizedLevel ?? row.rawUserLevel ?? '');
+                if (bandFilter === 'purple') return isBulanan;
+                if (isBulanan) return false;
+                return classifyCapacity(perDayOf(row, 'totalBjd'))?.key === bandFilter;
+            })
             .map((row) => ({ row, value: readMetric(row, metric) }))
             .filter((item): item is { row: PerformaRow; value: number } => item.value !== null)
             .sort((a, b) => b.value - a.value);
@@ -644,19 +660,26 @@ export default function MitraRanking({
                                 const isSelected = item.row.personId === selectedId;
                                 const warnStatus = warningMap[item.row.personId];
                                 const warn = warnStatus?.hasWarning;
+                                const isBulanan = /bulanan/i.test(item.row.normalizedLevel ?? item.row.rawUserLevel ?? '');
                                 const band = classifyCapacity(perDayOf(item.row, 'totalBjd'));
+                                const dotColor = isBulanan ? '#8b5cf6' : (band?.color ?? '#d1d5db');
                                 return (
                                     <button
                                         key={item.row.id}
                                         type="button"
-                                        onClick={() => setSelectedId(item.row.personId)}
-                                        title={item.row.rawUserLevel ?? undefined}
-                                        className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors ${
+                                        onClick={() => {
+                                            setSelectedId(item.row.personId);
+                                            setActivePayrollModalRow(item.row);
+                                        }}
+                                        title={`${item.row.name}${isBulanan ? ' (Anak Bulanan - 60rb/HK)' : ''} - Klik untuk lihat detail pembayaran & gaji`}
+                                        className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-all cursor-pointer ${
                                             isSelected
-                                                ? 'border-green-300 bg-green-50/70'
-                                                : warn
-                                                  ? 'border-amber-200 bg-amber-50/40 hover:bg-amber-50/70'
-                                                  : 'border-gray-100 hover:bg-gray-50'
+                                                ? 'border-green-300 bg-green-50/70 shadow-xs'
+                                                : isBulanan
+                                                  ? 'border-purple-200 bg-purple-50/30 hover:bg-purple-50/60'
+                                                  : warn
+                                                    ? 'border-amber-200 bg-amber-50/40 hover:bg-amber-50/70'
+                                                    : 'border-gray-100 hover:bg-gray-50 hover:border-gray-200'
                                         }`}
                                     >
                                         <span
@@ -666,14 +689,19 @@ export default function MitraRanking({
                                         >
                                             {index + 1}
                                         </span>
-                                        {/* Satu titik saja: warna mengikuti band kapasitas, konsisten dengan chart */}
+                                        {/* Satu titik saja: warna mengikuti band kapasitas / ungu untuk bulanan */}
                                         <span
                                             className="h-2.5 w-2.5 shrink-0 rounded-full"
-                                            style={{ backgroundColor: band?.color ?? '#d1d5db' }}
+                                            style={{ backgroundColor: dotColor }}
                                         />
                                         <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800">
                                             {item.row.name}
                                         </span>
+                                        {isBulanan ? (
+                                            <span className="shrink-0 rounded-md bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700">
+                                                Bulanan
+                                            </span>
+                                        ) : null}
                                         {warn ? (
                                             <span title={`Warning:\n• ${warnStatus.reasons.join('\n• ')}`}>
                                                 <AlertTriangle
@@ -749,11 +777,11 @@ export default function MitraRanking({
                                 </div>
                                 <button
                                     type="button"
-                                    onClick={() => onSelect(selected.personId)}
-                                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 transition-colors hover:bg-green-100"
+                                    onClick={() => setActivePayrollModalRow(selected)}
+                                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 transition-colors hover:bg-green-100 cursor-pointer"
                                 >
-                                    Detail lengkap
-                                    <ChevronRight className="h-3 w-3" />
+                                    <Wallet className="h-3.5 w-3.5" />
+                                    Detail Pembayaran
                                 </button>
                             </div>
 
@@ -845,6 +873,16 @@ export default function MitraRanking({
                     )}
                 </div>
             </div>
+
+            {/* Modal Detail Pembayaran & Payroll Mitra */}
+            <MitraPayrollModal
+                isOpen={Boolean(activePayrollModalRow)}
+                onClose={() => setActivePayrollModalRow(null)}
+                row={activePayrollModalRow}
+                periodLabel={periodLabel}
+                warningInfo={activePayrollModalRow ? warningMap[activePayrollModalRow.personId] : undefined}
+                onViewTrend={(personId) => setSelectedId(personId)}
+            />
         </div>
     );
 }

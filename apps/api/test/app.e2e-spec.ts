@@ -1,12 +1,15 @@
-import { Test, TestingModule } from "@nestjs/testing";
-import { INestApplication } from "@nestjs/common";
-import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
-import request from "supertest";
-import { App } from "supertest/types";
-import { AppModule } from "./../src/app.module";
-import { ResponseInterceptor } from "../src/common/interceptors/response.interceptor";
+import { Test, TestingModule } from '@nestjs/testing';
+import { INestApplication } from '@nestjs/common';
+import {
+  FastifyAdapter,
+  NestFastifyApplication,
+} from '@nestjs/platform-fastify';
+import request from 'supertest';
+import { App } from 'supertest/types';
+import { AppModule } from './../src/app.module';
+import { ResponseInterceptor } from '../src/common/interceptors/response.interceptor';
 
-describe("AppController (e2e)", () => {
+describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeAll(async () => {
@@ -17,7 +20,7 @@ describe("AppController (e2e)", () => {
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter(),
     );
-    app.setGlobalPrefix("api");
+    app.setGlobalPrefix('api');
     app.useGlobalInterceptors(new ResponseInterceptor());
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
@@ -27,12 +30,12 @@ describe("AppController (e2e)", () => {
     await app.close();
   });
 
-  it("/ (GET)", async () => {
+  it('/ (GET)', async () => {
     await request(app.getHttpServer())
-      .get("/api")
+      .get('/api')
       .expect(200)
       .expect(({ body }) => {
-        expect(body.data).toEqual({ status: "ok" });
+        expect(body.data).toEqual({ status: 'ok' });
       });
   });
 });

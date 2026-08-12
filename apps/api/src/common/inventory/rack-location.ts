@@ -53,10 +53,7 @@ export async function getFallbackRack(
   });
 }
 
-export async function getWorkerProductionRoomId(
-  tx: RackTx,
-  workerId: string,
-) {
+export async function getWorkerProductionRoomId(tx: RackTx, workerId: string) {
   const worker = await tx.worker.findUnique({
     where: { id: workerId },
     select: {
@@ -73,8 +70,11 @@ export async function getWorkerProductionRoomId(
 export async function getWorkerOrderRack(tx: RackTx, workerId: string) {
   const productionRoomId = await getWorkerProductionRoomId(tx, workerId);
   return productionRoomId
-    ? (await getProductionRoomRack(tx, productionRoomId, RackType.MITRA_ORDER)) ??
-        getFallbackRack(tx, RackType.MITRA_ORDER)
+    ? ((await getProductionRoomRack(
+        tx,
+        productionRoomId,
+        RackType.MITRA_ORDER,
+      )) ?? getFallbackRack(tx, RackType.MITRA_ORDER))
     : getFallbackRack(tx, RackType.MITRA_ORDER);
 }
 
@@ -91,7 +91,7 @@ export async function getWorkerFinishedRack(tx: RackTx, workerId: string) {
     worker?.trainer?.productionRoomId ?? worker?.productionRoomId ?? null;
 
   return productionRoomId
-    ? (await getProductionRoomRack(tx, productionRoomId, RackType.FINISHED)) ??
-        getFallbackRack(tx, RackType.FINISHED, worker?.isMiniplant ?? false)
+    ? ((await getProductionRoomRack(tx, productionRoomId, RackType.FINISHED)) ??
+        getFallbackRack(tx, RackType.FINISHED, worker?.isMiniplant ?? false))
     : getFallbackRack(tx, RackType.FINISHED, worker?.isMiniplant ?? false);
 }

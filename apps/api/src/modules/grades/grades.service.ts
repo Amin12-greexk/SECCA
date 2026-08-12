@@ -1,9 +1,9 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
-import { Prisma } from "@prisma/client";
-import { conflict, notFound } from "../../common/errors";
-import { CreateGradeDto } from "./dto/create-grade.dto";
-import { UpdateGradeDto } from "./dto/update-grade.dto";
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+import { conflict, notFound } from '../../common/errors';
+import { CreateGradeDto } from './dto/create-grade.dto';
+import { UpdateGradeDto } from './dto/update-grade.dto';
 
 @Injectable()
 export class GradesService {
@@ -14,7 +14,7 @@ export class GradesService {
       where: { code: dto.code },
     });
     if (existing) {
-      return conflict("Kode grade sudah terdaftar.", { code: dto.code });
+      return conflict('Kode grade sudah terdaftar.', { code: dto.code });
     }
 
     try {
@@ -27,8 +27,8 @@ export class GradesService {
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === "P2002") {
-          return conflict("Kode grade sudah terdaftar.", { code: dto.code });
+        if (error.code === 'P2002') {
+          return conflict('Kode grade sudah terdaftar.', { code: dto.code });
         }
       }
       throw error;
@@ -37,7 +37,7 @@ export class GradesService {
 
   findAll() {
     return this.prisma.grade.findMany({
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: 'asc' },
     });
   }
 
@@ -47,7 +47,7 @@ export class GradesService {
     });
 
     if (!existing) {
-      return notFound("Grade not found", { gradeId: id });
+      return notFound('Grade not found', { gradeId: id });
     }
 
     return this.prisma.grade.update({
@@ -66,7 +66,7 @@ export class GradesService {
     });
 
     if (!existing) {
-      return notFound("Grade not found", { gradeId: id });
+      return notFound('Grade not found', { gradeId: id });
     }
 
     const [
@@ -89,21 +89,13 @@ export class GradesService {
       this.prisma.rawBatchGradeStock.count({ where: { gradeId: id } }),
       this.prisma.productionLot.count({
         where: {
-          OR: [
-            { gradeId: id },
-            { featherGradeId: id },
-            { colorGradeId: id },
-          ],
+          OR: [{ gradeId: id }, { featherGradeId: id }, { colorGradeId: id }],
         },
       }),
       this.prisma.payrollEntry.count({ where: { gradeId: id } }),
       this.prisma.pecahBonEntry.count({
         where: {
-          OR: [
-            { gradeId: id },
-            { featherGradeId: id },
-            { colorGradeId: id },
-          ],
+          OR: [{ gradeId: id }, { featherGradeId: id }, { colorGradeId: id }],
         },
       }),
       this.prisma.moistureRule.count({ where: { gradeId: id } }),
@@ -111,7 +103,7 @@ export class GradesService {
 
     if (tariffCount > 0) {
       return conflict(
-        "Grade sudah memiliki tarif. Tidak bisa dihapus, hubungi pengawas.",
+        'Grade sudah memiliki tarif. Tidak bisa dihapus, hubungi pengawas.',
         { gradeId: id },
       );
     }
@@ -120,7 +112,7 @@ export class GradesService {
       stockCount + lotCount + payrollCount + pecahBonCount + moistureRuleCount;
     if (usageCount > 0) {
       return conflict(
-        "Grade sudah dipakai di transaksi (pecah bon/stock/lot/payroll) dan tidak bisa dihapus.",
+        'Grade sudah dipakai di transaksi (pecah bon/stock/lot/payroll) dan tidak bisa dihapus.',
         { gradeId: id },
       );
     }
@@ -131,8 +123,8 @@ export class GradesService {
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === "P2003") {
-          return conflict("Grade sedang dipakai dan tidak bisa dihapus", {
+        if (error.code === 'P2003') {
+          return conflict('Grade sedang dipakai dan tidak bisa dihapus', {
             gradeId: id,
           });
         }

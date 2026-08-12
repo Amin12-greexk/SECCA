@@ -1,10 +1,10 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { Transform, Type } from "class-transformer";
-import { IsInt, IsString, Min } from "class-validator";
+import { ApiProperty } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
+import { IsInt, IsString, Min } from 'class-validator';
 
 export class FinishResultGradeEntryDto {
-  @ApiProperty({ example: "uuid-grade-result" })
-  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @ApiProperty({ example: 'uuid-grade-result' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   resultGradeTypeId: string;
 

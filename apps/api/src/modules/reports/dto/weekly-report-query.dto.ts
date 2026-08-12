@@ -1,17 +1,17 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsDateString, IsOptional, IsString } from "class-validator";
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsDateString, IsOptional, IsString } from 'class-validator';
 
 export class WeeklyReportQueryDto {
   @ApiProperty({
-    description: "Tanggal mulai (YYYY-MM-DD)",
-    example: "2026-08-06",
+    description: 'Tanggal mulai (YYYY-MM-DD)',
+    example: '2026-08-06',
   })
   @IsDateString()
   from!: string;
 
   @ApiProperty({
-    description: "Tanggal akhir (YYYY-MM-DD)",
-    example: "2026-08-12",
+    description: 'Tanggal akhir (YYYY-MM-DD)',
+    example: '2026-08-12',
   })
   @IsDateString()
   to!: string;

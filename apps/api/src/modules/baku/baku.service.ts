@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger } from '@nestjs/common';
 import {
   GradeType,
   LotStatus,
@@ -9,33 +9,33 @@ import {
   WorkLane,
   WorkOrderItemStatus,
   WorkOrderStatus,
-} from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
-import { badRequest, conflict, notFound } from "../../common/errors";
-import { ReceiveRawBatchDto } from "./dto/receive-raw-batch.dto";
-import { CreatePecahBonDto } from "./dto/create-pecah-bon.dto";
-import { UpdatePecahBonDto } from "./dto/update-pecah-bon.dto";
-import { UpdateRawBatchDto } from "./dto/update-raw-batch.dto";
-import { RawBatchPageQueryDto } from "./dto/raw-batch-page-query.dto";
-import { PecahBonPageQueryDto } from "./dto/pecah-bon-page-query.dto";
-import { PecahBonHistoryQueryDto } from "./dto/pecah-bon-history-query.dto";
-import { MergeRawBatchesDto } from "./dto/merge-raw-batches.dto";
-import { NumberingService } from "../../common/numbering/numbering.service";
-import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
-import { WorkOrderAssignmentService } from "../work-orders/work-order-assignment.service";
-import { LOCATION_CODES } from "../../common/constants";
+} from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { badRequest, conflict, notFound } from '../../common/errors';
+import { ReceiveRawBatchDto } from './dto/receive-raw-batch.dto';
+import { CreatePecahBonDto } from './dto/create-pecah-bon.dto';
+import { UpdatePecahBonDto } from './dto/update-pecah-bon.dto';
+import { UpdateRawBatchDto } from './dto/update-raw-batch.dto';
+import { RawBatchPageQueryDto } from './dto/raw-batch-page-query.dto';
+import { PecahBonPageQueryDto } from './dto/pecah-bon-page-query.dto';
+import { PecahBonHistoryQueryDto } from './dto/pecah-bon-history-query.dto';
+import { MergeRawBatchesDto } from './dto/merge-raw-batches.dto';
+import { NumberingService } from '../../common/numbering/numbering.service';
+import { InventoryMovementService } from '../../common/inventory/inventory-movement.service';
+import { WorkOrderAssignmentService } from '../work-orders/work-order-assignment.service';
+import { LOCATION_CODES } from '../../common/constants';
 import {
   getFallbackRack,
   getProductionRoomRack,
   getWorkerProductionRoomId,
-} from "../../common/inventory/rack-location";
-import { roundDryWeight } from "../../common/utils/weight";
+} from '../../common/inventory/rack-location';
+import { roundDryWeight } from '../../common/utils/weight';
 import {
   PECAH_BON_FINAL_SPLIT_TARGET_GRAM,
   PECAH_BON_FINAL_SPLIT_TOLERANCE_GRAM,
   getRemainingAfterPecahBonConsumption,
   isAllowedPecahBonFinalSplit,
-} from "../../common/utils/pecah-bon-weight";
+} from '../../common/utils/pecah-bon-weight';
 
 type RawBatchWithSupplier = Prisma.RawBatchGetPayload<{
   include: { supplier: true };
@@ -58,7 +58,7 @@ export class BakuService {
     });
 
     if (!supplier) {
-      return notFound("Supplier not found", { supplierId: dto.supplierId });
+      return notFound('Supplier not found', { supplierId: dto.supplierId });
     }
 
     const createdAt = new Date();
@@ -92,25 +92,25 @@ export class BakuService {
         return rawBatch;
       } catch (error) {
         if (error instanceof Prisma.PrismaClientKnownRequestError) {
-          if (error.code === "P2002") {
+          if (error.code === 'P2002') {
             if (attempt < 2) {
               continue;
             }
-            return conflict("Batch identifier already exists");
+            return conflict('Batch identifier already exists');
           }
         }
         throw error;
       }
     }
 
-    return conflict("Failed to generate unique batch identifiers");
+    return conflict('Failed to generate unique batch identifiers');
   }
 
   async findAll() {
     const items = await this.prisma.rawBatch.findMany({
       where: { mergedIntoRawBatchId: null },
       include: { supplier: true },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
 
     const usedMap = await this.getUsedWeightMap();
@@ -132,7 +132,7 @@ export class BakuService {
       this.prisma.rawBatch.findMany({
         where,
         include: { supplier: true },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
@@ -159,7 +159,7 @@ export class BakuService {
     });
 
     if (!sourceBatch) {
-      return notFound("Raw batch not found", { cardId });
+      return notFound('Raw batch not found', { cardId });
     }
 
     const rawBatch = await this.resolveEffectiveRawBatch(sourceBatch.id);
@@ -177,7 +177,7 @@ export class BakuService {
     });
 
     if (!rawBatch) {
-      return notFound("Raw batch not found", { rawBatchId });
+      return notFound('Raw batch not found', { rawBatchId });
     }
 
     const grade = await this.prisma.grade.findUnique({
@@ -185,11 +185,11 @@ export class BakuService {
     });
 
     if (!grade) {
-      return notFound("Grade not found", { gradeId: dto.gradeId });
+      return notFound('Grade not found', { gradeId: dto.gradeId });
     }
 
     if (grade.type !== GradeType.BENTUK) {
-      return badRequest("Grade bentuk tidak sesuai", {
+      return badRequest('Grade bentuk tidak sesuai', {
         gradeId: dto.gradeId,
         expected: GradeType.BENTUK,
         actual: grade.type,
@@ -201,13 +201,13 @@ export class BakuService {
     });
 
     if (!featherGrade) {
-      return notFound("Grade bulu tidak ditemukan", {
+      return notFound('Grade bulu tidak ditemukan', {
         gradeId: dto.featherGradeId,
       });
     }
 
     if (featherGrade.type !== GradeType.BULU) {
-      return badRequest("Grade bulu tidak sesuai", {
+      return badRequest('Grade bulu tidak sesuai', {
         gradeId: dto.featherGradeId,
         expected: GradeType.BULU,
         actual: featherGrade.type,
@@ -219,13 +219,13 @@ export class BakuService {
     });
 
     if (!colorGrade) {
-      return notFound("Grade warna tidak ditemukan", {
+      return notFound('Grade warna tidak ditemukan', {
         gradeId: dto.colorGradeId,
       });
     }
 
     if (colorGrade.type !== GradeType.WARNA) {
-      return badRequest("Grade warna tidak sesuai", {
+      return badRequest('Grade warna tidak sesuai', {
         gradeId: dto.colorGradeId,
         expected: GradeType.WARNA,
         actual: colorGrade.type,
@@ -237,7 +237,7 @@ export class BakuService {
       dto.initialWeightGram,
     );
     if (remainingAfterCreate === null) {
-      return badRequest("Berat awal melebihi sisa berat batch", {
+      return badRequest('Berat awal melebihi sisa berat batch', {
         available: rawBatch.wetWeightGram,
         requested: dto.initialWeightGram,
         toleranceGram: PECAH_BON_FINAL_SPLIT_TOLERANCE_GRAM,
@@ -250,7 +250,7 @@ export class BakuService {
     const pecahBonDate = new Date(dto.pecahBonDate);
     const lotWetWeightGram = Math.round(dto.initialWeightGram);
     if (lotWetWeightGram <= 0) {
-      return badRequest("Berat lot terlalu kecil", {
+      return badRequest('Berat lot terlalu kecil', {
         initialWeightGram: dto.initialWeightGram,
       });
     }
@@ -263,7 +263,7 @@ export class BakuService {
         )
       ) {
         return badRequest(
-          "Sisa batch berada di rentang 35-50 gr, harus dihabiskan sekaligus atau dibulatkan menjadi 50 gr jika selisih kurang dari 5 gr.",
+          'Sisa batch berada di rentang 35-50 gr, harus dihabiskan sekaligus atau dibulatkan menjadi 50 gr jika selisih kurang dari 5 gr.',
           {
             requested: lotWetWeightGram,
             remaining: remainingRounded,
@@ -280,7 +280,7 @@ export class BakuService {
 
       if (dto.trainerOrderRequestId && dto.mitraOrderRequestId) {
         return badRequest(
-          "Pilih salah satu: order trainer atau order mandiri mitra.",
+          'Pilih salah satu: order trainer atau order mandiri mitra.',
         );
       }
 
@@ -298,7 +298,7 @@ export class BakuService {
             )
           : null;
       let effectiveProductionRoomId =
-        dto.productionRoomId && dto.productionRoomId !== "none"
+        dto.productionRoomId && dto.productionRoomId !== 'none'
           ? dto.productionRoomId
           : undefined;
       const linkedOrderRequestId =
@@ -322,7 +322,7 @@ export class BakuService {
                 trainer: { select: { productionRoomId: true } },
               },
             },
-          }
+          },
         });
         effectiveProductionRoomId =
           orderReq?.worker?.trainer?.productionRoomId ??
@@ -337,13 +337,16 @@ export class BakuService {
           select: { id: true },
         });
         if (!room) {
-          return notFound("Production room not found", {
+          return notFound('Production room not found', {
             productionRoomId: effectiveProductionRoomId,
           });
         }
       }
 
-      const location = await this.getMitraOrderLocation(tx, effectiveProductionRoomId);
+      const location = await this.getMitraOrderLocation(
+        tx,
+        effectiveProductionRoomId,
+      );
 
       const entry = await tx.pecahBonEntry.create({
         data: {
@@ -359,7 +362,8 @@ export class BakuService {
           moisturePercent: this.roundToTwoDecimals(dto.moisturePercent),
           dryWeightGram,
           orderedByName: autoAssignment?.orderedByName ?? null,
-          orderedForName: dto.orderedForName ?? autoAssignment?.orderedForName ?? null,
+          orderedForName:
+            dto.orderedForName ?? autoAssignment?.orderedForName ?? null,
           productionRoomId: effectiveProductionRoomId,
         },
         include: {
@@ -400,7 +404,7 @@ export class BakuService {
       });
 
       if (reserved.count === 0) {
-        return conflict("Insufficient graded stock weight", {
+        return conflict('Insufficient graded stock weight', {
           gradeId: dto.gradeId,
           requested: lotWetWeightGram,
           remaining: gradedStock.remainingWetWeightGram,
@@ -442,7 +446,7 @@ export class BakuService {
         fromLocationId: null,
         toLocationId: location.id,
         movementType: MovementType.IN,
-        note: "Create lot from pecah bon (direct to mitra order)",
+        note: 'Create lot from pecah bon (direct to mitra order)',
       });
 
       if (autoAssignment) {
@@ -480,7 +484,7 @@ export class BakuService {
     });
 
     if (!entry) {
-      return notFound("Pecah Bon not found", { entryId });
+      return notFound('Pecah Bon not found', { entryId });
     }
 
     const rawBatch = entry.rawBatch;
@@ -490,11 +494,11 @@ export class BakuService {
     });
 
     if (!grade) {
-      return notFound("Grade not found", { gradeId: dto.gradeId });
+      return notFound('Grade not found', { gradeId: dto.gradeId });
     }
 
     if (grade.type !== GradeType.BENTUK) {
-      return badRequest("Grade bentuk tidak sesuai", {
+      return badRequest('Grade bentuk tidak sesuai', {
         gradeId: dto.gradeId,
         expected: GradeType.BENTUK,
         actual: grade.type,
@@ -506,13 +510,13 @@ export class BakuService {
     });
 
     if (!featherGrade) {
-      return notFound("Grade bulu tidak ditemukan", {
+      return notFound('Grade bulu tidak ditemukan', {
         gradeId: dto.featherGradeId,
       });
     }
 
     if (featherGrade.type !== GradeType.BULU) {
-      return badRequest("Grade bulu tidak sesuai", {
+      return badRequest('Grade bulu tidak sesuai', {
         gradeId: dto.featherGradeId,
         expected: GradeType.BULU,
         actual: featherGrade.type,
@@ -524,13 +528,13 @@ export class BakuService {
     });
 
     if (!colorGrade) {
-      return notFound("Grade warna tidak ditemukan", {
+      return notFound('Grade warna tidak ditemukan', {
         gradeId: dto.colorGradeId,
       });
     }
 
     if (colorGrade.type !== GradeType.WARNA) {
-      return badRequest("Grade warna tidak sesuai", {
+      return badRequest('Grade warna tidak sesuai', {
         gradeId: dto.colorGradeId,
         expected: GradeType.WARNA,
         actual: colorGrade.type,
@@ -539,7 +543,9 @@ export class BakuService {
 
     const newInitialWeight = this.roundToTwoDecimals(dto.initialWeightGram);
     const oldInitialWeight = this.roundToTwoDecimals(entry.initialWeightGram);
-    const deltaWeight = this.roundToTwoDecimals(newInitialWeight - oldInitialWeight);
+    const deltaWeight = this.roundToTwoDecimals(
+      newInitialWeight - oldInitialWeight,
+    );
 
     const newRemaining =
       deltaWeight > 0
@@ -549,7 +555,7 @@ export class BakuService {
           )
         : this.roundToTwoDecimals(rawBatch.wetWeightGram - deltaWeight);
     if (newRemaining === null) {
-      return badRequest("Berat awal melebihi sisa berat batch", {
+      return badRequest('Berat awal melebihi sisa berat batch', {
         available: rawBatch.wetWeightGram,
         requested: deltaWeight,
         toleranceGram: PECAH_BON_FINAL_SPLIT_TOLERANCE_GRAM,
@@ -558,7 +564,7 @@ export class BakuService {
     const remainingRounded = Math.round(newRemaining);
     if (remainingRounded >= 35 && remainingRounded <= 50) {
       return badRequest(
-        "Sisa batch berada di rentang 35-50 gr, harus dihabiskan sekaligus.",
+        'Sisa batch berada di rentang 35-50 gr, harus dihabiskan sekaligus.',
         { remaining: remainingRounded },
       );
     }
@@ -569,7 +575,7 @@ export class BakuService {
     );
     const newLotWeight = Math.round(newInitialWeight);
     if (newLotWeight <= 0) {
-      return badRequest("Berat lot terlalu kecil", {
+      return badRequest('Berat lot terlalu kecil', {
         initialWeightGram: dto.initialWeightGram,
       });
     }
@@ -596,7 +602,7 @@ export class BakuService {
         });
 
         if (oldStockUpdate.count === 0) {
-          return conflict("Graded stock tidak mencukupi untuk diubah", {
+          return conflict('Graded stock tidak mencukupi untuk diubah', {
             gradeId: entry.gradeId,
             requested: oldLotWeight,
           });
@@ -650,7 +656,7 @@ export class BakuService {
           });
 
           if (updateStock.count === 0) {
-            return conflict("Graded stock tidak mencukupi untuk diubah", {
+            return conflict('Graded stock tidak mencukupi untuk diubah', {
               gradeId: entry.gradeId,
               requested: Math.abs(deltaLotWeight),
             });
@@ -720,7 +726,7 @@ export class BakuService {
     });
 
     if (!entry) {
-      return notFound("Pecah Bon not found", { id });
+      return notFound('Pecah Bon not found', { id });
     }
 
     const year = new Date(entry.pecahBonDate).getUTCFullYear();
@@ -791,7 +797,7 @@ export class BakuService {
     });
 
     if (!rawBatch) {
-      return notFound("Raw batch not found", { rawBatchId });
+      return notFound('Raw batch not found', { rawBatchId });
     }
 
     if (dto.supplierId) {
@@ -799,7 +805,7 @@ export class BakuService {
         where: { id: dto.supplierId },
       });
       if (!supplier) {
-        return notFound("Supplier not found", { supplierId: dto.supplierId });
+        return notFound('Supplier not found', { supplierId: dto.supplierId });
       }
     }
 
@@ -813,14 +819,14 @@ export class BakuService {
     if (dto.invoiceWeightGram !== undefined) {
       data.invoiceWeightGram = this.roundToTwoDecimals(dto.invoiceWeightGram);
     }
-    
+
     // moisturePercent and notes are handled below or added to data
     if (dto.moisturePercent !== undefined) {
       data.moisturePercent = this.roundToTwoDecimals(dto.moisturePercent);
     }
     if (dto.notes !== undefined) {
       const trimmed = dto.notes.trim();
-      data.notes = trimmed === "" ? null : trimmed;
+      data.notes = trimmed === '' ? null : trimmed;
     }
 
     try {
@@ -833,13 +839,18 @@ export class BakuService {
           });
           const usedWeight = usedTotal._sum.initialWeightGram ?? 0;
           const newArrivalWeight = this.roundToTwoDecimals(dto.wetWeightGram);
-          const newRemainingWeight = this.roundToTwoDecimals(newArrivalWeight - usedWeight);
+          const newRemainingWeight = this.roundToTwoDecimals(
+            newArrivalWeight - usedWeight,
+          );
 
           if (newRemainingWeight < 0) {
-            return badRequest("Berat kedatangan baru tidak boleh kurang dari berat yang sudah di pecah bon", {
-              usedWeight,
-              newArrivalWeight,
-            });
+            return badRequest(
+              'Berat kedatangan baru tidak boleh kurang dari berat yang sudah di pecah bon',
+              {
+                usedWeight,
+                newArrivalWeight,
+              },
+            );
           }
           data.wetWeightGram = newRemainingWeight;
         }
@@ -859,7 +870,7 @@ export class BakuService {
 
           if (existing) {
             if (!existing.mergedIntoRawBatchId) {
-              return conflict("Batch number already exists", {
+              return conflict('Batch number already exists', {
                 batchNumber: dto.batchNumber,
               });
             }
@@ -921,16 +932,19 @@ export class BakuService {
           _sum: { initialWeightGram: true },
         });
 
-        return this.mapRawBatch(updated, finalUsedTotal._sum.initialWeightGram ?? 0);
+        return this.mapRawBatch(
+          updated,
+          finalUsedTotal._sum.initialWeightGram ?? 0,
+        );
       });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002" &&
+        error.code === 'P2002' &&
         dto.batchNumber &&
         dto.batchNumber !== rawBatch.batchNumber
       ) {
-        return conflict("Batch number already exists", {
+        return conflict('Batch number already exists', {
           batchNumber: dto.batchNumber,
         });
       }
@@ -949,7 +963,7 @@ export class BakuService {
     });
 
     if (!rawBatch) {
-      return notFound("Raw batch not found", { id });
+      return notFound('Raw batch not found', { id });
     }
 
     const pecahBonIds = rawBatch.pecahBonEntries
@@ -981,7 +995,9 @@ export class BakuService {
             });
           }
 
-          await tx.workOrderItem.deleteMany({ where: { lotId: { in: lotIds } } });
+          await tx.workOrderItem.deleteMany({
+            where: { lotId: { in: lotIds } },
+          });
           await tx.inventoryMovement.deleteMany({
             where: { lotId: { in: lotIds } },
           });
@@ -1000,7 +1016,7 @@ export class BakuService {
       await this.forceSyncSequence(tx, `RBY:${year}`, () =>
         this.getMaxRawBatchSequenceByYear(tx, year),
       );
-      const monthCode = String(month + 1).padStart(2, "0");
+      const monthCode = String(month + 1).padStart(2, '0');
       await this.forceSyncSequence(tx, `RBC:${year}:${monthCode}`, () =>
         this.getMaxRawCardSequenceByMonth(tx, year, month),
       );
@@ -1029,12 +1045,14 @@ export class BakuService {
       !dto.confirmMoisturePercent ||
       !dto.confirmMerge
     ) {
-      return badRequest("Semua konfirmasi merge harus disetujui terlebih dahulu.");
+      return badRequest(
+        'Semua konfirmasi merge harus disetujui terlebih dahulu.',
+      );
     }
 
     const sourceRawBatchIds = [...new Set(dto.sourceRawBatchIds)];
     if (sourceRawBatchIds.length !== dto.sourceRawBatchIds.length) {
-      return badRequest("ID batch sumber duplikat.");
+      return badRequest('ID batch sumber duplikat.');
     }
 
     const supplier = await this.prisma.supplier.findUnique({
@@ -1042,7 +1060,7 @@ export class BakuService {
       select: { id: true },
     });
     if (!supplier) {
-      return notFound("Supplier not found", { supplierId: dto.supplierId });
+      return notFound('Supplier not found', { supplierId: dto.supplierId });
     }
 
     const createdAt = new Date();
@@ -1054,23 +1072,31 @@ export class BakuService {
 
       if (sourceBatches.length !== sourceRawBatchIds.length) {
         const existingIds = new Set(sourceBatches.map((item) => item.id));
-        const missingIds = sourceRawBatchIds.filter((item) => !existingIds.has(item));
-        return notFound("Raw batch not found", { rawBatchIds: missingIds });
+        const missingIds = sourceRawBatchIds.filter(
+          (item) => !existingIds.has(item),
+        );
+        return notFound('Raw batch not found', { rawBatchIds: missingIds });
       }
 
       const sourceMap = new Map(sourceBatches.map((item) => [item.id, item]));
-      const orderedSources = sourceRawBatchIds.map((item) => sourceMap.get(item)!);
-      const alreadyMerged = orderedSources.find((item) => item.mergedIntoRawBatchId);
+      const orderedSources = sourceRawBatchIds.map(
+        (item) => sourceMap.get(item)!,
+      );
+      const alreadyMerged = orderedSources.find(
+        (item) => item.mergedIntoRawBatchId,
+      );
       if (alreadyMerged) {
-        return conflict("Ada batch sumber yang sudah digabung sebelumnya.", {
+        return conflict('Ada batch sumber yang sudah digabung sebelumnya.', {
           rawBatchId: alreadyMerged.id,
           batchNumber: alreadyMerged.batchNumber,
         });
       }
 
-      const invalidWeight = orderedSources.filter((item) => item.wetWeightGram <= 0);
+      const invalidWeight = orderedSources.filter(
+        (item) => item.wetWeightGram <= 0,
+      );
       if (invalidWeight.length > 0) {
-        return conflict("Ada batch sumber tanpa sisa gram.", {
+        return conflict('Ada batch sumber tanpa sisa gram.', {
           batchNumbers: invalidWeight.map((item) => item.batchNumber),
         });
       }
@@ -1083,8 +1109,10 @@ export class BakuService {
         select: { rawBatchId: true },
       });
       if (activeGradeStocks.length > 0) {
-        const blockedIds = [...new Set(activeGradeStocks.map((item) => item.rawBatchId))];
-        return conflict("Batch sumber masih punya stok grading aktif.", {
+        const blockedIds = [
+          ...new Set(activeGradeStocks.map((item) => item.rawBatchId)),
+        ];
+        return conflict('Batch sumber masih punya stok grading aktif.', {
           rawBatchIds: blockedIds,
         });
       }
@@ -1093,10 +1121,15 @@ export class BakuService {
         orderedSources.reduce((sum, item) => sum + item.wetWeightGram, 0),
       );
       if (totalWetWeightGram <= 0) {
-        return badRequest("Total sisa gram dari batch sumber harus lebih dari 0.");
+        return badRequest(
+          'Total sisa gram dari batch sumber harus lebih dari 0.',
+        );
       }
 
-      const { batchNumber, cardId } = await this.generateIdentifiers(tx, createdAt);
+      const { batchNumber, cardId } = await this.generateIdentifiers(
+        tx,
+        createdAt,
+      );
       const mergedNotes = this.composeMergeNotes(
         dto.notes,
         orderedSources.map((item) => item.batchNumber),
@@ -1145,7 +1178,7 @@ export class BakuService {
         featherGrade: true,
         colorGrade: true,
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
 
     return entries;
@@ -1168,7 +1201,7 @@ export class BakuService {
           featherGrade: true,
           colorGrade: true,
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
@@ -1185,7 +1218,7 @@ export class BakuService {
 
   async getPecahBonHistory(query: PecahBonHistoryQueryDto) {
     const { page, limit, skip } = this.resolvePagination(query);
-    const order: Prisma.SortOrder = query.order === "desc" ? "desc" : "asc";
+    const order: Prisma.SortOrder = query.order === 'desc' ? 'desc' : 'asc';
     const where: Prisma.PecahBonEntryWhereInput = {};
 
     const from = query.from ? new Date(query.from) : null;
@@ -1199,7 +1232,7 @@ export class BakuService {
     }
 
     if (from && to && from.getTime() > to.getTime()) {
-      return badRequest("Rentang tanggal tidak valid (from > to)", {
+      return badRequest('Rentang tanggal tidak valid (from > to)', {
         from: query.from,
         to: query.to,
       });
@@ -1214,12 +1247,14 @@ export class BakuService {
     const search = query.search?.trim();
     if (search) {
       where.OR = [
-        { pecahBonId: { contains: search, mode: "insensitive" } },
-        { featherCondition: { contains: search, mode: "insensitive" } },
-        { rawBatch: { batchNumber: { contains: search, mode: "insensitive" } } },
-        { grade: { code: { contains: search, mode: "insensitive" } } },
-        { featherGrade: { code: { contains: search, mode: "insensitive" } } },
-        { colorGrade: { code: { contains: search, mode: "insensitive" } } },
+        { pecahBonId: { contains: search, mode: 'insensitive' } },
+        { featherCondition: { contains: search, mode: 'insensitive' } },
+        {
+          rawBatch: { batchNumber: { contains: search, mode: 'insensitive' } },
+        },
+        { grade: { code: { contains: search, mode: 'insensitive' } } },
+        { featherGrade: { code: { contains: search, mode: 'insensitive' } } },
+        { colorGrade: { code: { contains: search, mode: 'insensitive' } } },
       ];
     }
 
@@ -1243,11 +1278,11 @@ export class BakuService {
       const lotWhere: Prisma.ProductionLotWhereInput = {};
       if (search) {
         lotWhere.OR = [
-          { lotNumber: { contains: search, mode: "insensitive" } },
-          { externalId: { contains: search, mode: "insensitive" } },
-          { grade: { code: { contains: search, mode: "insensitive" } } },
-          { featherGrade: { code: { contains: search, mode: "insensitive" } } },
-          { colorGrade: { code: { contains: search, mode: "insensitive" } } },
+          { lotNumber: { contains: search, mode: 'insensitive' } },
+          { externalId: { contains: search, mode: 'insensitive' } },
+          { grade: { code: { contains: search, mode: 'insensitive' } } },
+          { featherGrade: { code: { contains: search, mode: 'insensitive' } } },
+          { colorGrade: { code: { contains: search, mode: 'insensitive' } } },
         ];
       }
       if (from || to) {
@@ -1317,7 +1352,7 @@ export class BakuService {
   async findPecahBonById(pecahBonId: string) {
     const rawSearch = pecahBonId.trim();
     if (!rawSearch) {
-      return badRequest("Nomor LP / Pecah Bon wajib diisi");
+      return badRequest('Nomor LP / Pecah Bon wajib diisi');
     }
 
     const includeRelations = {
@@ -1346,10 +1381,10 @@ export class BakuService {
       const lot = await this.prisma.productionLot.findFirst({
         where: {
           OR: [
-            { externalId: { equals: rawSearch, mode: "insensitive" } },
-            { lotNumber: { equals: rawSearch, mode: "insensitive" } },
-            { externalId: { contains: rawSearch, mode: "insensitive" } },
-            { lotNumber: { contains: rawSearch, mode: "insensitive" } },
+            { externalId: { equals: rawSearch, mode: 'insensitive' } },
+            { lotNumber: { equals: rawSearch, mode: 'insensitive' } },
+            { externalId: { contains: rawSearch, mode: 'insensitive' } },
+            { lotNumber: { contains: rawSearch, mode: 'insensitive' } },
           ],
         },
       });
@@ -1364,14 +1399,14 @@ export class BakuService {
 
     // 4. Try flexible matching with raw digits (e.g. "2851")
     if (!entry) {
-      const digitsOnly = rawSearch.replace(/\D/g, "");
+      const digitsOnly = rawSearch.replace(/\D/g, '');
       if (digitsOnly.length > 0) {
         entry = await this.prisma.pecahBonEntry.findFirst({
           where: {
             OR: [
-              { pecahBonId: { contains: rawSearch, mode: "insensitive" } },
+              { pecahBonId: { contains: rawSearch, mode: 'insensitive' } },
               { pecahBonId: { contains: digitsOnly } },
-              { pecahBonId: { contains: digitsOnly.padStart(4, "0") } },
+              { pecahBonId: { contains: digitsOnly.padStart(4, '0') } },
             ],
           },
           include: includeRelations,
@@ -1381,19 +1416,21 @@ export class BakuService {
 
     // 5. If still not found, check if a ProductionLot exists and synthesize a virtual PecahBonEntry
     if (!entry) {
-      const digitsOnly = rawSearch.replace(/\D/g, "");
+      const digitsOnly = rawSearch.replace(/\D/g, '');
       const lot = await this.prisma.productionLot.findFirst({
         where: {
           OR: [
-            { externalId: { equals: rawSearch, mode: "insensitive" } },
-            { lotNumber: { equals: rawSearch, mode: "insensitive" } },
-            { externalId: { contains: rawSearch, mode: "insensitive" } },
-            { lotNumber: { contains: rawSearch, mode: "insensitive" } },
-            ...(digitsOnly ? [
-              { lotNumber: { contains: digitsOnly } },
-              { lotNumber: { contains: digitsOnly.padStart(4, "0") } },
-              { externalId: { contains: digitsOnly } }
-            ] : [])
+            { externalId: { equals: rawSearch, mode: 'insensitive' } },
+            { lotNumber: { equals: rawSearch, mode: 'insensitive' } },
+            { externalId: { contains: rawSearch, mode: 'insensitive' } },
+            { lotNumber: { contains: rawSearch, mode: 'insensitive' } },
+            ...(digitsOnly
+              ? [
+                  { lotNumber: { contains: digitsOnly } },
+                  { lotNumber: { contains: digitsOnly.padStart(4, '0') } },
+                  { externalId: { contains: digitsOnly } },
+                ]
+              : []),
           ],
         },
         include: {
@@ -1416,7 +1453,7 @@ export class BakuService {
         const rawBatch = lot.sources[0]?.gradedStock?.rawBatch ?? null;
         entry = {
           id: lot.id,
-          rawBatchId: rawBatch?.id ?? "",
+          rawBatchId: rawBatch?.id ?? '',
           pecahBonId: lot.externalId ?? lot.lotNumber,
           gradeId: lot.gradeId,
           featherGradeId: lot.featherGradeId,
@@ -1424,7 +1461,7 @@ export class BakuService {
           orderedByName: null,
           orderedForName: null,
           pecahBonDate: lot.createdAt,
-          featherCondition: "UNKNOWN",
+          featherCondition: 'UNKNOWN',
           pieceCount: 0,
           initialWeightGram: lot.wetWeightGram,
           moisturePercent: lot.moistureBps / 100,
@@ -1440,7 +1477,7 @@ export class BakuService {
     }
 
     if (!entry) {
-      return notFound("LP tidak ditemukan", { pecahBonId: rawSearch });
+      return notFound('LP tidak ditemukan', { pecahBonId: rawSearch });
     }
 
     return entry;
@@ -1453,11 +1490,11 @@ export class BakuService {
     });
 
     if (!entry) {
-      return notFound("Pecah Bon not found", { entryId });
+      return notFound('Pecah Bon not found', { entryId });
     }
 
     if (!entry.pecahBonId) {
-      return badRequest("Pecah Bon ID belum tersedia", { entryId });
+      return badRequest('Pecah Bon ID belum tersedia', { entryId });
     }
 
     const lot = await this.prisma.productionLot.findFirst({
@@ -1465,7 +1502,7 @@ export class BakuService {
     });
 
     if (!lot) {
-      return notFound("Lot not found for pecah bon", {
+      return notFound('Lot not found for pecah bon', {
         pecahBonId: entry.pecahBonId,
       });
     }
@@ -1487,7 +1524,7 @@ export class BakuService {
     const year = at.getUTCFullYear();
     const yearShort = String(year).slice(-2);
     const sequence = await this.nextPecahBonSequence(tx, year);
-    const padded = String(sequence).padStart(4, "0");
+    const padded = String(sequence).padStart(4, '0');
 
     return `TEI-${padded}-${yearShort}`;
   }
@@ -1514,9 +1551,9 @@ export class BakuService {
     ]);
 
     const yearShort = String(year).slice(-2);
-    const monthCode = String(month + 1).padStart(2, "0");
-    const batchSequence = String(yearSequence).padStart(4, "0");
-    const cardSequence = String(monthSequence).padStart(3, "0");
+    const monthCode = String(month + 1).padStart(2, '0');
+    const batchSequence = String(yearSequence).padStart(4, '0');
+    const cardSequence = String(monthSequence).padStart(3, '0');
 
     const batchNumber = `K${batchSequence}-TEI-${yearShort}`;
     const cardId = `R-${yearShort}${monthCode}-${cardSequence}`;
@@ -1524,7 +1561,10 @@ export class BakuService {
     return { batchNumber, cardId };
   }
 
-  private async nextRawBatchSequence(tx: Prisma.TransactionClient, year: number) {
+  private async nextRawBatchSequence(
+    tx: Prisma.TransactionClient,
+    year: number,
+  ) {
     const key = `RBY:${year}`;
     const maxSequence = await this.getMaxRawBatchSequenceByYear(tx, year);
     return this.nextSequenceWithMaxSync(tx, key, maxSequence);
@@ -1535,9 +1575,13 @@ export class BakuService {
     year: number,
     month: number,
   ) {
-    const monthCode = String(month + 1).padStart(2, "0");
+    const monthCode = String(month + 1).padStart(2, '0');
     const key = `RBC:${year}:${monthCode}`;
-    const maxSequence = await this.getMaxRawCardSequenceByMonth(tx, year, month);
+    const maxSequence = await this.getMaxRawCardSequenceByMonth(
+      tx,
+      year,
+      month,
+    );
     return this.nextSequenceWithMaxSync(tx, key, maxSequence);
   }
 
@@ -1643,7 +1687,7 @@ export class BakuService {
     month: number,
   ): Promise<number> {
     const yearShort = String(year).slice(-2);
-    const monthCode = String(month + 1).padStart(2, "0");
+    const monthCode = String(month + 1).padStart(2, '0');
     const prefix = `R-${yearShort}${monthCode}-`;
     const rows = await tx.rawBatch.findMany({
       where: { cardId: { startsWith: prefix } },
@@ -1675,7 +1719,7 @@ export class BakuService {
 
   private async getUsedWeightMap(rawBatchIds?: string[]) {
     const usedTotals = await this.prisma.pecahBonEntry.groupBy({
-      by: ["rawBatchId"],
+      by: ['rawBatchId'],
       where:
         rawBatchIds && rawBatchIds.length > 0
           ? { rawBatchId: { in: rawBatchIds } }
@@ -1684,7 +1728,10 @@ export class BakuService {
     });
 
     return new Map(
-      usedTotals.map((item) => [item.rawBatchId, item._sum.initialWeightGram ?? 0]),
+      usedTotals.map((item) => [
+        item.rawBatchId,
+        item._sum.initialWeightGram ?? 0,
+      ]),
     );
   }
 
@@ -1719,7 +1766,7 @@ export class BakuService {
     notes: string | undefined,
     sourceBatchNumbers: string[],
   ) {
-    const sourceLabel = `Gabungan dari: ${sourceBatchNumbers.join(", ")}`;
+    const sourceLabel = `Gabungan dari: ${sourceBatchNumbers.join(', ')}`;
     const trimmed = notes?.trim();
     if (!trimmed) {
       return sourceLabel;
@@ -1731,7 +1778,7 @@ export class BakuService {
     batchNumber: string,
     rawBatchId: string,
   ) {
-    const suffix = rawBatchId.replace(/-/g, "").slice(0, 8).toUpperCase();
+    const suffix = rawBatchId.replace(/-/g, '').slice(0, 8).toUpperCase();
     return `${batchNumber}#MERGED#${suffix}`;
   }
 
@@ -1741,7 +1788,7 @@ export class BakuService {
 
     while (true) {
       if (visited.has(currentId)) {
-        return conflict("Siklus merge batch terdeteksi", { rawBatchId });
+        return conflict('Siklus merge batch terdeteksi', { rawBatchId });
       }
       visited.add(currentId);
 
@@ -1751,7 +1798,7 @@ export class BakuService {
       });
 
       if (!current) {
-        return notFound("Raw batch not found", { rawBatchId: currentId });
+        return notFound('Raw batch not found', { rawBatchId: currentId });
       }
 
       if (!current.mergedIntoRawBatchId) {
@@ -1808,12 +1855,12 @@ export class BakuService {
         },
       });
       if (!aggregate || aggregate.workerId) {
-        return notFound("Trainer order template not found", {
+        return notFound('Trainer order template not found', {
           trainerOrderRequestId,
         });
       }
       if (aggregate.status !== MitraOrderRequestStatus.APPROVED) {
-        return conflict("Trainer order template belum disetujui", {
+        return conflict('Trainer order template belum disetujui', {
           trainerOrderRequestId,
           status: aggregate.status,
         });
@@ -1830,9 +1877,9 @@ export class BakuService {
           },
         },
         orderBy: [
-          { orderRequest: { createdAt: "asc" } },
-          { updatedAt: "asc" },
-          { id: "asc" },
+          { orderRequest: { createdAt: 'asc' } },
+          { updatedAt: 'asc' },
+          { id: 'asc' },
         ],
         include: {
           orderRequest: {
@@ -1849,7 +1896,7 @@ export class BakuService {
       });
 
       if (!line?.orderRequest.workerId) {
-        return conflict("Berat LP tidak tersedia pada trainer order template", {
+        return conflict('Berat LP tidak tersedia pada trainer order template', {
           trainerOrderRequestId,
           requestedWeightGram: lotWeightGram,
         });
@@ -1879,7 +1926,7 @@ export class BakuService {
         },
       });
       if (childGramUpdate.count === 0) {
-        return conflict("Sisa gram order mitra tidak sesuai rincian LP", {
+        return conflict('Sisa gram order mitra tidak sesuai rincian LP', {
           orderRequestId: line.orderRequest.id,
           requestedGram: line.orderRequest.requestedGram,
           requestedWeightGram: lotWeightGram,
@@ -1896,7 +1943,7 @@ export class BakuService {
         },
       });
       if (aggregateGramUpdate.count === 0) {
-        return conflict("Sisa gram template trainer tidak sesuai rincian LP", {
+        return conflict('Sisa gram template trainer tidak sesuai rincian LP', {
           trainerOrderRequestId,
           requestedGram: aggregate.requestedGram,
           requestedWeightGram: lotWeightGram,
@@ -1967,12 +2014,12 @@ export class BakuService {
     });
 
     if (!request || !request.workerId) {
-      return notFound("Order mandiri mitra tidak ditemukan", {
+      return notFound('Order mandiri mitra tidak ditemukan', {
         orderRequestId,
       });
     }
     if (request.status !== MitraOrderRequestStatus.APPROVED) {
-      return conflict("Order mandiri mitra belum disetujui", {
+      return conflict('Order mandiri mitra belum disetujui', {
         orderRequestId,
         status: request.status,
       });
@@ -1984,10 +2031,10 @@ export class BakuService {
         weightGram: lotWeightGram,
         lpCount: { gt: 0 },
       },
-      orderBy: [{ sequence: "asc" }, { id: "asc" }],
+      orderBy: [{ sequence: 'asc' }, { id: 'asc' }],
     });
     if (!line) {
-      return conflict("Berat LP tidak tersedia pada order mandiri mitra", {
+      return conflict('Berat LP tidak tersedia pada order mandiri mitra', {
         orderRequestId,
         requestedWeightGram: lotWeightGram,
       });
@@ -2010,7 +2057,7 @@ export class BakuService {
       data: { requestedGram: { decrement: lotWeightGram } },
     });
     if (updatedRequest.count === 0) {
-      return conflict("Sisa gram order mandiri mitra tidak sesuai rincian LP", {
+      return conflict('Sisa gram order mandiri mitra tidak sesuai rincian LP', {
         orderRequestId,
         requestedGram: request.requestedGram,
         requestedWeightGram: lotWeightGram,
@@ -2067,7 +2114,10 @@ export class BakuService {
         },
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         const concurrentActive = await tx.workerActiveWorkOrder.findUnique({
           where: { workerId },
           select: { workOrderId: true },
@@ -2083,7 +2133,10 @@ export class BakuService {
     return workOrder.id;
   }
 
-  private async getMitraOrderLocation(tx: Prisma.TransactionClient, productionRoomId?: string) {
+  private async getMitraOrderLocation(
+    tx: Prisma.TransactionClient,
+    productionRoomId?: string,
+  ) {
     if (productionRoomId) {
       const roomRack = await getProductionRoomRack(
         tx,

@@ -1,11 +1,11 @@
-import { HttpException, HttpStatus } from "@nestjs/common";
+import { HttpException, HttpStatus } from '@nestjs/common';
 
 export type ErrorCode =
-  | "BAD_REQUEST"
-  | "NOT_FOUND"
-  | "CONFLICT"
-  | "UNPROCESSABLE"
-  | "INTERNAL_ERROR";
+  | 'BAD_REQUEST'
+  | 'NOT_FOUND'
+  | 'CONFLICT'
+  | 'UNPROCESSABLE'
+  | 'INTERNAL_ERROR';
 
 export const throwHttpError = (
   status: HttpStatus,
@@ -23,14 +23,24 @@ export const throwHttpError = (
   );
 };
 
-export const badRequest = (message: string, details?: Record<string, unknown>) =>
-  throwHttpError(HttpStatus.BAD_REQUEST, "BAD_REQUEST", message, details);
+export const badRequest = (
+  message: string,
+  details?: Record<string, unknown>,
+) => throwHttpError(HttpStatus.BAD_REQUEST, 'BAD_REQUEST', message, details);
 
 export const notFound = (message: string, details?: Record<string, unknown>) =>
-  throwHttpError(HttpStatus.NOT_FOUND, "NOT_FOUND", message, details);
+  throwHttpError(HttpStatus.NOT_FOUND, 'NOT_FOUND', message, details);
 
 export const conflict = (message: string, details?: Record<string, unknown>) =>
-  throwHttpError(HttpStatus.CONFLICT, "CONFLICT", message, details);
+  throwHttpError(HttpStatus.CONFLICT, 'CONFLICT', message, details);
 
-export const unprocessable = (message: string, details?: Record<string, unknown>) =>
-  throwHttpError(HttpStatus.UNPROCESSABLE_ENTITY, "UNPROCESSABLE", message, details);
+export const unprocessable = (
+  message: string,
+  details?: Record<string, unknown>,
+) =>
+  throwHttpError(
+    HttpStatus.UNPROCESSABLE_ENTITY,
+    'UNPROCESSABLE',
+    message,
+    details,
+  );

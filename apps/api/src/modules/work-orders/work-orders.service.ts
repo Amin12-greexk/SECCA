@@ -496,11 +496,16 @@ export class WorkOrdersService {
       }
 
       // Check if any items have finish receipts
-      const hasFinishReceipt = workOrder.items.some((item) => item.finishReceipt);
+      const hasFinishReceipt = workOrder.items.some(
+        (item) => item.finishReceipt,
+      );
       if (hasFinishReceipt) {
-        return conflict('Ada item yang sudah disetor, tidak bisa cancel order', {
-          workOrderId,
-        });
+        return conflict(
+          'Ada item yang sudah disetor, tidak bisa cancel order',
+          {
+            workOrderId,
+          },
+        );
       }
 
       // Check 2-day age limit based on work order creation
@@ -519,7 +524,9 @@ export class WorkOrdersService {
 
       const activeItems = workOrder.items;
       if (activeItems.length === 0) {
-        return conflict('Tidak ada item aktif untuk di-cancel', { workOrderId });
+        return conflict('Tidak ada item aktif untuk di-cancel', {
+          workOrderId,
+        });
       }
 
       // If reassigning to another worker, check their capacity (max 2 active orders)
@@ -538,15 +545,21 @@ export class WorkOrdersService {
           where: { workerId: dto.reassignToWorkerId },
         });
         if (activeOrderCount >= 2) {
-          return conflict('Mitra tujuan sudah mencapai batas maksimal order aktif (2)', {
-            workerId: dto.reassignToWorkerId,
-            activeOrderCount,
-          });
+          return conflict(
+            'Mitra tujuan sudah mencapai batas maksimal order aktif (2)',
+            {
+              workerId: dto.reassignToWorkerId,
+              activeOrderCount,
+            },
+          );
         }
       }
 
       // Get target location for canceled lots
-      const mitraOrderLocation = await getWorkerOrderRack(tx, workOrder.workerId);
+      const mitraOrderLocation = await getWorkerOrderRack(
+        tx,
+        workOrder.workerId,
+      );
 
       const canceledItemIds: string[] = [];
       const lotIds: string[] = [];

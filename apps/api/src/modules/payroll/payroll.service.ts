@@ -1,8 +1,8 @@
-import { Injectable } from "@nestjs/common";
-import { badRequest } from "../../common/errors";
-import { toBps } from "../../common/utils/weight";
-import { PrismaService } from "../../prisma/prisma.service";
-import { PayrollSummaryQueryDto } from "./dto/payroll-summary-query.dto";
+import { Injectable } from '@nestjs/common';
+import { badRequest } from '../../common/errors';
+import { toBps } from '../../common/utils/weight';
+import { PrismaService } from '../../prisma/prisma.service';
+import { PayrollSummaryQueryDto } from './dto/payroll-summary-query.dto';
 
 @Injectable()
 export class PayrollService {
@@ -26,7 +26,7 @@ export class PayrollService {
           },
         },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -52,7 +52,7 @@ export class PayrollService {
           },
         },
       },
-      orderBy: { returnedAt: "asc" },
+      orderBy: { returnedAt: 'asc' },
     });
 
     const totals = receipts.reduce(
@@ -112,7 +112,8 @@ export class PayrollService {
       existing.byProductWeightGram += item.byProductWeightGram;
       existing.susutProsesGram += item.susutProsesGram;
       existing.susutHilangGram += item.susutHilangGram;
-      existing.payrollAmountRp += item.workOrderItem.payrollEntry?.amountRp ?? 0;
+      existing.payrollAmountRp +=
+        item.workOrderItem.payrollEntry?.amountRp ?? 0;
       workerSummaryMap.set(worker.id, existing);
     }
 
@@ -143,7 +144,9 @@ export class PayrollService {
         susutProsesPctBps: toBps(totals.susutProsesGram, totals.dryInGram),
         susutHilangPctBps: toBps(totals.susutHilangGram, totals.dryInGram),
       },
-      workers: workerSummary.sort((a, b) => b.payrollAmountRp - a.payrollAmountRp),
+      workers: workerSummary.sort(
+        (a, b) => b.payrollAmountRp - a.payrollAmountRp,
+      ),
     };
   }
 
@@ -157,11 +160,11 @@ export class PayrollService {
     const end = to ? new Date(to) : now;
 
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      return badRequest("Format tanggal tidak valid", { from, to });
+      return badRequest('Format tanggal tidak valid', { from, to });
     }
 
     if (start.getTime() > end.getTime()) {
-      return badRequest("Rentang tanggal tidak valid: from harus <= to", {
+      return badRequest('Rentang tanggal tidak valid: from harus <= to', {
         from,
         to,
       });

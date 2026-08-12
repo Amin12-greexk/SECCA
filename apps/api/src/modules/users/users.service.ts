@@ -1,17 +1,17 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
-import { Prisma } from "@prisma/client";
-import { createHash } from "crypto";
-import { CreateUserDto } from "./dto/create-user.dto";
-import { UpdateUserDto } from "./dto/update-user.dto";
-import { UiAccessEntryDto } from "./dto/ui-access-entry.dto";
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+import { createHash } from 'crypto';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { UiAccessEntryDto } from './dto/ui-access-entry.dto';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   private hashPassword(password: string) {
-    return createHash("sha256").update(password).digest("hex");
+    return createHash('sha256').update(password).digest('hex');
   }
 
   private normalizeUiAccesses(uiAccesses: UiAccessEntryDto[] | undefined) {
@@ -26,7 +26,10 @@ export class UsersService {
         continue;
       }
 
-      byModule.set(moduleKey, Math.max(byModule.get(moduleKey) ?? 0, item.level));
+      byModule.set(
+        moduleKey,
+        Math.max(byModule.get(moduleKey) ?? 0, item.level),
+      );
     }
 
     return Array.from(byModule.entries())
@@ -53,16 +56,18 @@ export class UsersService {
           level: true,
         },
         orderBy: {
-          moduleKey: "asc" as const,
+          moduleKey: 'asc' as const,
         },
       },
     };
   }
 
-  private serializeUser<T extends {
-    role: string;
-    uiAccesses?: { moduleKey: string; level: number }[];
-  }>(user: T) {
+  private serializeUser<
+    T extends {
+      role: string;
+      uiAccesses?: { moduleKey: string; level: number }[];
+    },
+  >(user: T) {
     return {
       ...user,
       role: user.role.toLowerCase(),
@@ -76,7 +81,7 @@ export class UsersService {
     });
 
     if (existing) {
-      throw new BadRequestException("Email sudah terdaftar");
+      throw new BadRequestException('Email sudah terdaftar');
     }
 
     if (dto.workerId) {
@@ -85,14 +90,14 @@ export class UsersService {
         select: { id: true },
       });
       if (!worker) {
-        throw new BadRequestException("Worker tidak ditemukan");
+        throw new BadRequestException('Worker tidak ditemukan');
       }
       const workerOwner = await this.prisma.appUser.findFirst({
         where: { workerId: dto.workerId },
         select: { id: true },
       });
       if (workerOwner) {
-        throw new BadRequestException("Worker sudah terhubung ke akun lain");
+        throw new BadRequestException('Worker sudah terhubung ke akun lain');
       }
     }
 
@@ -124,7 +129,7 @@ export class UsersService {
 
   async findAll() {
     const users = await this.prisma.appUser.findMany({
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
       select: this.selectUser(),
     });
 
@@ -138,7 +143,7 @@ export class UsersService {
     });
 
     if (!existing) {
-      throw new BadRequestException("Akun tidak ditemukan");
+      throw new BadRequestException('Akun tidak ditemukan');
     }
 
     if (dto.email) {
@@ -148,7 +153,7 @@ export class UsersService {
       });
 
       if (emailOwner && emailOwner.id !== id) {
-        throw new BadRequestException("Email sudah terdaftar");
+        throw new BadRequestException('Email sudah terdaftar');
       }
     }
 
@@ -169,14 +174,14 @@ export class UsersService {
           select: { id: true },
         });
         if (!worker) {
-          throw new BadRequestException("Worker tidak ditemukan");
+          throw new BadRequestException('Worker tidak ditemukan');
         }
         const workerOwner = await this.prisma.appUser.findFirst({
           where: { workerId: dto.workerId },
           select: { id: true },
         });
         if (workerOwner && workerOwner.id !== id) {
-          throw new BadRequestException("Worker sudah terhubung ke akun lain");
+          throw new BadRequestException('Worker sudah terhubung ke akun lain');
         }
         data.worker = { connect: { id: dto.workerId } };
       } else {

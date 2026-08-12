@@ -1,14 +1,22 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
-import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import { Roles } from "../../auth/roles.decorator";
-import { CreateSupplierDto } from "./dto/create-supplier.dto";
-import { UpdateSupplierDto } from "./dto/update-supplier.dto";
-import { SuppliersService } from "./suppliers.service";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Roles } from '../../auth/roles.decorator';
+import { CreateSupplierDto } from './dto/create-supplier.dto';
+import { UpdateSupplierDto } from './dto/update-supplier.dto';
+import { SuppliersService } from './suppliers.service';
 
-@ApiTags("suppliers")
+@ApiTags('suppliers')
 @ApiBearerAuth()
-@Roles("manager", "baku", "mitra", "koreksi")
-@Controller("suppliers")
+@Roles('manager', 'baku', 'mitra', 'koreksi')
+@Controller('suppliers')
 export class SuppliersController {
   constructor(private readonly suppliersService: SuppliersService) {}
 
@@ -22,16 +30,16 @@ export class SuppliersController {
     return this.suppliersService.findAll();
   }
 
-  @Patch(":supplierId")
+  @Patch(':supplierId')
   update(
-    @Param("supplierId") supplierId: string,
+    @Param('supplierId') supplierId: string,
     @Body() dto: UpdateSupplierDto,
   ) {
     return this.suppliersService.update(supplierId, dto);
   }
 
-  @Delete(":supplierId")
-  remove(@Param("supplierId") supplierId: string) {
+  @Delete(':supplierId')
+  remove(@Param('supplierId') supplierId: string) {
     return this.suppliersService.remove(supplierId);
   }
 }

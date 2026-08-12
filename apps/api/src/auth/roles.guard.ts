@@ -1,11 +1,11 @@
-import { CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
-import { Reflector } from "@nestjs/core";
-import { ROLES_KEY } from "./auth.constants";
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { ROLES_KEY } from './auth.constants';
 import {
   RequestAuthUser,
   getApiAccessRequirement,
   hasExplicitUiAccess,
-} from "./ui-access.constants";
+} from './ui-access.constants';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -31,14 +31,16 @@ export class RolesGuard implements CanActivate {
 
     const roles = user.roles ?? (user.role ? [user.role] : []);
     const normalizedRoles = roles.map((role) => role.toLowerCase());
-    if (requiredRoles.some((role) => normalizedRoles.includes(role.toLowerCase()))) {
+    if (
+      requiredRoles.some((role) => normalizedRoles.includes(role.toLowerCase()))
+    ) {
       return true;
     }
 
     const path =
       (request.raw?.url as string | undefined) ??
       (request.url as string | undefined) ??
-      "";
+      '';
     const method = request.method as string | undefined;
     const accessRequirement = getApiAccessRequirement(path, method);
 

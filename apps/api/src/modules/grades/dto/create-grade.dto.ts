@@ -1,7 +1,7 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { Transform } from "class-transformer";
-import { IsEnum, IsString, MinLength } from "class-validator";
-import { GradeType } from "@prisma/client";
+import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { IsEnum, IsString, MinLength } from 'class-validator';
+import { GradeType } from '@prisma/client';
 
 export class CreateGradeDto {
   @ApiProperty()

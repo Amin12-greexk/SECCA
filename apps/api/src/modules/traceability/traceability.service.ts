@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
-import { conflict, notFound } from "../../common/errors";
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { conflict, notFound } from '../../common/errors';
 
 @Injectable()
 export class TraceabilityService {
@@ -24,12 +24,12 @@ export class TraceabilityService {
     });
 
     if (!lot) {
-      return notFound("Lot not found", { lotNumber });
+      return notFound('Lot not found', { lotNumber });
     }
 
     const effectiveRawBatchMap = new Map<
       string,
-      Awaited<ReturnType<TraceabilityService["resolveEffectiveRawBatch"]>>
+      Awaited<ReturnType<TraceabilityService['resolveEffectiveRawBatch']>>
     >();
     for (const source of lot.sources) {
       const sourceRawBatchId = source.gradedStock.rawBatch.id;
@@ -42,7 +42,9 @@ export class TraceabilityService {
     return {
       lotNumber: lot.lotNumber,
       sources: lot.sources.map((source) => {
-        const effective = effectiveRawBatchMap.get(source.gradedStock.rawBatch.id)!;
+        const effective = effectiveRawBatchMap.get(
+          source.gradedStock.rawBatch.id,
+        )!;
         return {
           sourceRawBatchNumber: source.gradedStock.rawBatch.batchNumber,
           supplier: {
@@ -63,7 +65,7 @@ export class TraceabilityService {
 
     while (true) {
       if (visited.has(currentId)) {
-        return conflict("Siklus merge batch terdeteksi", { rawBatchId });
+        return conflict('Siklus merge batch terdeteksi', { rawBatchId });
       }
       visited.add(currentId);
 
@@ -73,7 +75,7 @@ export class TraceabilityService {
       });
 
       if (!current) {
-        return notFound("Raw batch not found", { rawBatchId: currentId });
+        return notFound('Raw batch not found', { rawBatchId: currentId });
       }
 
       if (!current.mergedIntoRawBatchId) {

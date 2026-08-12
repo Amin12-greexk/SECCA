@@ -1,7 +1,16 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { Type } from "class-transformer";
-import { IsArray, IsDateString, IsInt, IsOptional, IsString, IsUUID, Min, ValidateNested } from "class-validator";
-import { FinishResultGradeEntryDto } from "./finish-result-grade-entry.dto";
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsDateString,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { FinishResultGradeEntryDto } from './finish-result-grade-entry.dto';
 
 export class FinishDto {
   @ApiProperty()

@@ -1,5 +1,5 @@
-import { ApiPropertyOptional } from "@nestjs/swagger";
-import { Transform, Type } from "class-transformer";
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
@@ -10,9 +10,9 @@ import {
   IsUUID,
   MinLength,
   ValidateNested,
-} from "class-validator";
-import { UserRole } from "@prisma/client";
-import { UiAccessEntryDto } from "./ui-access-entry.dto";
+} from 'class-validator';
+import { UserRole } from '@prisma/client';
+import { UiAccessEntryDto } from './ui-access-entry.dto';
 
 export class UpdateUserDto {
   @ApiPropertyOptional()

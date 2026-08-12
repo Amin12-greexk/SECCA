@@ -1,7 +1,7 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
-import { badRequest, conflict, notFound } from "../../common/errors";
-import { GradeRawBatchDto } from "./dto/grade-raw-batch.dto";
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { badRequest, conflict, notFound } from '../../common/errors';
+import { GradeRawBatchDto } from './dto/grade-raw-batch.dto';
 
 @Injectable()
 export class GradingService {
@@ -14,16 +14,16 @@ export class GradingService {
     });
 
     if (!rawBatch) {
-      return notFound("Raw batch not found", { rawBatchId });
+      return notFound('Raw batch not found', { rawBatchId });
     }
 
     if (rawBatch.gradeStocks.length > 0) {
-      return conflict("Raw batch already graded", { rawBatchId });
+      return conflict('Raw batch already graded', { rawBatchId });
     }
 
     const total = dto.items.reduce((sum, item) => sum + item.wetWeightGram, 0);
     if (total > rawBatch.wetWeightGram) {
-      return badRequest("Total grading weight exceeds raw batch weight", {
+      return badRequest('Total grading weight exceeds raw batch weight', {
         total,
         rawBatchWeight: rawBatch.wetWeightGram,
       });
@@ -31,7 +31,7 @@ export class GradingService {
 
     const gradeIdsSet = new Set(dto.items.map((item) => item.gradeId));
     if (gradeIdsSet.size !== dto.items.length) {
-      return badRequest("Duplicate gradeId in items");
+      return badRequest('Duplicate gradeId in items');
     }
 
     const gradeIds = Array.from(gradeIdsSet);
@@ -40,7 +40,7 @@ export class GradingService {
     });
 
     if (grades.length !== gradeIds.length) {
-      return badRequest("One or more grades not found", {
+      return badRequest('One or more grades not found', {
         missing: gradeIds.filter((id) => !grades.find((g) => g.id === id)),
       });
     }
@@ -56,7 +56,7 @@ export class GradingService {
 
     const gradedStocks = await this.prisma.rawBatchGradeStock.findMany({
       where: { rawBatchId },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: 'asc' },
     });
 
     return {

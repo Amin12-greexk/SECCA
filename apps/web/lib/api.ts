@@ -3709,6 +3709,15 @@ export interface PerformaRow {
   rendemenPctBps?: number | null;
   susutProsesPctBps?: number | null;
   susutHilangPctBps?: number | null;
+  pieceworkWageRp?: number | null;
+  subsidyRp?: number | null;
+  premiumRp?: number | null;
+  mealAllowanceRp?: number | null;
+  deductionRp?: number | null;
+  netWageRp?: number | null;
+  pin?: string | null;
+  noLp?: string | null;
+  lpCount?: number | null;
 }
 
 export interface PerformaPeriodRef {
@@ -3729,6 +3738,8 @@ export interface PerformaSummaryResponse {
     totalBakuBasah: number;
     totalBjd: number;
     weightedRendemenPctBps: number | null;
+    weightedSusutProsesPctBps: number | null;
+    weightedSusutHilangPctBps: number | null;
     averageRendemenPctBps: number | null;
     averageSusutProsesPctBps: number | null;
     averageSusutHilangPctBps: number | null;
@@ -3771,6 +3782,10 @@ export interface PerformaExpenseSummary {
   weightedRendemenPctBps: number | null;
   averageRendemenPctBps: number | null;
   totalPieceworkWageRp: number;
+  totalBorongWageRp?: number | null;
+  totalBulananWageRp?: number | null;
+  totalBulananCount?: number;
+  totalBorongCount?: number;
   totalSubsidyRp: number;
   totalPremiumRp: number;
   totalMealAllowanceRp: number;
@@ -3835,6 +3850,8 @@ export interface PerformaPeriodStat {
   totalBakuBasah: number;
   totalBjd: number;
   weightedRendemenPctBps: number | null;
+  weightedSusutProsesPctBps: number | null;
+  weightedSusutHilangPctBps: number | null;
   averageRendemenPctBps: number | null;
   averageSusutProsesPctBps: number | null;
   averageSusutHilangPctBps: number | null;
@@ -3860,6 +3877,12 @@ export interface PerformaImportResponse {
     sheetName: string;
     totalRows: number;
     replaced: boolean;
+  }>;
+  warnings?: Array<{
+    rowNumber: number;
+    rawName: string;
+    column: string;
+    message: string;
   }>;
 }
 

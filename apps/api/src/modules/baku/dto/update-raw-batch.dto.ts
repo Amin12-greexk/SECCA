@@ -1,5 +1,5 @@
-import { ApiPropertyOptional } from "@nestjs/swagger";
-import { Type } from "class-transformer";
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsNotEmpty,
@@ -10,7 +10,7 @@ import {
   Max,
   Min,
   MinLength,
-} from "class-validator";
+} from 'class-validator';
 
 export class UpdateRawBatchDto {
   @ApiPropertyOptional()

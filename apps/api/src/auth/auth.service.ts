@@ -1,11 +1,11 @@
-import { Injectable } from "@nestjs/common";
-import { JwtService } from "@nestjs/jwt";
-import { createHash } from "crypto";
-import { Prisma, UserRole } from "@prisma/client";
-import { PrismaService } from "../prisma/prisma.service";
-import { conflict, unprocessable } from "../common/errors";
-import { RegisterMitraDto } from "./dto/register-mitra.dto";
-import { ChangePasswordDto } from "./dto/change-password.dto";
+import { Injectable } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { createHash } from 'crypto';
+import { Prisma, UserRole } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { conflict, unprocessable } from '../common/errors';
+import { RegisterMitraDto } from './dto/register-mitra.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -26,18 +26,18 @@ export class AuthService {
             moduleKey: true,
             level: true,
           },
-          orderBy: { moduleKey: "asc" },
+          orderBy: { moduleKey: 'asc' },
         },
       },
     });
 
     if (!user) {
-      return unprocessable("Invalid email or password");
+      return unprocessable('Invalid email or password');
     }
 
     const passwordHash = this.hashPassword(password);
     if (passwordHash !== user.passwordHash) {
-      return unprocessable("Invalid email or password");
+      return unprocessable('Invalid email or password');
     }
 
     return this.buildAuthResponse(user);
@@ -50,7 +50,7 @@ export class AuthService {
     const name = dto.name.trim();
 
     if (!pin || pin.length < 3 || pin.length > 6) {
-      return unprocessable("PIN harus 3-6 digit angka");
+      return unprocessable('PIN harus 3-6 digit angka');
     }
 
     const [emailOwner, phoneOwner] = await Promise.all([
@@ -65,11 +65,11 @@ export class AuthService {
     ]);
 
     if (emailOwner) {
-      return conflict("Email sudah terdaftar");
+      return conflict('Email sudah terdaftar');
     }
 
     if (phoneOwner) {
-      return conflict("Nomor WhatsApp sudah terdaftar");
+      return conflict('Nomor WhatsApp sudah terdaftar');
     }
 
     try {
@@ -80,7 +80,7 @@ export class AuthService {
         });
 
         if (workerByPin?.user) {
-          return conflict("PIN ini sudah digunakan untuk mendaftar");
+          return conflict('PIN ini sudah digunakan untuk mendaftar');
         }
 
         const worker =
@@ -110,30 +110,33 @@ export class AuthService {
                 moduleKey: true,
                 level: true,
               },
-              orderBy: { moduleKey: "asc" },
+              orderBy: { moduleKey: 'asc' },
             },
           },
         });
       });
       return this.buildAuthResponse(user);
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         const target = Array.isArray(error.meta?.target)
-          ? error.meta?.target.join(",")
-          : String(error.meta?.target ?? "");
-        if (target.includes("email")) {
-          return conflict("Email sudah terdaftar");
+          ? error.meta?.target.join(',')
+          : String(error.meta?.target ?? '');
+        if (target.includes('email')) {
+          return conflict('Email sudah terdaftar');
         }
-        if (target.includes("phone")) {
-          return conflict("Nomor WhatsApp sudah terdaftar");
+        if (target.includes('phone')) {
+          return conflict('Nomor WhatsApp sudah terdaftar');
         }
-        if (target.includes("workerId")) {
-          return conflict("PIN ini sudah digunakan untuk mendaftar");
+        if (target.includes('workerId')) {
+          return conflict('PIN ini sudah digunakan untuk mendaftar');
         }
-        if (target.includes("pin")) {
-          return conflict("PIN ini sudah digunakan untuk mendaftar");
+        if (target.includes('pin')) {
+          return conflict('PIN ini sudah digunakan untuk mendaftar');
         }
-        return conflict("Data pendaftaran sudah digunakan");
+        return conflict('Data pendaftaran sudah digunakan');
       }
       throw error;
     }
@@ -151,13 +154,13 @@ export class AuthService {
             moduleKey: true,
             level: true,
           },
-          orderBy: { moduleKey: "asc" },
+          orderBy: { moduleKey: 'asc' },
         },
       },
     });
 
     if (!user) {
-      return unprocessable("User not found");
+      return unprocessable('User not found');
     }
 
     return {
@@ -175,7 +178,7 @@ export class AuthService {
 
   async changePassword(userId: string, dto: ChangePasswordDto) {
     if (!userId) {
-      return unprocessable("User not found");
+      return unprocessable('User not found');
     }
 
     const user = await this.prisma.appUser.findUnique({
@@ -187,16 +190,18 @@ export class AuthService {
     });
 
     if (!user) {
-      return unprocessable("User not found");
+      return unprocessable('User not found');
     }
 
     const currentPasswordHash = this.hashPassword(dto.currentPassword);
     if (currentPasswordHash !== user.passwordHash) {
-      return unprocessable("Password saat ini tidak sesuai");
+      return unprocessable('Password saat ini tidak sesuai');
     }
 
     if (dto.currentPassword === dto.newPassword) {
-      return unprocessable("Password baru harus berbeda dari password saat ini");
+      return unprocessable(
+        'Password baru harus berbeda dari password saat ini',
+      );
     }
 
     await this.prisma.appUser.update({
@@ -208,7 +213,7 @@ export class AuthService {
 
     return {
       ok: true,
-      message: "Password berhasil diperbarui",
+      message: 'Password berhasil diperbarui',
     };
   }
 
@@ -252,21 +257,19 @@ export class AuthService {
   }
 
   private normalizePin(pin: string) {
-    return pin.replace(/\D/g, "");
+    return pin.replace(/\D/g, '');
   }
 
   private normalizePhone(phone: string) {
     const trimmed = phone.trim();
-    if (trimmed.startsWith("+")) {
-      const normalized = `+${trimmed
-        .slice(1)
-        .replace(/\D/g, "")}`;
+    if (trimmed.startsWith('+')) {
+      const normalized = `+${trimmed.slice(1).replace(/\D/g, '')}`;
       return normalized;
     }
-    return trimmed.replace(/\D/g, "");
+    return trimmed.replace(/\D/g, '');
   }
 
   private hashPassword(password: string) {
-    return createHash("sha256").update(password).digest("hex");
+    return createHash('sha256').update(password).digest('hex');
   }
 }

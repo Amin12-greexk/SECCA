@@ -1,6 +1,6 @@
-import { ApiPropertyOptional } from "@nestjs/swagger";
-import { Transform, Type } from "class-transformer";
-import { IsBoolean, IsInt, IsOptional, Max, Min } from "class-validator";
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
+import { IsBoolean, IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export class RawBatchPageQueryDto {
   @ApiPropertyOptional({ minimum: 1, default: 1 })
@@ -20,11 +20,11 @@ export class RawBatchPageQueryDto {
 
   @ApiPropertyOptional({
     default: true,
-    description: "Jika true, hanya batch dengan sisa berat > 0 yang ditampilkan.",
+    description:
+      'Jika true, hanya batch dengan sisa berat > 0 yang ditampilkan.',
   })
   @IsOptional()
-  @Transform(({ value }) => value === true || value === "true")
+  @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   activeOnly?: boolean;
 }
-

@@ -1,11 +1,11 @@
-import "dotenv/config";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, UserRole, RoomType, RackType } from "@prisma/client";
-import { Pool } from "pg";
+import 'dotenv/config';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient, UserRole, RoomType, RackType } from '@prisma/client';
+import { Pool } from 'pg';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
-  throw new Error("DATABASE_URL is not set");
+  throw new Error('DATABASE_URL is not set');
 }
 
 const pool = new Pool({ connectionString });
@@ -14,7 +14,9 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
-  console.log("[clean] Cleansing all transactional data, non-manager users, and racks...");
+  console.log(
+    '[clean] Cleansing all transactional data, non-manager users, and racks...',
+  );
 
   // 1. Delete transactional records
   await prisma.mitraOrderRequest.deleteMany({});
@@ -56,12 +58,14 @@ async function main() {
 
   // 6. Re-create default production rooms and isolated racks
   await prisma.productionRoom.deleteMany({});
-  console.log("[clean] Re-creating default production rooms and isolated racks...");
+  console.log(
+    '[clean] Re-creating default production rooms and isolated racks...',
+  );
 
   const defaultRooms = [
-    { code: "RP1", name: "Ruang Produksi 1", type: RoomType.FACTORY },
-    { code: "RP2", name: "Ruang Produksi 2", type: RoomType.FACTORY },
-    { code: "MINIPLANT1", name: "Miniplant 1", type: RoomType.MINIPLANT },
+    { code: 'RP1', name: 'Ruang Produksi 1', type: RoomType.FACTORY },
+    { code: 'RP2', name: 'Ruang Produksi 2', type: RoomType.FACTORY },
+    { code: 'MINIPLANT1', name: 'Miniplant 1', type: RoomType.MINIPLANT },
   ];
 
   for (const r of defaultRooms) {
@@ -86,27 +90,39 @@ async function main() {
 
   // 7. Ensure standard global fallback racks
   await prisma.rackLocation.upsert({
-    where: { code: "RAK_MITRA_ORDER" },
+    where: { code: 'RAK_MITRA_ORDER' },
     update: {},
-    create: { code: "RAK_MITRA_ORDER", name: "Rak Order Mitra (Pabrik)", type: RackType.MITRA_ORDER },
+    create: {
+      code: 'RAK_MITRA_ORDER',
+      name: 'Rak Order Mitra (Pabrik)',
+      type: RackType.MITRA_ORDER,
+    },
   });
   await prisma.rackLocation.upsert({
-    where: { code: "RAK_FINISHED" },
+    where: { code: 'RAK_FINISHED' },
     update: {},
-    create: { code: "RAK_FINISHED", name: "Rak Finished (Pabrik)", type: RackType.FINISHED },
+    create: {
+      code: 'RAK_FINISHED',
+      name: 'Rak Finished (Pabrik)',
+      type: RackType.FINISHED,
+    },
   });
   await prisma.rackLocation.upsert({
-    where: { code: "RAK_FINISHED_MINIPLANT" },
+    where: { code: 'RAK_FINISHED_MINIPLANT' },
     update: {},
-    create: { code: "RAK_FINISHED_MINIPLANT", name: "Rak Finished Miniplant", type: RackType.FINISHED },
+    create: {
+      code: 'RAK_FINISHED_MINIPLANT',
+      name: 'Rak Finished Miniplant',
+      type: RackType.FINISHED,
+    },
   });
 
-  console.log("[clean] Database cleansing completed successfully!");
+  console.log('[clean] Database cleansing completed successfully!');
 }
 
 main()
   .catch((err) => {
-    console.error("[clean] Error cleansing database:", err);
+    console.error('[clean] Error cleansing database:', err);
     process.exit(1);
   })
   .finally(async () => {

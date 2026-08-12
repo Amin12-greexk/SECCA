@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable } from '@nestjs/common';
 import {
   LotStatus,
   MovementType,
@@ -7,26 +7,31 @@ import {
   WorkLane,
   WorkOrderItemStatus,
   WorkOrderStatus,
-} from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
-import { InventoryMovementService } from "../../common/inventory/inventory-movement.service";
-import { WorkOrderAssignmentService } from "../work-orders/work-order-assignment.service";
-import { badRequest, conflict, notFound, unprocessable } from "../../common/errors";
-import { LOCATION_CODES } from "../../common/constants";
+} from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { InventoryMovementService } from '../../common/inventory/inventory-movement.service';
+import { WorkOrderAssignmentService } from '../work-orders/work-order-assignment.service';
+import {
+  badRequest,
+  conflict,
+  notFound,
+  unprocessable,
+} from '../../common/errors';
+import { LOCATION_CODES } from '../../common/constants';
 import {
   getWorkerFinishedRack,
   getWorkerOrderRack,
-} from "../../common/inventory/rack-location";
+} from '../../common/inventory/rack-location';
 import {
   calcRendemenMainBps,
   calcRendemenNetBps,
   calcSusutHilang,
   calcSusutProses,
   toBps,
-} from "../../common/utils/weight";
-import { FinishDto } from "./dto/finish.dto";
-import { QueryFinishReceiptsDto } from "./dto/query-finish-receipts.dto";
-import { UpdateFinishReceiptDto } from "./dto/update-finish-receipt.dto";
+} from '../../common/utils/weight';
+import { FinishDto } from './dto/finish.dto';
+import { QueryFinishReceiptsDto } from './dto/query-finish-receipts.dto';
+import { UpdateFinishReceiptDto } from './dto/update-finish-receipt.dto';
 
 @Injectable()
 export class FinishService {
@@ -47,18 +52,19 @@ export class FinishService {
         where: {
           weightGram: lot.wetWeightGram,
           orderRequest: {
-            status: "FULFILLED",
+            status: 'FULFILLED',
             workerId: { not: null },
           },
         },
-        orderBy: { createdAt: "asc" },
+        orderBy: { createdAt: 'asc' },
         include: {
           workItems: { select: { id: true } },
           orderRequest: { select: { workerId: true } },
         },
       });
       const allocationLine = allocationLines.find(
-        (line) => line.workItems.length < line.lpCount && line.orderRequest.workerId,
+        (line) =>
+          line.workItems.length < line.lpCount && line.orderRequest.workerId,
       );
 
       if (!allocationLine || !allocationLine.orderRequest.workerId) {
@@ -71,7 +77,7 @@ export class FinishService {
         lane: WorkLane.READY_TO_SUBMIT,
         startedAt: new Date(),
         mitraOrderRequestLineId: allocationLine.id,
-        note: "Automatic assignment from fulfilled trainer order at finish",
+        note: 'Automatic assignment from fulfilled trainer order at finish',
       });
     });
   }
@@ -93,18 +99,18 @@ export class FinishService {
       dryCheckedAt,
     } = input;
 
-    if (status === WorkOrderItemStatus.COMPLETED) return "SUBMITTED";
-    if (status === WorkOrderItemStatus.CANCELED) return "CANCELED";
-    if (lane === WorkLane.NEXT_DAY) return "NEXT_DAY";
-    if (lane === WorkLane.READY_TO_SUBMIT) return "READY_TO_SUBMIT";
-    if (dryCheckedAt) return "READY_TO_SUBMIT";
+    if (status === WorkOrderItemStatus.COMPLETED) return 'SUBMITTED';
+    if (status === WorkOrderItemStatus.CANCELED) return 'CANCELED';
+    if (lane === WorkLane.NEXT_DAY) return 'NEXT_DAY';
+    if (lane === WorkLane.READY_TO_SUBMIT) return 'READY_TO_SUBMIT';
+    if (dryCheckedAt) return 'READY_TO_SUBMIT';
     if (dryingStartedAt || readyAt) {
       if (dryingReadyAt && dryingReadyAt.getTime() <= Date.now()) {
-        return "DRYING_QC";
+        return 'DRYING_QC';
       }
-      return "DRYING";
+      return 'DRYING';
     }
-    return "IN_PROGRESS";
+    return 'IN_PROGRESS';
   }
 
   private calcMetrics(dryIn: number, mainOut: number, byProduct: number) {
@@ -125,11 +131,18 @@ export class FinishService {
     };
   }
 
-  private calcPayroll(rateRpPerGram: number, mainOut: number, byProduct: number) {
+  private calcPayroll(
+    rateRpPerGram: number,
+    mainOut: number,
+    byProduct: number,
+  ) {
     const byProductCoefficientBps = this.getByProductCoefficientBps();
-    const payrollWeightedGramBps = mainOut * 10000 + byProduct * byProductCoefficientBps;
+    const payrollWeightedGramBps =
+      mainOut * 10000 + byProduct * byProductCoefficientBps;
     const payrollBaseGram = Number((payrollWeightedGramBps / 10000).toFixed(2));
-    const amountRp = Math.round((rateRpPerGram * payrollWeightedGramBps) / 10000);
+    const amountRp = Math.round(
+      (rateRpPerGram * payrollWeightedGramBps) / 10000,
+    );
 
     return {
       byProductCoefficientBps,
@@ -159,11 +172,17 @@ export class FinishService {
         continue;
       }
 
-      byType.set(resultGradeTypeId, (byType.get(resultGradeTypeId) ?? 0) + weightGram);
+      byType.set(
+        resultGradeTypeId,
+        (byType.get(resultGradeTypeId) ?? 0) + weightGram,
+      );
     }
 
     return Array.from(byType.entries())
-      .map(([resultGradeTypeId, weightGram]) => ({ resultGradeTypeId, weightGram }))
+      .map(([resultGradeTypeId, weightGram]) => ({
+        resultGradeTypeId,
+        weightGram,
+      }))
       .sort((left, right) =>
         left.resultGradeTypeId.localeCompare(right.resultGradeTypeId),
       );
@@ -187,7 +206,7 @@ export class FinishService {
     });
 
     if (!barangJadi) {
-      return notFound("Barang jadi tidak ditemukan", { barangJadiId });
+      return notFound('Barang jadi tidak ditemukan', { barangJadiId });
     }
 
     return barangJadi;
@@ -195,14 +214,12 @@ export class FinishService {
 
   private async resolveResultGradeBreakdown(
     tx: Prisma.TransactionClient,
-    barangJadi:
-      | {
-          id: string;
-          resultGrades: Array<{
-            resultGradeTypeId: string;
-          }>;
-        }
-      | null,
+    barangJadi: {
+      id: string;
+      resultGrades: Array<{
+        resultGradeTypeId: string;
+      }>;
+    } | null,
     resultGrades:
       | Array<{
           resultGradeTypeId: string;
@@ -228,11 +245,11 @@ export class FinishService {
       where: {
         id: { in: typeIds },
       },
-      orderBy: { name: "asc" },
+      orderBy: { name: 'asc' },
     });
 
     if (resultGradeTypes.length !== typeIds.length) {
-      return notFound("Ada grade hasil yang tidak ditemukan", {
+      return notFound('Ada grade hasil yang tidak ditemukan', {
         requested: typeIds.length,
         found: resultGradeTypes.length,
       });
@@ -244,10 +261,13 @@ export class FinishService {
       );
       const invalidIds = typeIds.filter((item) => !allowedIds.has(item));
       if (invalidIds.length > 0) {
-        return badRequest("Grade hasil tidak sesuai dengan barang jadi terpilih", {
-          barangJadiId: barangJadi.id,
-          invalidResultGradeTypeIds: invalidIds,
-        });
+        return badRequest(
+          'Grade hasil tidak sesuai dengan barang jadi terpilih',
+          {
+            barangJadiId: barangJadi.id,
+            invalidResultGradeTypeIds: invalidIds,
+          },
+        );
       }
     }
 
@@ -258,7 +278,10 @@ export class FinishService {
         name: byId.get(item.resultGradeTypeId)?.name ?? item.resultGradeTypeId,
         weightGram: item.weightGram,
       })),
-      totalWeightGram: normalized.reduce((sum, item) => sum + item.weightGram, 0),
+      totalWeightGram: normalized.reduce(
+        (sum, item) => sum + item.weightGram,
+        0,
+      ),
     };
   }
 
@@ -279,11 +302,11 @@ export class FinishService {
         effectiveFrom: { lte: at },
         OR: [{ effectiveTo: null }, { effectiveTo: { gt: at } }],
       },
-      orderBy: { effectiveFrom: "desc" },
+      orderBy: { effectiveFrom: 'desc' },
     });
 
     if (!baseTariff) {
-      return unprocessable("Tarif bentuk belum dikonfigurasi", {
+      return unprocessable('Tarif bentuk belum dikonfigurasi', {
         shapeGradeId: lot.gradeId,
         at: at.toISOString(),
       });
@@ -301,7 +324,7 @@ export class FinishService {
           effectiveFrom: { lte: at },
           OR: [{ effectiveTo: null }, { effectiveTo: { gt: at } }],
         },
-        orderBy: { effectiveFrom: "desc" },
+        orderBy: { effectiveFrom: 'desc' },
       });
       featherRate = featherTariff?.rateRpPerGram ?? 0;
     }
@@ -316,7 +339,7 @@ export class FinishService {
           effectiveFrom: { lte: at },
           OR: [{ effectiveTo: null }, { effectiveTo: { gt: at } }],
         },
-        orderBy: { effectiveFrom: "desc" },
+        orderBy: { effectiveFrom: 'desc' },
       });
       colorRate = colorTariff?.rateRpPerGram ?? 0;
     }
@@ -327,7 +350,11 @@ export class FinishService {
   private async calculatePayrollAmount(
     tx: Prisma.TransactionClient,
     input: {
-      lot: { gradeId: string; featherGradeId: string | null; colorGradeId: string | null };
+      lot: {
+        gradeId: string;
+        featherGradeId: string | null;
+        colorGradeId: string | null;
+      };
       returnedAt: Date;
       wetWeightGram: number;
       dryInGram: number;
@@ -336,12 +363,18 @@ export class FinishService {
       resultGrades: Array<{ resultGradeTypeId: string; weightGram: number }>;
     },
   ) {
-    const rateRpPerGram = await this.resolveRateRpPerGram(tx, input.lot, input.returnedAt);
+    const rateRpPerGram = await this.resolveRateRpPerGram(
+      tx,
+      input.lot,
+      input.returnedAt,
+    );
     const rawCalcBaseSetting = await tx.systemSetting.findUnique({
-      where: { key: "RAW_MATERIAL_PAYROLL_CALC_BASE" },
+      where: { key: 'RAW_MATERIAL_PAYROLL_CALC_BASE' },
     });
     const rawWeightGram =
-      rawCalcBaseSetting?.value === "DRY" ? input.dryInGram : input.wetWeightGram;
+      rawCalcBaseSetting?.value === 'DRY'
+        ? input.dryInGram
+        : input.wetWeightGram;
     const rawMaterialCostRp = Math.round(rawWeightGram * rateRpPerGram);
 
     let totalOutputValueRp = 0;
@@ -351,9 +384,12 @@ export class FinishService {
         where: {
           resultGradeTypeId: item.resultGradeTypeId,
           effectiveFrom: { lte: input.returnedAt },
-          OR: [{ effectiveTo: null }, { effectiveTo: { gt: input.returnedAt } }],
+          OR: [
+            { effectiveTo: null },
+            { effectiveTo: { gt: input.returnedAt } },
+          ],
         },
-        orderBy: { effectiveFrom: "desc" },
+        orderBy: { effectiveFrom: 'desc' },
       });
       if (!tariff) {
         hasMissingResultGradeTariff = true;
@@ -368,7 +404,9 @@ export class FinishService {
       input.byProductWeightGram,
     );
     const useLegacyPayroll =
-      input.resultGrades.length === 0 || hasMissingResultGradeTariff || totalOutputValueRp === 0;
+      input.resultGrades.length === 0 ||
+      hasMissingResultGradeTariff ||
+      totalOutputValueRp === 0;
 
     return {
       ...legacyPayroll,
@@ -382,15 +420,12 @@ export class FinishService {
   async findWorkItemByLpCode(lpCode: string) {
     const normalizedCode = lpCode.trim().toUpperCase();
     if (!normalizedCode) {
-      return badRequest("Nomor LP wajib diisi");
+      return badRequest('Nomor LP wajib diisi');
     }
 
     let lot = await this.prisma.productionLot.findFirst({
       where: {
-        OR: [
-          { externalId: normalizedCode },
-          { lotNumber: normalizedCode },
-        ],
+        OR: [{ externalId: normalizedCode }, { lotNumber: normalizedCode }],
       },
       include: {
         grade: true,
@@ -411,17 +446,20 @@ export class FinishService {
     });
 
     if (!lot) {
-      return notFound("LP tidak ditemukan", { lpCode: normalizedCode });
+      return notFound('LP tidak ditemukan', { lpCode: normalizedCode });
     }
 
     let workItem = lot.workItem;
     if (!workItem) {
       const autoAssigned = await this.assignFulfilledTrainerLotForSetoran(lot);
       if (!autoAssigned) {
-        return conflict("LP belum di-assign ke work order atau order trainer yang sudah dipenuhi", {
-          lpCode: normalizedCode,
-          lotId: lot.id,
-        });
+        return conflict(
+          'LP belum di-assign ke work order atau order trainer yang sudah dipenuhi',
+          {
+            lpCode: normalizedCode,
+            lotId: lot.id,
+          },
+        );
       }
 
       lot = await this.prisma.productionLot.findUniqueOrThrow({
@@ -441,7 +479,7 @@ export class FinishService {
       });
       workItem = lot.workItem;
       if (!workItem) {
-        return conflict("Gagal membuat assignment LP untuk setoran", {
+        return conflict('Gagal membuat assignment LP untuk setoran', {
           lpCode: normalizedCode,
           lotId: lot.id,
         });
@@ -481,7 +519,7 @@ export class FinishService {
       pecahBonId: lot.externalId,
       workerId: workItem.workOrder.workerId,
       workerName: workItem.workOrder.worker.name,
-      grade: `${lot.grade.code}/${lot.featherGrade?.code ?? "-"}/${lot.colorGrade?.code ?? "-"}`,
+      grade: `${lot.grade.code}/${lot.featherGrade?.code ?? '-'}/${lot.colorGrade?.code ?? '-'}`,
       dryInGram: lot.dryWeightGramLocked,
       wetWeightGram: lot.wetWeightGram,
       moisturePercent: Number((lot.moistureBps / 100).toFixed(2)),
@@ -500,7 +538,7 @@ export class FinishService {
     const requestedPage = query.page ?? 1;
     const page = Math.max(1, requestedPage);
     const search = query.search?.trim();
-    const order = query.order ?? "desc";
+    const order = query.order ?? 'desc';
 
     const where: Prisma.FinishReceiptWhereInput = {};
 
@@ -521,8 +559,8 @@ export class FinishService {
           workOrderItem: {
             lot: {
               OR: [
-                { externalId: { contains: search, mode: "insensitive" } },
-                { lotNumber: { contains: search, mode: "insensitive" } },
+                { externalId: { contains: search, mode: 'insensitive' } },
+                { lotNumber: { contains: search, mode: 'insensitive' } },
               ],
             },
           },
@@ -532,8 +570,8 @@ export class FinishService {
             workOrder: {
               worker: {
                 OR: [
-                  { name: { contains: search, mode: "insensitive" } },
-                  { code: { contains: search, mode: "insensitive" } },
+                  { name: { contains: search, mode: 'insensitive' } },
+                  { code: { contains: search, mode: 'insensitive' } },
                 ],
               },
             },
@@ -543,9 +581,17 @@ export class FinishService {
           workOrderItem: {
             lot: {
               OR: [
-                { grade: { code: { contains: search, mode: "insensitive" } } },
-                { featherGrade: { code: { contains: search, mode: "insensitive" } } },
-                { colorGrade: { code: { contains: search, mode: "insensitive" } } },
+                { grade: { code: { contains: search, mode: 'insensitive' } } },
+                {
+                  featherGrade: {
+                    code: { contains: search, mode: 'insensitive' },
+                  },
+                },
+                {
+                  colorGrade: {
+                    code: { contains: search, mode: 'insensitive' },
+                  },
+                },
               ],
             },
           },
@@ -568,7 +614,7 @@ export class FinishService {
             },
             orderBy: {
               resultGradeType: {
-                name: "asc",
+                name: 'asc',
               },
             },
           },
@@ -600,12 +646,13 @@ export class FinishService {
         id: row.id,
         workOrderItemId: row.workOrderItemId,
         returnedAt: row.returnedAt,
-        noLp: row.workOrderItem.lot.externalId ?? row.workOrderItem.lot.lotNumber,
+        noLp:
+          row.workOrderItem.lot.externalId ?? row.workOrderItem.lot.lotNumber,
         lotNumber: row.workOrderItem.lot.lotNumber,
         workerId: row.workOrderItem.workOrder.workerId,
         workerName: row.workOrderItem.workOrder.worker.name,
         workerCode: row.workOrderItem.workOrder.worker.code ?? null,
-        grade: `${row.workOrderItem.lot.grade.code}/${row.workOrderItem.lot.featherGrade?.code ?? "-"}/${row.workOrderItem.lot.colorGrade?.code ?? "-"}`,
+        grade: `${row.workOrderItem.lot.grade.code}/${row.workOrderItem.lot.featherGrade?.code ?? '-'}/${row.workOrderItem.lot.colorGrade?.code ?? '-'}`,
         barangJadi: row.barangJadi
           ? {
               id: row.barangJadi.id,
@@ -652,7 +699,7 @@ export class FinishService {
             },
             orderBy: {
               resultGradeType: {
-                name: "asc",
+                name: 'asc',
               },
             },
           },
@@ -677,12 +724,14 @@ export class FinishService {
       });
 
       if (!receipt) {
-        return notFound("Finish receipt not found", { receiptId });
+        return notFound('Finish receipt not found', { receiptId });
       }
 
       const barangJadi = await this.ensureBarangJadiExists(
         tx,
-        dto.barangJadiId === undefined ? receipt.barangJadiId : dto.barangJadiId,
+        dto.barangJadiId === undefined
+          ? receipt.barangJadiId
+          : dto.barangJadiId,
       );
 
       if (
@@ -693,10 +742,12 @@ export class FinishService {
         dto.notes === undefined &&
         dto.resultGrades === undefined
       ) {
-        return badRequest("Tidak ada perubahan data");
+        return badRequest('Tidak ada perubahan data');
       }
 
-      const returnedAt = dto.returnedAt ? new Date(dto.returnedAt) : receipt.returnedAt;
+      const returnedAt = dto.returnedAt
+        ? new Date(dto.returnedAt)
+        : receipt.returnedAt;
       const dryIn = receipt.dryInGram;
       const effectiveResultGrades =
         dto.resultGrades === undefined
@@ -711,7 +762,7 @@ export class FinishService {
         effectiveResultGrades,
       );
       if (resultGradeBreakdown.items.length > 0 && !barangJadi) {
-        return badRequest("Pilih barang jadi sebelum mengisi grade hasil", {
+        return badRequest('Pilih barang jadi sebelum mengisi grade hasil', {
           receiptId,
         });
       }
@@ -721,7 +772,7 @@ export class FinishService {
         dto.resultGrades !== undefined &&
         resultGradeBreakdown.items.length === 0
       ) {
-        return badRequest("Isi grade hasil barang jadi terlebih dahulu", {
+        return badRequest('Isi grade hasil barang jadi terlebih dahulu', {
           barangJadiId: barangJadi.id,
         });
       }
@@ -729,10 +780,12 @@ export class FinishService {
         resultGradeBreakdown.items.length > 0
           ? resultGradeBreakdown.totalWeightGram
           : Math.round(dto.mainOutWeightGram ?? receipt.mainOutWeightGram);
-      const byProduct = Math.round(dto.byProductWeightGram ?? receipt.byProductWeightGram);
+      const byProduct = Math.round(
+        dto.byProductWeightGram ?? receipt.byProductWeightGram,
+      );
 
       if (mainOut + byProduct > dryIn) {
-        return badRequest("Output weight exceeds dry input", {
+        return badRequest('Output weight exceeds dry input', {
           dryInGram: dryIn,
           mainOutGram: mainOut,
           byProductGram: byProduct,
@@ -758,7 +811,10 @@ export class FinishService {
         where: { id: receipt.id },
         data: {
           returnedAt,
-          barangJadiId: dto.barangJadiId === undefined ? receipt.barangJadiId : dto.barangJadiId ?? null,
+          barangJadiId:
+            dto.barangJadiId === undefined
+              ? receipt.barangJadiId
+              : (dto.barangJadiId ?? null),
           mainOutWeightGram: mainOut,
           byProductWeightGram: byProduct,
           susutProsesGram: metrics.susutProsesGram,
@@ -784,7 +840,7 @@ export class FinishService {
             },
             orderBy: {
               resultGradeType: {
-                name: "asc",
+                name: 'asc',
               },
             },
           },
@@ -868,7 +924,7 @@ export class FinishService {
       });
 
       if (!receipt) {
-        return notFound("Finish receipt not found", { receiptId });
+        return notFound('Finish receipt not found', { receiptId });
       }
 
       const workerId = receipt.workOrderItem.workOrder.workerId;
@@ -877,7 +933,7 @@ export class FinishService {
       });
       if (active && active.workOrderId !== receipt.workOrderItem.workOrderId) {
         return conflict(
-          "Tidak bisa rollback setoran karena worker sudah punya order aktif lain",
+          'Tidak bisa rollback setoran karena worker sudah punya order aktif lain',
           {
             workerId,
             activeWorkOrderId: active.workOrderId,
@@ -918,7 +974,7 @@ export class FinishService {
           fromLocationId: receipt.workOrderItem.lot.locationId,
           toLocationId: orderLocation.id,
           movementType: MovementType.MOVE,
-          note: "Rollback finish receipt",
+          note: 'Rollback finish receipt',
         });
       }
 
@@ -953,26 +1009,35 @@ export class FinishService {
       const workItem = await tx.workOrderItem.findUnique({
         where: { id: dto.workOrderItemId },
         include: {
-          lot: { include: { grade: true, featherGrade: true, colorGrade: true, location: true } },
+          lot: {
+            include: {
+              grade: true,
+              featherGrade: true,
+              colorGrade: true,
+              location: true,
+            },
+          },
           workOrder: { include: { worker: { include: { trainer: true } } } },
-          mitraOrderRequestLine: { include: { orderRequest: { include: { requestedBy: true } } } },
+          mitraOrderRequestLine: {
+            include: { orderRequest: { include: { requestedBy: true } } },
+          },
         },
       });
 
       if (!workItem) {
-        return notFound("Work order item not found", {
+        return notFound('Work order item not found', {
           workOrderItemId: dto.workOrderItemId,
         });
       }
 
       if (workItem.status === WorkOrderItemStatus.COMPLETED) {
-        return conflict("Work order item already finished", {
+        return conflict('Work order item already finished', {
           workOrderItemId: workItem.id,
         });
       }
 
       if (workItem.status === WorkOrderItemStatus.CANCELED) {
-        return conflict("Work order item sudah dibatalkan", {
+        return conflict('Work order item sudah dibatalkan', {
           workOrderItemId: workItem.id,
         });
       }
@@ -987,11 +1052,15 @@ export class FinishService {
       }
 
       const returnedAt = new Date(dto.returnedAt);
-      if (workItem.dryingReadyAt && returnedAt.getTime() < workItem.dryingReadyAt.getTime()) {
+      if (
+        workItem.dryingReadyAt &&
+        returnedAt.getTime() < workItem.dryingReadyAt.getTime()
+      ) {
         const remainingMinutes = Math.ceil(
-          (workItem.dryingReadyAt.getTime() - returnedAt.getTime()) / (60 * 1000),
+          (workItem.dryingReadyAt.getTime() - returnedAt.getTime()) /
+            (60 * 1000),
         );
-        return conflict("Waktu pengeringan belum mencapai batas minimal", {
+        return conflict('Waktu pengeringan belum mencapai batas minimal', {
           workOrderItemId: workItem.id,
           dryingReadyAt: workItem.dryingReadyAt,
           remainingMinutes,
@@ -999,24 +1068,31 @@ export class FinishService {
       }
 
       if (workItem.dryingStartedAt && !workItem.dryCheckedAt) {
-        return conflict("Koreksi kering belum diselesaikan", {
+        return conflict('Koreksi kering belum diselesaikan', {
           workOrderItemId: workItem.id,
         });
       }
 
-      const barangJadi = await this.ensureBarangJadiExists(tx, dto.barangJadiId);
+      const barangJadi = await this.ensureBarangJadiExists(
+        tx,
+        dto.barangJadiId,
+      );
       const resultGradeBreakdown = await this.resolveResultGradeBreakdown(
         tx,
         barangJadi,
         dto.resultGrades,
       );
       if (resultGradeBreakdown.items.length > 0 && !barangJadi) {
-        return badRequest("Pilih barang jadi sebelum mengisi grade hasil", {
+        return badRequest('Pilih barang jadi sebelum mengisi grade hasil', {
           workOrderItemId: workItem.id,
         });
       }
-      if (barangJadi && barangJadi.resultGrades.length > 0 && resultGradeBreakdown.items.length === 0) {
-        return badRequest("Isi grade hasil barang jadi terlebih dahulu", {
+      if (
+        barangJadi &&
+        barangJadi.resultGrades.length > 0 &&
+        resultGradeBreakdown.items.length === 0
+      ) {
+        return badRequest('Isi grade hasil barang jadi terlebih dahulu', {
           barangJadiId: barangJadi.id,
         });
       }
@@ -1029,7 +1105,7 @@ export class FinishService {
       const dryIn = workItem.lot.dryWeightGramLocked;
 
       if (mainOut + byProduct > dryIn) {
-        return badRequest("Output weight exceeds dry input", {
+        return badRequest('Output weight exceeds dry input', {
           dryInGram: dryIn,
           mainOutGram: mainOut,
           byProductGram: byProduct,
@@ -1067,12 +1143,12 @@ export class FinishService {
           where: { id: dto.targetLocationId },
         });
         if (!finishedLocation) {
-          return notFound("Target location not found", {
+          return notFound('Target location not found', {
             targetLocationId: dto.targetLocationId,
           });
         }
         if (finishedLocation.type !== RackType.FINISHED) {
-          return conflict("Setoran hanya boleh masuk ke rak FINISHED", {
+          return conflict('Setoran hanya boleh masuk ke rak FINISHED', {
             targetLocationId: dto.targetLocationId,
           });
         }
@@ -1082,7 +1158,7 @@ export class FinishService {
             canonicalFinishedLocation.productionRoomId
         ) {
           return conflict(
-            "Rak finished harus berada di ruang produksi trainer mitra",
+            'Rak finished harus berada di ruang produksi trainer mitra',
             {
               expectedLocationId: canonicalFinishedLocation.id,
               targetLocationId: dto.targetLocationId,
@@ -1143,7 +1219,7 @@ export class FinishService {
         fromLocationId: workItem.lot.locationId,
         toLocationId: finishedLocation.id,
         movementType: MovementType.MOVE,
-        note: "Finish work order",
+        note: 'Finish work order',
       });
 
       const remaining = await tx.workOrderItem.count({

@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { Type } from "class-transformer";
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
@@ -9,8 +9,8 @@ import {
   Max,
   Min,
   ValidateNested,
-} from "class-validator";
-import { LotSourceDto } from "./lot-source.dto";
+} from 'class-validator';
+import { LotSourceDto } from './lot-source.dto';
 
 export class CreateLotDto {
   @ApiProperty()

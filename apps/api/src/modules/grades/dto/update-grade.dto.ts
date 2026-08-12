@@ -1,7 +1,7 @@
-import { ApiPropertyOptional } from "@nestjs/swagger";
-import { Transform } from "class-transformer";
-import { IsEnum, IsOptional, IsString, MinLength } from "class-validator";
-import { GradeType } from "@prisma/client";
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { GradeType } from '@prisma/client';
 
 export class UpdateGradeDto {
   @ApiPropertyOptional()

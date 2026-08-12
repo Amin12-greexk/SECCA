@@ -1,12 +1,12 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
-import { badRequest, conflict, notFound } from "../../common/errors";
-import { CreateBarangJadiDto } from "./dto/create-barang-jadi.dto";
-import { UpdateBarangJadiDto } from "./dto/update-barang-jadi.dto";
-import { CreateByProductTypeDto } from "./dto/create-by-product-type.dto";
-import { UpdateByProductTypeDto } from "./dto/update-by-product-type.dto";
-import { CreateResultGradeTypeDto } from "./dto/create-result-grade-type.dto";
-import { UpdateResultGradeTypeDto } from "./dto/update-result-grade-type.dto";
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { badRequest, conflict, notFound } from '../../common/errors';
+import { CreateBarangJadiDto } from './dto/create-barang-jadi.dto';
+import { UpdateBarangJadiDto } from './dto/update-barang-jadi.dto';
+import { CreateByProductTypeDto } from './dto/create-by-product-type.dto';
+import { UpdateByProductTypeDto } from './dto/update-by-product-type.dto';
+import { CreateResultGradeTypeDto } from './dto/create-result-grade-type.dto';
+import { UpdateResultGradeTypeDto } from './dto/update-result-grade-type.dto';
 
 @Injectable()
 export class BarangJadiService {
@@ -27,11 +27,11 @@ export class BarangJadiService {
       where: {
         id: { in: normalizedIds },
       },
-      orderBy: { name: "asc" },
+      orderBy: { name: 'asc' },
     });
 
     if (rows.length !== normalizedIds.length) {
-      return notFound("Ada komponen by product yang tidak ditemukan", {
+      return notFound('Ada komponen by product yang tidak ditemukan', {
         requested: normalizedIds.length,
         found: rows.length,
       });
@@ -51,11 +51,11 @@ export class BarangJadiService {
       where: {
         id: { in: normalizedIds },
       },
-      orderBy: { name: "asc" },
+      orderBy: { name: 'asc' },
     });
 
     if (rows.length !== normalizedIds.length) {
-      return notFound("Ada grade hasil barang jadi yang tidak ditemukan", {
+      return notFound('Ada grade hasil barang jadi yang tidak ditemukan', {
         requested: normalizedIds.length,
         found: rows.length,
       });
@@ -65,48 +65,50 @@ export class BarangJadiService {
   }
 
   findAll() {
-    return this.prisma.barangJadi.findMany({
-      include: {
-        byProducts: {
-          include: {
-            byProductType: true,
+    return this.prisma.barangJadi
+      .findMany({
+        include: {
+          byProducts: {
+            include: {
+              byProductType: true,
+            },
+            orderBy: {
+              byProductType: {
+                name: 'asc',
+              },
+            },
           },
-          orderBy: {
-            byProductType: {
-              name: "asc",
+          resultGrades: {
+            include: {
+              resultGradeType: true,
+            },
+            orderBy: {
+              resultGradeType: {
+                name: 'asc',
+              },
             },
           },
         },
-        resultGrades: {
-          include: {
-            resultGradeType: true,
-          },
-          orderBy: {
-            resultGradeType: {
-              name: "asc",
-            },
-          },
-        },
-      },
-      orderBy: { name: "asc" },
-    }).then((rows) =>
-      rows.map((row) => ({
-        ...row,
-        byProducts: row.byProducts.map((item) => item.byProductType),
-        resultGrades: row.resultGrades.map((item) => item.resultGradeType),
-      })),
-    );
+        orderBy: { name: 'asc' },
+      })
+      .then((rows) =>
+        rows.map((row) => ({
+          ...row,
+          byProducts: row.byProducts.map((item) => item.byProductType),
+          resultGrades: row.resultGrades.map((item) => item.resultGradeType),
+        })),
+      );
   }
 
   findAllByProductTypes() {
     return this.prisma.byProductType.findMany({
-      orderBy: { name: "asc" },
+      orderBy: { name: 'asc' },
     });
   }
 
   findAllResultGradeTypes() {
     return this.prisma.barangJadiGradeType.findMany({
-      orderBy: { name: "asc" },
+      orderBy: { name: 'asc' },
     });
   }
 
@@ -142,89 +144,95 @@ export class BarangJadiService {
   async create(dto: CreateBarangJadiDto) {
     const normalizedName = this.normalizeName(dto.name);
     if (!normalizedName) {
-      return badRequest("Nama barang jadi wajib diisi");
+      return badRequest('Nama barang jadi wajib diisi');
     }
 
-    const byProductTypes = await this.resolveByProductTypes(dto.byProductTypeIds);
-    const resultGradeTypes = await this.resolveResultGradeTypes(dto.resultGradeTypeIds);
+    const byProductTypes = await this.resolveByProductTypes(
+      dto.byProductTypeIds,
+    );
+    const resultGradeTypes = await this.resolveResultGradeTypes(
+      dto.resultGradeTypeIds,
+    );
 
     const existing = await this.prisma.barangJadi.findFirst({
       where: {
         name: {
           equals: normalizedName,
-          mode: "insensitive",
+          mode: 'insensitive',
         },
       },
     });
 
     if (existing) {
-      return conflict("Nama barang jadi sudah ada", {
+      return conflict('Nama barang jadi sudah ada', {
         barangJadiId: existing.id,
         name: existing.name,
       });
     }
 
-    return this.prisma.barangJadi.create({
-      data: {
-        name: normalizedName,
-        byProductKeys: byProductTypes.map((item) => item.name),
-        byProducts: {
-          create: byProductTypes.map((item) => ({
-            byProductTypeId: item.id,
-          })),
-        },
-        resultGrades: {
-          create: resultGradeTypes.map((item) => ({
-            resultGradeTypeId: item.id,
-          })),
-        },
-      },
-      include: {
-        byProducts: {
-          include: {
-            byProductType: true,
+    return this.prisma.barangJadi
+      .create({
+        data: {
+          name: normalizedName,
+          byProductKeys: byProductTypes.map((item) => item.name),
+          byProducts: {
+            create: byProductTypes.map((item) => ({
+              byProductTypeId: item.id,
+            })),
           },
-          orderBy: {
-            byProductType: {
-              name: "asc",
+          resultGrades: {
+            create: resultGradeTypes.map((item) => ({
+              resultGradeTypeId: item.id,
+            })),
+          },
+        },
+        include: {
+          byProducts: {
+            include: {
+              byProductType: true,
+            },
+            orderBy: {
+              byProductType: {
+                name: 'asc',
+              },
+            },
+          },
+          resultGrades: {
+            include: {
+              resultGradeType: true,
+            },
+            orderBy: {
+              resultGradeType: {
+                name: 'asc',
+              },
             },
           },
         },
-        resultGrades: {
-          include: {
-            resultGradeType: true,
-          },
-          orderBy: {
-            resultGradeType: {
-              name: "asc",
-            },
-          },
-        },
-      },
-    }).then((row) => ({
-      ...row,
-      byProducts: row.byProducts.map((item) => item.byProductType),
-      resultGrades: row.resultGrades.map((item) => item.resultGradeType),
-    }));
+      })
+      .then((row) => ({
+        ...row,
+        byProducts: row.byProducts.map((item) => item.byProductType),
+        resultGrades: row.resultGrades.map((item) => item.resultGradeType),
+      }));
   }
 
   async createResultGradeType(dto: CreateResultGradeTypeDto) {
     const normalizedName = this.normalizeName(dto.name);
     if (!normalizedName) {
-      return badRequest("Nama grade hasil wajib diisi");
+      return badRequest('Nama grade hasil wajib diisi');
     }
 
     const existing = await this.prisma.barangJadiGradeType.findFirst({
       where: {
         name: {
           equals: normalizedName,
-          mode: "insensitive",
+          mode: 'insensitive',
         },
       },
     });
 
     if (existing) {
-      return conflict("Nama grade hasil sudah ada", {
+      return conflict('Nama grade hasil sudah ada', {
         resultGradeTypeId: existing.id,
         name: existing.name,
       });
@@ -282,79 +290,85 @@ export class BarangJadiService {
     });
 
     if (!existing) {
-      return notFound("Barang jadi tidak ditemukan", { id });
+      return notFound('Barang jadi tidak ditemukan', { id });
     }
 
     const normalizedName = this.normalizeName(dto.name);
     if (!normalizedName) {
-      return badRequest("Nama barang jadi wajib diisi");
+      return badRequest('Nama barang jadi wajib diisi');
     }
 
-    const byProductTypes = await this.resolveByProductTypes(dto.byProductTypeIds);
-    const resultGradeTypes = await this.resolveResultGradeTypes(dto.resultGradeTypeIds);
+    const byProductTypes = await this.resolveByProductTypes(
+      dto.byProductTypeIds,
+    );
+    const resultGradeTypes = await this.resolveResultGradeTypes(
+      dto.resultGradeTypeIds,
+    );
 
     const duplicate = await this.prisma.barangJadi.findFirst({
       where: {
         id: { not: id },
         name: {
           equals: normalizedName,
-          mode: "insensitive",
+          mode: 'insensitive',
         },
       },
     });
 
     if (duplicate) {
-      return conflict("Nama barang jadi sudah ada", {
+      return conflict('Nama barang jadi sudah ada', {
         barangJadiId: duplicate.id,
         name: duplicate.name,
       });
     }
 
-    return this.prisma.barangJadi.update({
-      where: { id },
-      data: {
-        name: normalizedName,
-        byProductKeys: byProductTypes.map((item) => item.name),
-        byProducts: {
-          deleteMany: {},
-          create: byProductTypes.map((item) => ({
-            byProductTypeId: item.id,
-          })),
-        },
-        resultGrades: {
-          deleteMany: {},
-          create: resultGradeTypes.map((item) => ({
-            resultGradeTypeId: item.id,
-          })),
-        },
-      },
-      include: {
-        byProducts: {
-          include: {
-            byProductType: true,
+    return this.prisma.barangJadi
+      .update({
+        where: { id },
+        data: {
+          name: normalizedName,
+          byProductKeys: byProductTypes.map((item) => item.name),
+          byProducts: {
+            deleteMany: {},
+            create: byProductTypes.map((item) => ({
+              byProductTypeId: item.id,
+            })),
           },
-          orderBy: {
-            byProductType: {
-              name: "asc",
+          resultGrades: {
+            deleteMany: {},
+            create: resultGradeTypes.map((item) => ({
+              resultGradeTypeId: item.id,
+            })),
+          },
+        },
+        include: {
+          byProducts: {
+            include: {
+              byProductType: true,
+            },
+            orderBy: {
+              byProductType: {
+                name: 'asc',
+              },
+            },
+          },
+          resultGrades: {
+            include: {
+              resultGradeType: true,
+            },
+            orderBy: {
+              resultGradeType: {
+                name: 'asc',
+              },
             },
           },
         },
-        resultGrades: {
-          include: {
-            resultGradeType: true,
-          },
-          orderBy: {
-            resultGradeType: {
-              name: "asc",
-            },
-          },
-        },
-      },
-    }).then((row) => ({
-      ...row,
-      byProducts: row.byProducts.map((item) => item.byProductType),
-      resultGrades: row.resultGrades.map((item) => item.resultGradeType),
-    }));
+      })
+      .then((row) => ({
+        ...row,
+        byProducts: row.byProducts.map((item) => item.byProductType),
+        resultGrades: row.resultGrades.map((item) => item.resultGradeType),
+      }));
   }
 
   async updateResultGradeType(id: string, dto: UpdateResultGradeTypeDto) {
@@ -363,12 +377,12 @@ export class BarangJadiService {
     });
 
     if (!existing) {
-      return notFound("Grade hasil tidak ditemukan", { id });
+      return notFound('Grade hasil tidak ditemukan', { id });
     }
 
     const normalizedName = this.normalizeName(dto.name);
     if (!normalizedName) {
-      return badRequest("Nama grade hasil wajib diisi");
+      return badRequest('Nama grade hasil wajib diisi');
     }
 
     const duplicate = await this.prisma.barangJadiGradeType.findFirst({
@@ -376,13 +390,13 @@ export class BarangJadiService {
         id: { not: id },
         name: {
           equals: normalizedName,
-          mode: "insensitive",
+          mode: 'insensitive',
         },
       },
     });
 
     if (duplicate) {
-      return conflict("Nama grade hasil sudah ada", {
+      return conflict('Nama grade hasil sudah ada', {
         resultGradeTypeId: duplicate.id,
         name: duplicate.name,
       });
@@ -438,11 +452,11 @@ export class BarangJadiService {
     });
 
     if (!existing) {
-      return notFound("Grade hasil tidak ditemukan", { id });
+      return notFound('Grade hasil tidak ditemukan', { id });
     }
 
     if (existing._count.barangJadis > 0 || existing._count.finishReceipts > 0) {
-      return conflict("Grade hasil sudah dipakai", {
+      return conflict('Grade hasil sudah dipakai', {
         id,
         usedInBarangJadi: existing._count.barangJadis,
         usedInReceipts: existing._count.finishReceipts,
@@ -467,11 +481,11 @@ export class BarangJadiService {
     });
 
     if (!existing) {
-      return notFound("Barang jadi tidak ditemukan", { id });
+      return notFound('Barang jadi tidak ditemukan', { id });
     }
 
     if (existing._count.finishReceipts > 0) {
-      return conflict("Barang jadi sudah dipakai pada data setoran", {
+      return conflict('Barang jadi sudah dipakai pada data setoran', {
         id,
         usedInReceipts: existing._count.finishReceipts,
       });

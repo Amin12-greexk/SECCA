@@ -406,6 +406,7 @@ export default function Sidebar() {
             const interval = setInterval(fetchNotifications, 30000); // Poll every 30 seconds
             return () => clearInterval(interval);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user]);
 
     // Clear notifications on visiting orders page

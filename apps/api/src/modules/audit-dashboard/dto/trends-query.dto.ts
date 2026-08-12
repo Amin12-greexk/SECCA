@@ -1,14 +1,14 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { Transform } from "class-transformer";
-import { ArrayMaxSize, ArrayNotEmpty, IsIn, IsUUID } from "class-validator";
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { ArrayMaxSize, ArrayNotEmpty, IsIn, IsUUID } from 'class-validator';
 
 export const TREND_METRICS = [
-  "totalBakuBasah",
-  "totalBjd",
-  "rendemen",
-  "sp",
-  "sh",
-  "hk",
+  'totalBakuBasah',
+  'totalBjd',
+  'rendemen',
+  'sp',
+  'sh',
+  'hk',
 ] as const;
 
 export type TrendMetric = (typeof TREND_METRICS)[number];
@@ -18,25 +18,25 @@ export const MAX_TREND_SERIES = 8;
 
 export class TrendsQueryDto {
   @ApiProperty({
-    description: "Satu atau beberapa id mitra, dipisah koma.",
-    example: "uuid-a,uuid-b",
+    description: 'Satu atau beberapa id mitra, dipisah koma.',
+    example: 'uuid-a,uuid-b',
   })
-  @Transform(({ value }) =>
-    typeof value === "string"
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string'
       ? value
-          .split(",")
+          .split(',')
           .map((part) => part.trim())
           .filter(Boolean)
-      : value,
+      : (value as string[]),
   )
-  @ArrayNotEmpty({ message: "personIds tidak boleh kosong." })
+  @ArrayNotEmpty({ message: 'personIds tidak boleh kosong.' })
   @ArrayMaxSize(MAX_TREND_SERIES, {
     message: `Maksimal ${MAX_TREND_SERIES} mitra untuk sekali banding.`,
   })
-  @IsUUID("4", { each: true })
+  @IsUUID('4', { each: true })
   personIds: string[];
 
-  @ApiPropertyOptional({ enum: TREND_METRICS, default: "rendemen" })
+  @ApiPropertyOptional({ enum: TREND_METRICS, default: 'rendemen' })
   @IsIn(TREND_METRICS)
-  metric?: TrendMetric = "rendemen";
+  metric?: TrendMetric = 'rendemen';
 }

@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { Type } from "class-transformer";
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsNotEmpty,
   IsNumber,
@@ -9,7 +9,7 @@ import {
   Max,
   Min,
   MinLength,
-} from "class-validator";
+} from 'class-validator';
 
 export class ReceiveRawBatchDto {
   @ApiProperty()

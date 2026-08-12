@@ -1,5 +1,5 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { Type } from "class-transformer";
+import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsInt,
   IsNotEmpty,
@@ -7,7 +7,7 @@ import {
   IsString,
   IsUUID,
   Min,
-} from "class-validator";
+} from 'class-validator';
 
 export class UpdatePecahBonDto {
   @ApiProperty()

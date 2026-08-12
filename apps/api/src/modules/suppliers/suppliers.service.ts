@@ -1,13 +1,13 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
-import { Prisma } from "@prisma/client";
-import { conflict, notFound } from "../../common/errors";
-import { CreateSupplierDto } from "./dto/create-supplier.dto";
-import { UpdateSupplierDto } from "./dto/update-supplier.dto";
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+import { conflict, notFound } from '../../common/errors';
+import { CreateSupplierDto } from './dto/create-supplier.dto';
+import { UpdateSupplierDto } from './dto/update-supplier.dto';
 
 @Injectable()
 export class SuppliersService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   create(dto: CreateSupplierDto) {
     return this.prisma.supplier.create({
@@ -21,7 +21,7 @@ export class SuppliersService {
 
   findAll() {
     return this.prisma.supplier.findMany({
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: 'asc' },
     });
   }
 
@@ -31,7 +31,7 @@ export class SuppliersService {
     });
 
     if (!existing) {
-      return notFound("Supplier not found", { supplierId: id });
+      return notFound('Supplier not found', { supplierId: id });
     }
 
     return this.prisma.supplier.update({
@@ -50,7 +50,7 @@ export class SuppliersService {
     });
 
     if (!existing) {
-      return notFound("Supplier not found", { supplierId: id });
+      return notFound('Supplier not found', { supplierId: id });
     }
 
     try {
@@ -59,8 +59,8 @@ export class SuppliersService {
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === "P2003") {
-          return conflict("Supplier sedang dipakai dan tidak bisa dihapus", {
+        if (error.code === 'P2003') {
+          return conflict('Supplier sedang dipakai dan tidak bisa dihapus', {
             supplierId: id,
           });
         }

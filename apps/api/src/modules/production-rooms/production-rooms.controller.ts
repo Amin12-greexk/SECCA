@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Put, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Put,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { ProductionRoomsService } from './production-rooms.service';
 import { CreateProductionRoomDto } from './dto/create-production-room.dto';
 import { UpdateProductionRoomDto } from './dto/update-production-room.dto';
@@ -10,7 +18,9 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 @Roles('manager', 'baku', 'koreksi', 'trainer')
 @Controller('production-rooms')
 export class ProductionRoomsController {
-  constructor(private readonly productionRoomsService: ProductionRoomsService) {}
+  constructor(
+    private readonly productionRoomsService: ProductionRoomsService,
+  ) {}
 
   @Post()
   @Roles('manager')
