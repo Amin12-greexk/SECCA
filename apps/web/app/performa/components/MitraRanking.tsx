@@ -1,25 +1,38 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { EChartsOption } from 'echarts';
 import {
     AlertTriangle,
     CalendarDays,
     Calculator,
     ChevronRight,
     Filter,
+    LayoutGrid,
     Search,
+    Table,
     TrendingUp,
     Trophy,
     Wallet,
 } from 'lucide-react';
 import MitraPayrollModal from './MitraPayrollModal';
 import LazyEChart from '@/components/charts/LazyEChart';
-import { fmtBpsId, fmtId, stripPeriode } from '@/components/charts/chart-theme';
+import {
+    categoryAxis,
+    fmtBpsId,
+    fmtId,
+    stripPeriode,
+    tooltipStyle,
+    valueAxis,
+    verticalGradient,
+} from '@/components/charts/chart-theme';
 import { useToast } from '@/lib/toast';
 import {
     getPerformaSummary,
     getPerformaTrends,
+    updatePerformaPersonColor,
     type PerformaPeriod,
+    type PerformaPerson,
     type PerformaRow,
 } from '@/lib/api';
 import { personTrendOption, type PersonBjdRendemenTrend } from './personTrendChart';
@@ -27,6 +40,45 @@ import { describeTenure, isVeteranTenure } from './tenure';
 import CapacityBadge from './CapacityBadge';
 import { CAPACITY_BANDS, classifyCapacity, type CapacityBand } from './capacityBand';
 import { capacityTrendOption } from './capacityTrendChart';
+
+/** HK per periode — bar chart sederhana, jumlah hari kerja. Dipindah dari IndividualPanel
+ * supaya grafik anak terpilih jadi satu tempat (tidak ada 2 panel terpisah untuk data yang sama). */
+function hkBarOption(labels: string[], points: Array<number | null>, color: string): EChartsOption {
+    return {
+        grid: { top: 10, right: 10, bottom: 44, left: 46 },
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(17,24,39,0.04)' } },
+            ...tooltipStyle,
+            valueFormatter: (value) =>
+                value === null || value === undefined ? '–' : fmtId(Number(value), 0),
+        },
+        xAxis: {
+            type: 'category',
+            data: labels,
+            ...categoryAxis,
+            axisLabel: {
+                ...categoryAxis.axisLabel,
+                interval: labels.length > 8 ? ('auto' as const) : 0,
+                rotate: labels.length > 4 ? 26 : 0,
+                hideOverlap: true,
+            },
+        },
+        yAxis: {
+            type: 'value',
+            ...valueAxis,
+            axisLabel: { ...valueAxis.axisLabel, formatter: (value: number) => fmtId(value) },
+        },
+        series: [
+            {
+                type: 'bar',
+                data: points,
+                barMaxWidth: 22,
+                itemStyle: { color: verticalGradient(color), borderRadius: [4, 4, 0, 0] },
+            },
+        ],
+    };
+}
 
 /**
  * Kapasitas mitra sebagai daftar (bukan bar chart raksasa) — jumlah anak
@@ -69,7 +121,12 @@ function readMetric(row: PerformaRow, metric: RankMetric): number | null {
             return row.hk ?? null;
         case 'bjd':
         default:
-            return row.totalBjd ?? null;
+            // Kartu ranking menampilkan BJD produksi + reprocess digabung (total barang
+            // jadi seutuhnya) — beda dengan bjd/HK band kapasitas & rendemen di bawah,
+            // yang sengaja tetap murni produksi (lihat perDayOf & rendemenPctBps).
+            return row.totalBjd != null || row.reprocessBjd != null
+                ? (row.totalBjd ?? 0) + (row.reprocessBjd ?? 0)
+                : null;
     }
 }
 
@@ -300,17 +357,25 @@ export default function MitraRanking({
     rows,
     periods,
     periodId,
-    onPeriodChange,
     periodLabel,
     onSelect,
+    externalSelectedId,
+    persons,
+    canManage,
+    onColorSaved,
 }: {
     rows: PerformaRow[];
-    /** Semua periode (urut kronologis) — untuk ganti periode & pembanding. */
+    /** Semua periode (urut kronologis) — untuk pembanding tren, bukan ganti periode (itu di header halaman). */
     periods: PerformaPeriod[];
     periodId: string;
-    onPeriodChange: (periodId: string) => void;
     periodLabel?: string;
     onSelect: (personId: string) => void;
+    /** Anak yang dipilih dari luar (mis. klik di panel Payroll) — dashboard cuma
+     * punya satu panel detail-anak sekarang, jadi ini harus dituruti. */
+    externalSelectedId?: string | null;
+    persons: PerformaPerson[];
+    canManage: boolean;
+    onColorSaved: (person: PerformaPerson) => void;
 }) {
     const toast = useToast();
     const [metric, setMetric] = useState<RankMetric>('bjd');
@@ -327,6 +392,8 @@ export default function MitraRanking({
     const [periodWindow, setPeriodWindow] = useState(4);
     const [rowsByPeriod, setRowsByPeriod] = useState<Record<string, PerformaRow[]>>({});
     const [loadingWindow, setLoadingWindow] = useState(false);
+    const [draftColor, setDraftColor] = useState<string | null>(null);
+    const colorSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const active = METRICS.find((item) => item.value === metric) ?? METRICS[0];
 
@@ -445,6 +512,34 @@ export default function MitraRanking({
     );
 
     const selected = rows.find((row) => row.personId === selectedId) ?? null;
+    const selectedPerson = persons.find((item) => item.id === selectedId) ?? null;
+    const selectedColor = draftColor ?? selectedPerson?.colorHex ?? selected?.colorHex ?? '#2a78d6';
+
+    useEffect(() => {
+        setDraftColor(null);
+    }, [selectedId]);
+
+    useEffect(
+        () => () => {
+            if (colorSaveTimer.current) clearTimeout(colorSaveTimer.current);
+        },
+        [],
+    );
+
+    // Drag color picker menembak banyak event — simpan setelah jeda 450ms.
+    const handleColor = (hex: string) => {
+        if (!selectedId) return;
+        setDraftColor(hex);
+        if (colorSaveTimer.current) clearTimeout(colorSaveTimer.current);
+        colorSaveTimer.current = setTimeout(async () => {
+            try {
+                const updated = await updatePerformaPersonColor(selectedId, hex);
+                onColorSaved(updated);
+            } catch (error) {
+                toast.error(error instanceof Error ? error.message : 'Gagal menyimpan warna.');
+            }
+        }, 450);
+    };
 
     const windowColumns = useMemo<WindowColumn[]>(
         () =>
@@ -472,6 +567,24 @@ export default function MitraRanking({
             setSelectedId(sorted[0].row.personId);
         }
     }, [rows, sorted, selectedId]);
+
+    // Pilihan dari luar (mis. klik baris di panel Payroll) harus tercermin di sini juga —
+    // panel detail-anak di bawah cuma ada satu tempat sekarang, jadi harus selalu sinkron.
+    useEffect(() => {
+        if (externalSelectedId && externalSelectedId !== selectedId) {
+            setSelectedId(externalSelectedId);
+        }
+        // selectedId sengaja tidak jadi dependency: ini cuma bereaksi ke perubahan dari luar,
+        // klik di dalam komponen ini sendiri sudah diurus oleh pickPerson().
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [externalSelectedId]);
+
+    /** Pilih anak dari dalam komponen ini + kabari parent, supaya state tetap sinkron
+     * kalau ada bagian lain halaman yang juga mengikuti anak yang sedang dipilih. */
+    const pickPerson = (personId: string) => {
+        setSelectedId(personId);
+        onSelect(personId);
+    };
 
     useEffect(() => {
         if (!selectedId) {
@@ -513,8 +626,19 @@ export default function MitraRanking({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedId]);
 
+    const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+
     const displayValue = (value: number) =>
         active.isBps ? `${fmtId(value / 100, active.fd)}%` : fmtId(value, active.fd);
+
+    const fmtRp = (value: number | null | undefined) =>
+        value === null || value === undefined
+            ? '–'
+            : new Intl.NumberFormat('id-ID', {
+                  style: 'currency',
+                  currency: 'IDR',
+                  maximumFractionDigits: 0,
+              }).format(value);
 
     const trendSummary = useMemo(() => {
         if (!trend) return null;
@@ -560,21 +684,34 @@ export default function MitraRanking({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative">
-                        <CalendarDays className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-green-600" />
-                        <select
-                            value={periodId}
-                            onChange={(event) => onPeriodChange(event.target.value)}
-                            disabled={periods.length === 0}
-                            className="rounded-lg border border-gray-300 bg-gray-50 py-1.5 pl-8 pr-3 text-sm transition focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 disabled:opacity-50"
-                            aria-label="Ganti periode"
+                    {/* Toggle Mode: Grid vs Tabel Lengkap */}
+                    <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('grid')}
+                            className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                                viewMode === 'grid'
+                                    ? 'bg-white text-gray-900 shadow-sm'
+                                    : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                            title="Tampilan Grid Kapasitas"
                         >
-                            {periods.map((period) => (
-                                <option key={period.id} value={period.id}>
-                                    {period.label}
-                                </option>
-                            ))}
-                        </select>
+                            <LayoutGrid className="h-3.5 w-3.5" />
+                            Grid
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('table')}
+                            className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                                viewMode === 'table'
+                                    ? 'bg-white text-gray-900 shadow-sm'
+                                    : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                            title="Tampilan Tabel Audit & Tarif Efektif"
+                        >
+                            <Table className="h-3.5 w-3.5" />
+                            Tabel Detail
+                        </button>
                     </div>
 
                     <div className="relative">
@@ -594,7 +731,7 @@ export default function MitraRanking({
                                 key={item.value}
                                 type="button"
                                 onClick={() => setMetric(item.value)}
-                                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
                                     metric === item.value
                                         ? 'bg-white text-gray-900 shadow-sm'
                                         : 'text-gray-500 hover:text-gray-700'
@@ -646,85 +783,192 @@ export default function MitraRanking({
             </div>
 
             <div className="space-y-4">
-                {/* Daftar anak (ranking) — kartu grid, lebar penuh */}
-                <div className="max-h-[360px] overflow-y-auto rounded-lg border border-gray-100 p-2">
-                    {sorted.length === 0 ? (
-                        <div className="flex h-[160px] items-center justify-center text-sm text-gray-400">
-                            {search || bandFilter
-                                ? 'Tidak ada anak cocok filter ini.'
-                                : 'Tidak ada data untuk metrik ini.'}
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                            {sorted.map((item, index) => {
-                                const isSelected = item.row.personId === selectedId;
-                                const warnStatus = warningMap[item.row.personId];
-                                const warn = warnStatus?.hasWarning;
-                                const isBulanan = /bulanan/i.test(item.row.normalizedLevel ?? item.row.rawUserLevel ?? '');
-                                const band = classifyCapacity(perDayOf(item.row, 'totalBjd'));
-                                const dotColor = isBulanan ? '#8b5cf6' : (band?.color ?? '#d1d5db');
-                                return (
-                                    <button
-                                        key={item.row.id}
-                                        type="button"
-                                        onClick={() => {
-                                            setSelectedId(item.row.personId);
-                                            setActivePayrollModalRow(item.row);
-                                        }}
-                                        title={`${item.row.name}${isBulanan ? ' (Anak Bulanan - 60rb/HK)' : ''} - Klik untuk lihat detail pembayaran & gaji`}
-                                        className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-all cursor-pointer ${
-                                            isSelected
-                                                ? 'border-green-300 bg-green-50/70 shadow-xs'
-                                                : isBulanan
-                                                  ? 'border-purple-200 bg-purple-50/30 hover:bg-purple-50/60'
-                                                  : warn
-                                                    ? 'border-amber-200 bg-amber-50/40 hover:bg-amber-50/70'
-                                                    : 'border-gray-100 hover:bg-gray-50 hover:border-gray-200'
-                                        }`}
-                                    >
-                                        <span
-                                            className={`w-5 shrink-0 text-right font-mono text-[10px] ${
-                                                RANK_CLASS[index] ?? 'text-gray-300'
+                {viewMode === 'table' ? (
+                    <div className="max-h-[420px] overflow-y-auto rounded-lg border border-gray-200 bg-white">
+                        <table className="w-full text-xs">
+                            <thead className="sticky top-0 z-10 bg-gray-50">
+                                <tr className="border-b border-gray-200 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                                    <th className="px-3 py-2.5">#</th>
+                                    <th className="px-3 py-2.5">Nama &amp; Status</th>
+                                    <th className="px-3 py-2.5">PIN</th>
+                                    <th className="px-3 py-2.5">Level</th>
+                                    <th className="px-3 py-2.5 text-right">HK</th>
+                                    <th className="px-3 py-2.5 text-right">Jumlah LP</th>
+                                    <th className="px-3 py-2.5 text-right">Total Baku</th>
+                                    <th className="px-3 py-2.5 text-right">Total BJD</th>
+                                    <th className="px-3 py-2.5 text-right">Rendemen</th>
+                                    <th className="px-3 py-2.5 text-right">Upah</th>
+                                    <th className="px-3 py-2.5 text-right">Tarif / Gram</th>
+                                    <th className="px-3 py-2.5 text-right">Tarif / Kg</th>
+                                    <th className="px-3 py-2.5 text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {sorted.map((item, index) => {
+                                    const row = item.row;
+                                    const isSelected = row.personId === selectedId;
+                                    const isBulanan = /bulanan/i.test(row.normalizedLevel ?? row.rawUserLevel ?? '');
+                                    const band = classifyCapacity(perDayOf(row, 'totalBjd'));
+                                    const dotColor = isBulanan ? '#8b5cf6' : (band?.color ?? '#d1d5db');
+                                    const lpCount = row.lpCount ?? (row.lpRows?.length ?? (row.totalBakuBasah || row.totalBjd ? 1 : 0));
+
+                                    return (
+                                        <tr
+                                            key={row.id}
+                                            onClick={() => pickPerson(row.personId)}
+                                            className={`hover:bg-gray-50/80 cursor-pointer transition-colors ${
+                                                isSelected ? 'bg-green-50/60 font-medium' : ''
                                             }`}
                                         >
-                                            {index + 1}
-                                        </span>
-                                        {/* Satu titik saja: warna mengikuti band kapasitas / ungu untuk bulanan */}
-                                        <span
-                                            className="h-2.5 w-2.5 shrink-0 rounded-full"
-                                            style={{ backgroundColor: dotColor }}
-                                        />
-                                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800">
-                                            {item.row.name}
-                                        </span>
-                                        {isBulanan ? (
-                                            <span className="shrink-0 rounded-md bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700">
-                                                Bulanan
+                                            <td className="px-3 py-2 font-mono text-gray-400">{index + 1}</td>
+                                            <td className="px-3 py-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span
+                                                        className="h-2 w-2 rounded-full shrink-0"
+                                                        style={{ backgroundColor: dotColor }}
+                                                    />
+                                                    <span className="font-semibold text-gray-800">{row.name}</span>
+                                                    {isBulanan ? (
+                                                        <span className="rounded bg-purple-50 px-1.5 py-0.5 text-[9px] font-semibold text-purple-700 border border-purple-200">
+                                                            Bulanan
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                            </td>
+                                            <td className="px-3 py-2 font-mono text-gray-500">{row.pin ?? '–'}</td>
+                                            <td className="px-3 py-2 text-gray-600">
+                                                {isBulanan ? 'Bulanan (60rb/HK)' : (row.rawUserLevel ?? '–')}
+                                            </td>
+                                            <td className="px-3 py-2 text-right text-gray-700 font-medium">
+                                                {row.hk != null ? fmtId(row.hk, 0) : '–'}
+                                            </td>
+                                            <td className="px-3 py-2 text-right text-gray-700">
+                                                {lpCount} LP
+                                            </td>
+                                            <td className="px-3 py-2 text-right text-gray-700">
+                                                {row.totalBakuBasah != null ? `${fmtId(row.totalBakuBasah, 1)} g` : '–'}
+                                            </td>
+                                            <td className="px-3 py-2 text-right font-bold text-gray-900">
+                                                {row.totalBjd != null || row.reprocessBjd != null
+                                                    ? `${fmtId((row.totalBjd ?? 0) + (row.reprocessBjd ?? 0), 1)} g`
+                                                    : '–'}
+                                            </td>
+                                            <td className="px-3 py-2 text-right text-blue-700 font-semibold">
+                                                {fmtBpsId(row.rendemenPctBps)}
+                                            </td>
+                                            <td className="px-3 py-2 text-right font-bold text-emerald-800">
+                                                {isBulanan ? fmtRp(row.netWageRp) : fmtRp(row.pieceworkWageRp ?? row.netWageRp)}
+                                            </td>
+                                            <td className="px-3 py-2 text-right text-gray-600">
+                                                {isBulanan || row.effectivePieceworkRatePerGramRp == null
+                                                    ? '—'
+                                                    : `${fmtRp(row.effectivePieceworkRatePerGramRp)}/g`}
+                                            </td>
+                                            <td className="px-3 py-2 text-right text-gray-600">
+                                                {isBulanan || row.effectivePieceworkRatePerKgRp == null
+                                                    ? '—'
+                                                    : `${fmtRp(row.effectivePieceworkRatePerKgRp)}/kg`}
+                                            </td>
+                                            <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        pickPerson(row.personId);
+                                                        setActivePayrollModalRow(row);
+                                                    }}
+                                                    className="inline-flex items-center gap-1 rounded bg-green-50 px-2 py-1 text-[10px] font-semibold text-green-700 hover:bg-green-100 cursor-pointer"
+                                                >
+                                                    <Wallet className="h-3 w-3" />
+                                                    Detail
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : (
+                    /* Daftar anak (ranking) — kartu grid, lebar penuh */
+                    <div className="max-h-[360px] overflow-y-auto rounded-lg border border-gray-100 p-2">
+                        {sorted.length === 0 ? (
+                            <div className="flex h-[160px] items-center justify-center text-sm text-gray-400">
+                                {search || bandFilter
+                                    ? 'Tidak ada anak cocok filter ini.'
+                                    : 'Tidak ada data untuk metrik ini.'}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                                {sorted.map((item, index) => {
+                                    const isSelected = item.row.personId === selectedId;
+                                    const warnStatus = warningMap[item.row.personId];
+                                    const warn = warnStatus?.hasWarning;
+                                    const isBulanan = /bulanan/i.test(item.row.normalizedLevel ?? item.row.rawUserLevel ?? '');
+                                    const band = classifyCapacity(perDayOf(item.row, 'totalBjd'));
+                                    const dotColor = isBulanan ? '#8b5cf6' : (band?.color ?? '#d1d5db');
+                                    return (
+                                        <button
+                                            key={item.row.id}
+                                            type="button"
+                                            onClick={() => {
+                                                pickPerson(item.row.personId);
+                                                setActivePayrollModalRow(item.row);
+                                            }}
+                                            title={`${item.row.name}${isBulanan ? ' (Anak Bulanan - 60rb/HK)' : ''} - Klik untuk lihat detail pembayaran & gaji`}
+                                            className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-all cursor-pointer ${
+                                                isSelected
+                                                    ? 'border-green-300 bg-green-50/70 shadow-xs'
+                                                    : isBulanan
+                                                      ? 'border-purple-200 bg-purple-50/30 hover:bg-purple-50/60'
+                                                      : warn
+                                                        ? 'border-amber-200 bg-amber-50/40 hover:bg-amber-50/70'
+                                                        : 'border-gray-100 hover:bg-gray-50 hover:border-gray-200'
+                                            }`}
+                                        >
+                                            <span
+                                                className={`w-5 shrink-0 text-right font-mono text-[10px] ${
+                                                    RANK_CLASS[index] ?? 'text-gray-300'
+                                                }`}
+                                            >
+                                                {index + 1}
                                             </span>
-                                        ) : null}
-                                        {warn ? (
-                                            <span title={`Warning:\n• ${warnStatus.reasons.join('\n• ')}`}>
-                                                <AlertTriangle
-                                                    className={`h-3 w-3 shrink-0 ${
-                                                        warnStatus.isRedMonth && warnStatus.isUnder13TwoWeeks
-                                                            ? 'text-red-600 animate-pulse'
-                                                            : warnStatus.isRedMonth
-                                                              ? 'text-red-500'
-                                                              : 'text-amber-500'
-                                                    }`}
-                                                    aria-label={warnStatus.reasons.join(', ')}
-                                                />
+                                            {/* Satu titik saja: warna mengikuti band kapasitas / ungu untuk bulanan */}
+                                            <span
+                                                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                                style={{ backgroundColor: dotColor }}
+                                            />
+                                            <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800">
+                                                {item.row.name}
                                             </span>
-                                        ) : null}
-                                        <span className="shrink-0 text-xs font-semibold text-gray-900">
-                                            {displayValue(item.value)}
-                                        </span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
+                                            {isBulanan ? (
+                                                <span className="shrink-0 rounded-md bg-purple-100 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700">
+                                                    Bulanan
+                                                </span>
+                                            ) : null}
+                                            {warn ? (
+                                                <span title={`Warning:\n• ${warnStatus.reasons.join('\n• ')}`}>
+                                                    <AlertTriangle
+                                                        className={`h-3 w-3 shrink-0 ${
+                                                            warnStatus.isRedMonth && warnStatus.isUnder13TwoWeeks
+                                                                ? 'text-red-600 animate-pulse'
+                                                                : warnStatus.isRedMonth
+                                                                  ? 'text-red-500'
+                                                                  : 'text-amber-500'
+                                                        }`}
+                                                        aria-label={warnStatus.reasons.join(', ')}
+                                                    />
+                                                </span>
+                                            ) : null}
+                                            <span className="shrink-0 text-xs font-semibold text-gray-900">
+                                                {displayValue(item.value)}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Grafik BJD anak terpilih — sekarang lebar penuh */}
                 <div className="min-w-0 rounded-lg border border-gray-100 p-4">
@@ -732,14 +976,30 @@ export default function MitraRanking({
                         <>
                             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                                 <div className="flex min-w-0 items-center gap-2">
-                                    <span
-                                        className="h-3 w-3 shrink-0 rounded-full"
-                                        style={{
-                                            backgroundColor:
-                                                classifyCapacity(perDayOf(selected, 'totalBjd'))
-                                                    ?.color ?? '#d1d5db',
-                                        }}
-                                    />
+                                    {canManage ? (
+                                        <label
+                                            className="relative inline-flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full ring-2 ring-white"
+                                            style={{ backgroundColor: selectedColor }}
+                                            title="Ubah warna identitas anak ini"
+                                        >
+                                            <input
+                                                type="color"
+                                                value={selectedColor}
+                                                onChange={(event) => handleColor(event.target.value)}
+                                                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                                aria-label={`Warna ${selected.name}`}
+                                            />
+                                        </label>
+                                    ) : (
+                                        <span
+                                            className="h-3 w-3 shrink-0 rounded-full"
+                                            style={{
+                                                backgroundColor:
+                                                    classifyCapacity(perDayOf(selected, 'totalBjd'))
+                                                        ?.color ?? '#d1d5db',
+                                            }}
+                                        />
+                                    )}
                                     <div className="min-w-0">
                                         <p className="flex items-center gap-2 truncate text-sm font-semibold text-gray-800">
                                             {selected.name}
@@ -831,6 +1091,18 @@ export default function MitraRanking({
                                 </>
                             )}
 
+                            {!loadingTrend && trend ? (
+                                <div className="mt-3">
+                                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                                        HK per periode
+                                    </p>
+                                    <LazyEChart
+                                        option={hkBarOption(trend.labels, trend.hk, selectedColor)}
+                                        height={120}
+                                    />
+                                </div>
+                            ) : null}
+
                             {trendSummary?.avgPerHk != null ? (
                                 <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg border border-green-100 bg-green-50/50 px-3 py-2 text-xs text-gray-600">
                                     <Calculator className="h-3.5 w-3.5 shrink-0 text-green-600" />
@@ -881,7 +1153,7 @@ export default function MitraRanking({
                 row={activePayrollModalRow}
                 periodLabel={periodLabel}
                 warningInfo={activePayrollModalRow ? warningMap[activePayrollModalRow.personId] : undefined}
-                onViewTrend={(personId) => setSelectedId(personId)}
+                onViewTrend={(personId) => pickPerson(personId)}
             />
         </div>
     );

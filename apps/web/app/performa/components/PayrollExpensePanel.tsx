@@ -106,7 +106,7 @@ export default function PayrollExpensePanel({
             </h2>
 
             {summary ? (
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-7">
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                     <ExpenseTile
                         label="Upah Borong"
                         value={fmtRp(summary.totalBorongWageRp ?? summary.totalPieceworkWageRp)}
@@ -119,10 +119,17 @@ export default function PayrollExpensePanel({
                         accent="#8b5cf6"
                         hint={summary.totalBulananCount ? `60rb/HK · ${summary.totalBulananCount} mitra` : 'Rp 60rb/HK'}
                     />
-                    <ExpenseTile label="Subsidi" value={fmtRp(summary.totalSubsidyRp)} accent="#1baf7a" />
-                    <ExpenseTile label="Premi" value={fmtRp(summary.totalPremiumRp)} accent="#eda100" />
-                    <ExpenseTile label="Uang Makan" value={fmtRp(summary.totalMealAllowanceRp)} accent="#4a3aa7" />
-                    <ExpenseTile label="Potongan" value={fmtRp(summary.totalDeductionRp)} accent="#e34948" />
+                    <ExpenseTile
+                        label="Tunjangan & Potongan"
+                        value={fmtRp(
+                            summary.totalSubsidyRp +
+                                summary.totalPremiumRp +
+                                summary.totalMealAllowanceRp -
+                                summary.totalDeductionRp,
+                        )}
+                        accent="#eda100"
+                        hint={`Subsidi ${fmtRp(summary.totalSubsidyRp)} · Premi ${fmtRp(summary.totalPremiumRp)} · Makan ${fmtRp(summary.totalMealAllowanceRp)} · Potongan -${fmtRp(summary.totalDeductionRp)}`}
+                    />
                     <ExpenseTile
                         label="Akumulasi Upah"
                         value={fmtRp(summary.totalNetWageRp)}
@@ -163,12 +170,12 @@ export default function PayrollExpensePanel({
                             <thead>
                                 <tr className="border-b border-gray-100 text-left text-[11px] font-medium uppercase tracking-wide text-gray-500">
                                     <th className="px-4 py-2">Nama</th>
+                                    <th className="px-4 py-2">PIN</th>
                                     <th className="px-4 py-2">Level</th>
                                     <th className="px-4 py-2 text-right">HK</th>
-                                    <th className="px-4 py-2 text-right">Upah Borong</th>
-                                    <th className="px-4 py-2 text-right">Subsidi</th>
-                                    <th className="px-4 py-2 text-right">Premi</th>
-                                    <th className="px-4 py-2 text-right">Uang Makan</th>
+                                    <th className="px-4 py-2 text-right">Upah Pokok/Borong</th>
+                                    <th className="px-4 py-2 text-right">Tarif / g</th>
+                                    <th className="px-4 py-2 text-right">Subsidi+Premi+Makan</th>
                                     <th className="px-4 py-2 text-right">Potongan</th>
                                     <th className="px-4 py-2 text-right">Upah Bersih</th>
                                 </tr>
@@ -176,11 +183,12 @@ export default function PayrollExpensePanel({
                             <tbody>
                                 {rows.map((row) => {
                                     const isBulanan = /bulanan/i.test(row.normalizedLevel ?? row.rawUserLevel ?? '');
+                                    const allowanceSum = (row.subsidyRp ?? 0) + (row.premiumRp ?? 0) + (row.mealAllowanceRp ?? 0);
                                     return (
                                         <tr
                                             key={row.personId}
                                             onClick={() => onSelect?.(row.personId)}
-                                            className="cursor-pointer border-b border-gray-50 last:border-0 hover:bg-gray-50"
+                                            className="cursor-pointer border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors"
                                         >
                                             <td className="px-4 py-2 font-medium text-gray-800">
                                                 <span className="flex items-center gap-2">
@@ -191,6 +199,9 @@ export default function PayrollExpensePanel({
                                                     {row.name}
                                                 </span>
                                             </td>
+                                            <td className="px-4 py-2 font-mono text-xs text-gray-500">
+                                                {row.pin ?? '–'}
+                                            </td>
                                             <td className="px-4 py-2 text-gray-500">
                                                 {isBulanan ? (
                                                     <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-0.5 text-xs font-semibold text-purple-700 border border-purple-200">
@@ -200,13 +211,22 @@ export default function PayrollExpensePanel({
                                                     row.normalizedLevel ?? '–'
                                                 )}
                                             </td>
-                                            <td className="px-4 py-2 text-right text-gray-700">{fmtId(row.hk ?? 0)}</td>
-                                            <td className="px-4 py-2 text-right text-gray-700">{fmtRp(row.pieceworkWageRp)}</td>
-                                            <td className="px-4 py-2 text-right text-gray-700">{fmtRp(row.subsidyRp)}</td>
-                                            <td className="px-4 py-2 text-right text-gray-700">{fmtRp(row.premiumRp)}</td>
-                                            <td className="px-4 py-2 text-right text-gray-700">{fmtRp(row.mealAllowanceRp)}</td>
-                                            <td className="px-4 py-2 text-right text-red-600">{fmtRp(row.deductionRp)}</td>
-                                            <td className="px-4 py-2 text-right font-semibold text-gray-900">
+                                            <td className="px-4 py-2 text-right text-gray-700 font-medium">{fmtId(row.hk ?? 0)}</td>
+                                            <td className="px-4 py-2 text-right text-gray-700">
+                                                {isBulanan ? fmtRp(row.netWageRp) : fmtRp(row.pieceworkWageRp ?? row.upahBorongRp)}
+                                            </td>
+                                            <td className="px-4 py-2 text-right text-xs text-gray-600">
+                                                {isBulanan || row.effectivePieceworkRatePerGramRp == null
+                                                    ? '—'
+                                                    : `${fmtRp(row.effectivePieceworkRatePerGramRp)}/g`}
+                                            </td>
+                                            <td className="px-4 py-2 text-right text-gray-700">
+                                                {allowanceSum > 0 ? fmtRp(allowanceSum) : '–'}
+                                            </td>
+                                            <td className="px-4 py-2 text-right text-red-600">
+                                                {row.deductionRp ? fmtRp(row.deductionRp) : '–'}
+                                            </td>
+                                            <td className="px-4 py-2 text-right font-bold text-gray-900">
                                                 {fmtRp(row.netWageRp)}
                                             </td>
                                         </tr>

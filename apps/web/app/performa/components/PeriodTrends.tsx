@@ -44,8 +44,6 @@ const RANGE_OPTIONS = [
     { value: 4, label: '4 periode terakhir' },
 ];
 
-const SELECT_CLASS =
-    'mt-3 w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none transition';
 
 /** % perubahan vs periode sebelumnya, mis. 15,08. */
 function growthPct(current: number | null | undefined, previous: number | null | undefined) {
@@ -165,13 +163,12 @@ function baseOption(params: {
     };
 }
 
-/** Kerangka kartu: judul + dropdown rentang + strip statistik + chart. */
+/** Kerangka kartu: judul + strip statistik + chart. Rentang periode dikontrol satu selector
+ * bersama di level {@link PeriodTrends} — sebelumnya tiap kartu punya dropdown sendiri-sendiri. */
 function ChartCard(props: {
     title: string;
     subtitle: string;
     number?: string;
-    range: number;
-    onRangeChange: (value: number) => void;
     totalPeriods: number;
     heroValue: string;
     heroUnit?: string;
@@ -197,19 +194,6 @@ function ChartCard(props: {
                 </h2>
                 <p className="mt-0.5 text-xs text-gray-400">{props.subtitle}</p>
             </div>
-
-            <select
-                value={props.range}
-                onChange={(event) => props.onRangeChange(Number(event.target.value))}
-                className={SELECT_CLASS}
-                aria-label={`Rentang periode ${props.title}`}
-            >
-                {RANGE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                        {option.label}
-                    </option>
-                ))}
-            </select>
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-gray-50 px-4 py-2.5">
                 <p className="text-2xl font-bold text-gray-900">
@@ -249,8 +233,7 @@ function capacityOf(stat: PerformaPeriodStat | null) {
     return stat && stat.totalHk > 0 ? stat.totalBjd / stat.totalHk : null;
 }
 
-function ProductionCard({ stats }: { stats: PerformaPeriodStat[] }) {
-    const [range, setRange] = useState(0);
+function ProductionCard({ stats, range }: { stats: PerformaPeriodStat[]; range: number }) {
     const visible = useMemo(() => sliceRange(stats, range), [stats, range]);
 
     const latest = stats[stats.length - 1] ?? null;
@@ -292,8 +275,6 @@ function ProductionCard({ stats }: { stats: PerformaPeriodStat[] }) {
             title="Grafik Produksi"
             subtitle="Total Baku Basah vs Barang Jadi per periode (kg)"
             number="03"
-            range={range}
-            onRangeChange={setRange}
             totalPeriods={visible.length}
             heroValue={latest ? fmtId(latest.totalBjd / 1000, 1) : '–'}
             heroUnit="Kg"
@@ -306,8 +287,7 @@ function ProductionCard({ stats }: { stats: PerformaPeriodStat[] }) {
     );
 }
 
-function EfficiencyCard({ stats }: { stats: PerformaPeriodStat[] }) {
-    const [range, setRange] = useState(0);
+function EfficiencyCard({ stats, range }: { stats: PerformaPeriodStat[]; range: number }) {
     const visible = useMemo(() => sliceRange(stats, range), [stats, range]);
 
     const latest = stats[stats.length - 1] ?? null;
@@ -359,8 +339,6 @@ function EfficiencyCard({ stats }: { stats: PerformaPeriodStat[] }) {
         <ChartCard
             title="Grafik Efisiensi"
             subtitle="Rendemen tertimbang · rata-rata Susut Proses & Susut Hilang"
-            range={range}
-            onRangeChange={setRange}
             totalPeriods={visible.length}
             heroValue={latest ? fmtBpsId(latest.weightedRendemenPctBps) : '–'}
             best={bestBps === null ? '–' : fmtBpsId(bestBps)}
@@ -374,8 +352,7 @@ function EfficiencyCard({ stats }: { stats: PerformaPeriodStat[] }) {
     );
 }
 
-function CapacityCard({ stats }: { stats: PerformaPeriodStat[] }) {
-    const [range, setRange] = useState(0);
+function CapacityCard({ stats, range }: { stats: PerformaPeriodStat[]; range: number }) {
     const visible = useMemo(() => sliceRange(stats, range), [stats, range]);
 
     const latest = capacityOf(stats[stats.length - 1] ?? null);
@@ -408,8 +385,6 @@ function CapacityCard({ stats }: { stats: PerformaPeriodStat[] }) {
         <ChartCard
             title="Rata-rata Kapasitas Harian per Anak"
             subtitle="Gram Barang Jadi per HK di tiap periode"
-            range={range}
-            onRangeChange={setRange}
             totalPeriods={visible.length}
             heroValue={latest === null ? '–' : fmtId(latest, 1)}
             heroUnit="Gr"
@@ -423,15 +398,34 @@ function CapacityCard({ stats }: { stats: PerformaPeriodStat[] }) {
 }
 
 export default function PeriodTrends({ stats }: { stats: PerformaPeriodStat[] }) {
+    /** Satu rentang periode berlaku untuk ketiga grafik — sebelumnya tiap grafik
+     * punya dropdown rentang sendiri-sendiri yang harus diganti satu-satu. */
+    const [range, setRange] = useState(0);
+
     if (stats.length === 0) return null;
 
     return (
-        <div className="space-y-5">
-            <div className="grid gap-5 lg:grid-cols-2">
-                <ProductionCard stats={stats} />
-                <EfficiencyCard stats={stats} />
+        <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-gray-800">Tren Perusahaan Antar Periode</h2>
+                <select
+                    value={range}
+                    onChange={(event) => setRange(Number(event.target.value))}
+                    className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm transition focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+                    aria-label="Rentang periode untuk semua grafik tren"
+                >
+                    {RANGE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                            {option.label}
+                        </option>
+                    ))}
+                </select>
             </div>
-            <CapacityCard stats={stats} />
+            <div className="grid gap-5 lg:grid-cols-2">
+                <ProductionCard stats={stats} range={range} />
+                <EfficiencyCard stats={stats} range={range} />
+            </div>
+            <CapacityCard stats={stats} range={range} />
         </div>
     );
 }

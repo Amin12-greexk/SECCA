@@ -21,14 +21,15 @@ import {
     type PerformaPerson,
     type PerformaPeriod,
     type PerformaPeriodStat,
+    type PerformaRow,
     type PerformaSummaryResponse,
     type PerformaExpenseSummaryResponse,
 } from '@/lib/api';
 import DeltaBadge from './components/DeltaBadge';
-import IndividualPanel from './components/IndividualPanel';
 import MitraRanking from './components/MitraRanking';
 import PayrollExpensePanel from './components/PayrollExpensePanel';
 import PeriodTrends from './components/PeriodTrends';
+import TotalBjdModal from './components/TotalBjdModal';
 import TurnoverAndShifts from './components/TurnoverAndShifts';
 
 /* ─── Helpers ─────────────────────────────────────────────────── */
@@ -59,6 +60,7 @@ function StatTile({
     deltaSuffix = '',
     accent,
     hero = false,
+    onClick,
 }: {
     label: string;
     value: string;
@@ -67,10 +69,24 @@ function StatTile({
     deltaSuffix?: string;
     accent?: string;
     hero?: boolean;
+    /** Kalau diisi, tile jadi bisa diklik (mis. buka modal rincian). */
+    onClick?: () => void;
 }) {
+    const clickableProps = onClick
+        ? {
+              type: 'button' as const,
+              onClick,
+              title: 'Klik untuk rincian',
+          }
+        : {};
+    const Tag = onClick ? 'button' : 'div';
+
     if (hero) {
         return (
-            <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-[#047f2b] to-emerald-500 px-4 py-3 text-white shadow-sm">
+            <Tag
+                {...clickableProps}
+                className={`relative overflow-hidden rounded-xl bg-gradient-to-br from-[#047f2b] to-emerald-500 px-4 py-3 text-white shadow-sm text-left w-full ${onClick ? 'cursor-pointer transition-transform hover:scale-[1.01] hover:shadow-md' : ''}`}
+            >
                 <div className="absolute -right-6 -top-10 h-28 w-28 rounded-full bg-white/10 blur-2xl" />
                 <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-50/80">
                     {label}
@@ -80,12 +96,15 @@ function StatTile({
                     <DeltaBadge value={delta} suffix={deltaSuffix} tone="dark" />
                     {hint ? <p className="text-[10px] text-emerald-50/70">{hint}</p> : null}
                 </div>
-            </div>
+            </Tag>
         );
     }
 
     return (
-        <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+        <Tag
+            {...clickableProps}
+            className={`rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm text-left w-full ${onClick ? 'cursor-pointer transition-shadow hover:shadow-md' : ''}`}
+        >
             <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-500">
                 {accent ? (
                     <span className="h-2 w-2 rounded-full" style={{ backgroundColor: accent }} />
@@ -97,7 +116,7 @@ function StatTile({
                 <DeltaBadge value={delta} suffix={deltaSuffix} />
                 {hint ? <p className="text-[10px] text-gray-400">{hint}</p> : null}
             </div>
-        </div>
+        </Tag>
     );
 }
 
@@ -227,6 +246,7 @@ export default function PerformaPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+    const [showBjdModal, setShowBjdModal] = useState(false);
     const [importWarnings, setImportWarnings] = useState<Array<{
         rowNumber: number;
         rawName: string;
@@ -361,10 +381,12 @@ export default function PerformaPage() {
 
     const rows = useMemo(() => summary?.rows ?? [], [summary]);
 
-    // Auto-pilih anak dengan BJD tertinggi supaya panel individu tidak kosong.
+    // Auto-pilih anak dengan BJD tertinggi (produksi + reprocess digabung, sama seperti
+    // urutan ranking di MitraRanking) supaya panel individu tidak kosong.
     useEffect(() => {
         if (!selectedPersonId && rows.length > 0) {
-            const top = [...rows].sort((a, b) => (b.totalBjd ?? 0) - (a.totalBjd ?? 0))[0];
+            const combinedBjd = (row: PerformaRow) => (row.totalBjd ?? 0) + (row.reprocessBjd ?? 0);
+            const top = [...rows].sort((a, b) => combinedBjd(b) - combinedBjd(a))[0];
             setSelectedPersonId(top.personId);
         }
     }, [rows, selectedPersonId]);
@@ -381,7 +403,6 @@ export default function PerformaPage() {
     // Delta tile diambil dari period-stats periode yang sedang dilihat.
     const currentStat =
         periodStats.find((stat) => stat.id === summary?.period?.id) ?? null;
-    const currentRow = rows.find((row) => row.personId === selectedPersonId) ?? null;
     const isEmpty = !loading && !error && periods.length === 0;
 
     return (
@@ -489,66 +510,77 @@ export default function PerformaPage() {
                     </div>
                 ) : null}
 
-                {/* Ringkasan: urutan BJD -> Rendemen -> HK -> Anak */}
+                {/* Ringkasan Summary: 4 KPI produksi inti + 1 total upah gabungan.
+                    Rincian Borong/Bulanan/Subsidi/dst ada di panel Payroll & Biaya di bawah — tidak diulang di sini. */}
                 {stats ? (
-                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                         <StatTile
                             hero
                             label="Total BJD"
-                            value={fmtNum(stats.totalBjd)}
-                            hint={`Baku Basah ${fmtNum(stats.totalBakuBasah)}`}
-                            delta={currentStat?.deltaBjd ?? null}
+                            value={fmtNum(stats.totalBjdWithReprocess ?? stats.totalBjd)}
+                            hint={`Rendemen ${fmtBps(stats.weightedRendemenPctBps)}`}
+                            delta={currentStat?.deltaBjdWithReprocess ?? currentStat?.deltaBjd ?? null}
+                            onClick={() => setShowBjdModal(true)}
                         />
                         <StatTile
-                            label="Rendemen"
-                            value={fmtBps(stats.weightedRendemenPctBps)}
+                            label="Total Baku Basah"
+                            value={fmtNum(stats.totalBakuBasah)}
                             hint={`SP ${fmtBps(stats.weightedSusutProsesPctBps)} · SH ${fmtBps(stats.weightedSusutHilangPctBps)}`}
-                            delta={
-                                currentStat?.deltaRendemenPctBps == null
-                                    ? null
-                                    : currentStat.deltaRendemenPctBps / 100
-                            }
-                            deltaSuffix="%"
+                            delta={currentStat?.deltaBakuBasah ?? null}
                             accent="#2a78d6"
                         />
                         <StatTile
-                            label="Rata-rata Harian"
-                            value={fmtNum(stats.totalBjd / 6)}
-                            hint="Total BJD ÷ 6 hari"
-                            delta={currentStat?.deltaBjd == null ? null : currentStat.deltaBjd / 6}
+                            label="Total Mitra"
+                            value={fmt(stats.totalPeople)}
+                            hint="Pekerja aktif"
+                            accent="#4a3aa7"
+                        />
+                        <StatTile
+                            label="Total HK"
+                            value={`${fmt(stats.totalHk)} HK`}
+                            hint={`Rata-rata ${(stats.totalHk / (stats.totalPeople || 1)).toFixed(1)} HK/mitra`}
+                            delta={currentStat?.deltaHk ?? null}
                             accent="#eda100"
                         />
                         <StatTile
-                            label="Total Anak"
-                            value={fmt(stats.totalPeople)}
-                            hint="di periode ini"
-                            accent="#4a3aa7"
+                            label="Total Upah"
+                            value={new Intl.NumberFormat('id-ID', {
+                                style: 'currency',
+                                currency: 'IDR',
+                                maximumFractionDigits: 0,
+                                notation: 'compact',
+                            }).format(
+                                (expenseSummary?.summary?.totalBorongWageRp ??
+                                    expenseSummary?.summary?.totalPieceworkWageRp ??
+                                    0) + (expenseSummary?.summary?.totalBulananWageRp ?? 0),
+                            )}
+                            hint="Rincian borong/bulanan di Payroll ↓"
+                            accent="#1baf7a"
                         />
                     </div>
                 ) : null}
 
-                {/* 01 — Kapasitas per anak (klik untuk detail) */}
+                {/* 01 — Kapasitas per anak + detail lengkap anak terpilih (ranking, grafik, warna identitas
+                    semua digabung jadi satu panel di sini — sebelumnya tersebar di 2 tempat terpisah). */}
                 {rows.length > 0 ? (
-                    <>
+                    <div ref={panelRef} className="scroll-mt-24">
                         <MitraRanking
                             rows={rows}
                             periods={periods}
                             periodId={periodId}
-                            onPeriodChange={handlePeriodChange}
                             periodLabel={summary?.period?.label}
                             onSelect={selectPerson}
+                            externalSelectedId={selectedPersonId}
+                            persons={persons}
+                            canManage={canManage}
+                            onColorSaved={handleColorSaved}
                         />
                         <div className="mt-2 text-sm text-gray-600 bg-white border border-gray-200 px-4 py-2 rounded-lg shadow-sm inline-flex items-center gap-2">
                             <CalendarRange className="h-4 w-4 text-indigo-500" />
                             Total Hari Kerja Periode Ini: <span className="font-bold text-gray-900">{stats?.totalHk ?? 0} HK</span>
                         </div>
-                    </>
+                    </div>
                 ) : null}
-
-                {/* Turnover & Shifts (Khusus Manager) */}
-                {canManage && prevSummary && (
-                    <TurnoverAndShifts currentSummary={summary} prevSummary={prevSummary} />
-                )}
 
                 {/* Payroll & Biaya Perusahaan / Rekap Payroll Anak Borong */}
                 <PayrollExpensePanel
@@ -557,21 +589,22 @@ export default function PerformaPage() {
                     onSelect={selectPerson}
                 />
 
-                {/* 02 — Detail anak terpilih */}
-                <div ref={panelRef} className="scroll-mt-24">
-                    <IndividualPanel
-                        personId={selectedPersonId}
-                        persons={persons}
-                        currentRow={currentRow}
-                        periodLabel={summary?.period?.label}
-                        canManage={canManage}
-                        onColorSaved={handleColorSaved}
-                    />
-                </div>
+                {/* Turnover & Shifts (Khusus Manager) */}
+                {canManage && prevSummary && (
+                    <TurnoverAndShifts currentSummary={summary} prevSummary={prevSummary} />
+                )}
 
-                {/* 03 — Tren antar periode */}
+                {/* 02 — Tren antar periode (perusahaan) */}
                 {periodStats.length > 0 ? <PeriodTrends stats={periodStats} /> : null}
             </div>
+
+            <TotalBjdModal
+                isOpen={showBjdModal}
+                onClose={() => setShowBjdModal(false)}
+                summary={stats}
+                periodLabel={summary?.period?.label}
+                rows={rows}
+            />
         </div>
     );
 }

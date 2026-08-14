@@ -3693,6 +3693,30 @@ export interface PerformaPeriod {
   createdAt: string;
 }
 
+export interface PerformaLpRow {
+  lpNumber?: string | null;
+  transactionType?: string | null;
+  workerNames: string[];
+  workerPins?: Array<string | null>;
+  pin?: string | null;
+  gradeBaku?: string | null;
+  totalBakuBasah?: number | null;
+  totalBjd?: number | null;
+  rendemenPctBps?: number | null;
+  tarifBakuPerGramRp?: number | null;
+  upahMentahRp?: number | null;
+  upahBarangJadiRp?: number | null;
+  upahBorongRp?: number | null;
+}
+
+/** Baris reprocess/barang-jadi (pola NO. LP "764/5" dsb) — dilacak terpisah dari LP produksi
+ * karena tidak punya baku basah baru, jadi tidak ikut Total BJD/Rendemen utama. */
+export interface PerformaReprocessRow {
+  reprocessId?: string | null;
+  totalBjd?: number | null;
+  rendemenPctBps?: number | null;
+}
+
 export interface PerformaRow {
   id: string;
   personId: string;
@@ -3709,7 +3733,14 @@ export interface PerformaRow {
   rendemenPctBps?: number | null;
   susutProsesPctBps?: number | null;
   susutHilangPctBps?: number | null;
+  gradeBaku?: string | null;
+  tarifBakuPerGramRp?: number | null;
+  upahMentahRp?: number | null;
+  upahBarangJadiRp?: number | null;
+  upahBorongRp?: number | null;
   pieceworkWageRp?: number | null;
+  effectivePieceworkRatePerGramRp?: number | null;
+  effectivePieceworkRatePerKgRp?: number | null;
   subsidyRp?: number | null;
   premiumRp?: number | null;
   mealAllowanceRp?: number | null;
@@ -3718,13 +3749,17 @@ export interface PerformaRow {
   pin?: string | null;
   noLp?: string | null;
   lpCount?: number | null;
+  lpRows?: PerformaLpRow[];
+  reprocessBjd?: number | null;
+  reprocessCount?: number | null;
+  reprocessRows?: PerformaReprocessRow[];
 }
 
 export interface PerformaPeriodRef {
   id: string;
   label: string;
   sheetName: string;
-  format: PerformaImportFormat;
+  format?: PerformaImportFormat;
   startDate?: string | null;
   endDate?: string | null;
   year?: number | null;
@@ -3737,6 +3772,11 @@ export interface PerformaSummaryResponse {
     totalHk: number;
     totalBakuBasah: number;
     totalBjd: number;
+    /** BJD reprocess (pola LP "764/5" dst) dijumlah semua orang di periode ini. */
+    totalReprocessBjd?: number;
+    /** totalBjd + totalReprocessBjd — dipakai untuk kartu "Total BJD" di halaman utama.
+     * Rendemen tetap pakai totalBjd murni produksi, tidak berubah. */
+    totalBjdWithReprocess?: number;
     weightedRendemenPctBps: number | null;
     weightedSusutProsesPctBps: number | null;
     weightedSusutHilangPctBps: number | null;
@@ -3764,12 +3804,24 @@ export interface PerformaExpenseRow {
   rendemenPctBps: number | null;
   weightedSp: number | null;
   weightedSh: number | null;
+  gradeBaku?: string | null;
+  tarifBakuPerGramRp?: number | null;
+  upahMentahRp?: number | null;
+  upahBarangJadiRp?: number | null;
+  upahBorongRp?: number | null;
   pieceworkWageRp: number | null;
+  effectivePieceworkRatePerGramRp?: number | null;
+  effectivePieceworkRatePerKgRp?: number | null;
   subsidyRp: number | null;
   premiumRp: number | null;
   mealAllowanceRp: number | null;
   deductionRp: number | null;
   netWageRp: number | null;
+  lpCount?: number | null;
+  lpRows?: PerformaLpRow[];
+  reprocessBjd?: number | null;
+  reprocessCount?: number | null;
+  reprocessRows?: PerformaReprocessRow[];
   workItemCount: number;
   payrollCount: number;
 }
@@ -3849,6 +3901,8 @@ export interface PerformaPeriodStat {
   totalHk: number;
   totalBakuBasah: number;
   totalBjd: number;
+  totalReprocessBjd?: number;
+  totalBjdWithReprocess?: number;
   weightedRendemenPctBps: number | null;
   weightedSusutProsesPctBps: number | null;
   weightedSusutHilangPctBps: number | null;
@@ -3858,6 +3912,7 @@ export interface PerformaPeriodStat {
   /** Selisih vs periode sebelumnya; null di periode pertama. */
   deltaBakuBasah: number | null;
   deltaBjd: number | null;
+  deltaBjdWithReprocess?: number | null;
   deltaHk: number | null;
   deltaRendemenPctBps: number | null;
 }

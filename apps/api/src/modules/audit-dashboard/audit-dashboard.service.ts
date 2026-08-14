@@ -7,6 +7,8 @@ import {
   ExcelParseError,
   parseWorkbook,
   ParsedWorkbook,
+  calculateEffectiveRates,
+  normalizePersonName,
 } from './audit-dashboard.parser';
 import { TrendMetric } from './dto/trends-query.dto';
 
@@ -70,17 +72,23 @@ type AggregatableMetric = {
   rendemenPctBps: number | null;
   susutProsesPctBps: number | null;
   susutHilangPctBps: number | null;
+  /** JSON mentah dari DB (Prisma.AuditDashboardMetric['rawRowJson']) — dipakai untuk
+   * mengambil reprocessBjd, karena bukan kolom sendiri. Opsional supaya caller lama tanpa
+   * rawRowJson tetap valid. */
+  rawRowJson?: unknown;
 };
+
+/** BJD dari reprocess/barang-jadi (pola LP "764/5") — disimpan di rawRowJson, bukan kolom. */
+function extractReprocessBjd(m: AggregatableMetric): number {
+  const raw = (m.rawRowJson as Record<string, unknown>) ?? {};
+  return typeof raw.reprocessBjd === 'number' ? raw.reprocessBjd : 0;
+}
 
 export function getEffectiveSusutHilangBps(
   m: AggregatableMetric,
 ): number | null {
   if (m.rendemenPctBps !== null && m.susutProsesPctBps !== null) {
-    const sum =
-      m.rendemenPctBps + m.susutProsesPctBps + (m.susutHilangPctBps ?? 0);
-    if (m.susutHilangPctBps === null || sum !== 10_000) {
-      return Math.max(0, 10_000 - m.rendemenPctBps - m.susutProsesPctBps);
-    }
+    return 10_000 - m.rendemenPctBps - m.susutProsesPctBps;
   }
   return m.susutHilangPctBps;
 }
@@ -92,6 +100,14 @@ export function getEffectiveSusutHilangBps(
 export function aggregateMetrics(metrics: AggregatableMetric[]) {
   const totalBakuBasah = sumOf(metrics.map((metric) => metric.totalBakuBasah));
   const totalBjd = sumOf(metrics.map((metric) => metric.totalBjd));
+  // Untuk kartu "Total BJD" saja (angka barang jadi seutuhnya). Rendemen di bawah
+  // TETAP pakai `totalBjd` murni produksi — reprocess sengaja tidak ikut karena tidak
+  // punya baku basah baru untuk dibandingkan.
+  const totalReprocessBjd = metrics.reduce(
+    (sum, m) => sum + extractReprocessBjd(m),
+    0,
+  );
+  const totalBjdWithReprocess = totalBjd + totalReprocessBjd;
 
   const weightedRendemenPctBps =
     weightedAverageOf(
@@ -121,6 +137,8 @@ export function aggregateMetrics(metrics: AggregatableMetric[]) {
     totalHk: sumOf(metrics.map((metric) => metric.hk)),
     totalBakuBasah,
     totalBjd,
+    totalReprocessBjd,
+    totalBjdWithReprocess,
     weightedRendemenPctBps,
     weightedSusutProsesPctBps,
     weightedSusutHilangPctBps,
@@ -277,6 +295,87 @@ export class AuditDashboardService {
             const personId = personIdByName.get(row.normalizedName);
             if (!personId || metricsMap.has(personId)) continue;
 
+            const personLpRows =
+              period.lpRows?.filter(
+                (lp) =>
+                  lp.transactionType !== 'REPROCESS' &&
+                  lp.transactionType !== 'UNKNOWN' &&
+                  lp.workerNames.some(
+                    (w) => normalizePersonName(w) === row.normalizedName,
+                  ),
+              ) ?? [];
+
+            const uniqueLpSet = new Set<string>();
+            let unnamedLps = 0;
+            for (const lp of personLpRows) {
+              if (lp.lpNumber && lp.lpNumber.trim() !== '') {
+                uniqueLpSet.add(lp.lpNumber.trim());
+              } else if (lp.totalBakuBasah !== null || lp.totalBjd !== null) {
+                unnamedLps++;
+              }
+            }
+            const lpCount =
+              uniqueLpSet.size > 0
+                ? uniqueLpSet.size
+                : unnamedLps > 0
+                  ? unnamedLps
+                  : (row.lpCount ?? 0);
+
+            // Baris reprocess (pola LP "764/5" dsb — barang jadi anak bulanan tanpa
+            // baku basah baru) sengaja TIDAK ikut dijumlah ke totalBjd/rendemen orang ini
+            // (lihat consolidateRows di parser — reprocess dipisah dari agregasi produksi).
+            // Dilacak terpisah di sini supaya UI bisa menampilkannya sebagai info tambahan
+            // tanpa mengubah Total BJD atau Rendemen.
+            const personReprocessRows =
+              period.reprocessRows?.filter(
+                (rp) => rp.normalizedName === row.normalizedName,
+              ) ?? [];
+            const reprocessBjd =
+              personReprocessRows.length > 0
+                ? personReprocessRows.reduce(
+                    (sum, rp) => sum + (rp.totalBjd ?? 0),
+                    0,
+                  )
+                : null;
+            const reprocessCount = personReprocessRows.length;
+
+            const enrichedRawRowJson = {
+              ...row.rawRowJson,
+              lpCount,
+              reprocessBjd,
+              reprocessCount,
+              pin: row.pin,
+              noLp: row.lpNumber,
+              gradeBaku: row.gradeBaku,
+              tarifBakuPerGramRp: row.tarifBakuPerGramRp,
+              upahMentahRp: row.upahMentahRp,
+              upahBarangJadiRp: row.upahBarangJadiRp,
+              upahBorongRp: row.upahBorongRp,
+              effectivePieceworkRatePerGramRp:
+                row.effectivePieceworkRatePerGramRp,
+              effectivePieceworkRatePerKgRp: row.effectivePieceworkRatePerKgRp,
+              lpRows: personLpRows.map((lp) => ({
+                lpNumber: lp.lpNumber,
+                transactionType: lp.transactionType,
+                workerNames: lp.workerNames,
+                gradeBaku: lp.gradeBaku,
+                totalBakuBasah: lp.totalBakuBasah,
+                totalBjd: lp.totalBjd,
+                rendemenPctBps: lp.rendemenPctBps,
+                susutProsesPctBps: lp.susutProsesPctBps,
+                susutHilangPctBps: lp.susutHilangPctBps,
+                tarifBakuPerGramRp: lp.tarifBakuPerGramRp,
+                upahMentahRp: lp.upahMentahRp,
+                upahBarangJadiRp: lp.upahBarangJadiRp,
+                upahBorongRp: lp.upahBorongRp,
+              })),
+              reprocessRows: personReprocessRows.map((rp) => ({
+                reprocessId: rp.reprocessId,
+                totalBjd: rp.totalBjd,
+                rendemenPctBps: rp.rendemenPctBps,
+              })),
+            };
+
             metricsMap.set(personId, {
               periodId: created.id,
               personId,
@@ -296,7 +395,7 @@ export class AuditDashboardService {
               mealAllowanceRp: row.mealAllowanceRp ?? null,
               deductionRp: row.deductionRp ?? null,
               netWageRp: row.netWageRp ?? null,
-              rawRowJson: row.rawRowJson as Prisma.InputJsonValue,
+              rawRowJson: enrichedRawRowJson as unknown as Prisma.InputJsonValue,
             });
           }
 
@@ -408,21 +507,81 @@ export class AuditDashboardService {
       orderBy: { rawName: 'asc' },
     });
 
-    const rows = metrics.map((metric) => ({
-      personId: metric.personId,
-      name: metric.person.name,
-      rawName: metric.rawName,
-      colorHex: metric.person.colorHex ?? fallbackColor(metric.personId),
-      rawUserLevel: metric.rawUserLevel,
-      normalizedLevel: metric.normalizedLevel,
-      hk: metric.hk,
-      pieceworkWageRp: metric.pieceworkWageRp,
-      subsidyRp: metric.subsidyRp,
-      premiumRp: metric.premiumRp,
-      mealAllowanceRp: metric.mealAllowanceRp,
-      deductionRp: metric.deductionRp,
-      netWageRp: metric.netWageRp,
-    }));
+    const rows = metrics.map((metric) => {
+      const rawJson = (metric.rawRowJson as Record<string, unknown>) ?? {};
+      const isBulanan = /bulanan/i.test(
+        metric.normalizedLevel ?? metric.rawUserLevel ?? '',
+      );
+      const effectiveRates = calculateEffectiveRates(
+        metric.pieceworkWageRp,
+        metric.totalBakuBasah,
+        isBulanan,
+      );
+
+      const pin =
+        (rawJson.pin as string | undefined) ??
+        (rawJson.PIN as string | undefined) ??
+        metric.person.workerId ??
+        null;
+
+      const lpRows = (rawJson.lpRows as unknown[] | undefined) ?? [];
+      const lpCount =
+        (rawJson.lpCount as number | undefined) ??
+        (lpRows.length > 0 ? lpRows.length : metric.totalBakuBasah ? 1 : 0);
+      const reprocessBjd =
+        typeof rawJson.reprocessBjd === 'number' ? rawJson.reprocessBjd : null;
+      const reprocessCount =
+        typeof rawJson.reprocessCount === 'number' ? rawJson.reprocessCount : 0;
+      const reprocessRows =
+        (rawJson.reprocessRows as Array<Record<string, unknown>> | undefined) ??
+        [];
+
+      return {
+        personId: metric.personId,
+        name: metric.person.name,
+        rawName: metric.rawName,
+        pin,
+        colorHex: metric.person.colorHex ?? fallbackColor(metric.personId),
+        hasCustomColor: Boolean(metric.person.colorHex),
+        rawUserLevel: metric.rawUserLevel,
+        normalizedLevel: metric.normalizedLevel,
+        levelNumber: metric.levelNumber,
+        hk: metric.hk,
+        totalBakuBasah: metric.totalBakuBasah,
+        totalBjd: metric.totalBjd,
+        rendemenPctBps: metric.rendemenPctBps,
+        weightedSp: metric.susutProsesPctBps,
+        weightedSh: getEffectiveSusutHilangBps(metric),
+        gradeBaku: (rawJson.gradeBaku as string | undefined) ?? null,
+        tarifBakuPerGramRp:
+          (rawJson.tarifBakuPerGramRp as number | undefined) ?? null,
+        upahMentahRp: (rawJson.upahMentahRp as number | undefined) ?? null,
+        upahBarangJadiRp:
+          (rawJson.upahBarangJadiRp as number | undefined) ?? null,
+        upahBorongRp:
+          (rawJson.upahBorongRp as number | undefined) ??
+          metric.pieceworkWageRp,
+        pieceworkWageRp: metric.pieceworkWageRp,
+        effectivePieceworkRatePerGramRp:
+          (rawJson.effectivePieceworkRatePerGramRp as number | undefined) ??
+          effectiveRates.effectivePieceworkRatePerGramRp,
+        effectivePieceworkRatePerKgRp:
+          (rawJson.effectivePieceworkRatePerKgRp as number | undefined) ??
+          effectiveRates.effectivePieceworkRatePerKgRp,
+        subsidyRp: metric.subsidyRp,
+        premiumRp: metric.premiumRp,
+        mealAllowanceRp: metric.mealAllowanceRp,
+        deductionRp: metric.deductionRp,
+        netWageRp: metric.netWageRp,
+        lpCount,
+        lpRows,
+        reprocessBjd,
+        reprocessCount,
+        reprocessRows,
+        workItemCount: lpCount,
+        payrollCount: 1,
+      };
+    });
 
     const bulananMetrics = metrics.filter((m) =>
       /bulanan/i.test(m.normalizedLevel ?? m.rawUserLevel ?? ''),
@@ -504,6 +663,10 @@ export class AuditDashboardService {
           ...row,
           deltaBakuBasah: delta(row.totalBakuBasah, previous?.totalBakuBasah),
           deltaBjd: delta(row.totalBjd, previous?.totalBjd),
+          deltaBjdWithReprocess: delta(
+            row.totalBjdWithReprocess,
+            previous?.totalBjdWithReprocess,
+          ),
           deltaHk: delta(row.totalHk, previous?.totalHk),
           deltaRendemenPctBps: delta(
             row.weightedRendemenPctBps,
@@ -515,11 +678,62 @@ export class AuditDashboardService {
   }
 
   private toRow(metric: MetricWithPerson) {
+    const rawJson = (metric.rawRowJson as Record<string, unknown>) ?? {};
+    const isBulanan = /bulanan/i.test(
+      metric.normalizedLevel ?? metric.rawUserLevel ?? '',
+    );
+    const effectiveRates = calculateEffectiveRates(
+      metric.pieceworkWageRp,
+      metric.totalBakuBasah,
+      isBulanan,
+    );
+
+    const pin =
+      (rawJson.pin as string | undefined) ??
+      (rawJson.PIN as string | undefined) ??
+      metric.person.workerId ??
+      null;
+
+    const rawLpRows =
+      (rawJson.lpRows as Array<Record<string, unknown>> | undefined) ?? [];
+    const lpRows = rawLpRows.filter(
+      (lp) =>
+        lp.transactionType !== 'REPROCESS' && lp.transactionType !== 'UNKNOWN',
+    );
+    const uniqueLpSet = new Set<string>();
+    let unnamedLps = 0;
+    for (const lp of lpRows) {
+      if (typeof lp.lpNumber === 'string' && lp.lpNumber.trim() !== '') {
+        uniqueLpSet.add(lp.lpNumber.trim());
+      } else if (lp.totalBakuBasah !== null || lp.totalBjd !== null) {
+        unnamedLps++;
+      }
+    }
+    const lpCount =
+      uniqueLpSet.size > 0
+        ? uniqueLpSet.size
+        : unnamedLps > 0
+          ? unnamedLps
+          : typeof rawJson.lpCount === 'number'
+            ? rawJson.lpCount
+            : metric.totalBakuBasah || metric.totalBjd
+              ? 1
+              : 0;
+
+    const reprocessBjd =
+      typeof rawJson.reprocessBjd === 'number' ? rawJson.reprocessBjd : null;
+    const reprocessCount =
+      typeof rawJson.reprocessCount === 'number' ? rawJson.reprocessCount : 0;
+    const reprocessRows =
+      (rawJson.reprocessRows as Array<Record<string, unknown>> | undefined) ??
+      [];
+
     return {
       id: metric.id,
       personId: metric.personId,
       name: metric.person.name,
       rawName: metric.rawName,
+      pin,
       colorHex: metric.person.colorHex ?? fallbackColor(metric.personId),
       hasCustomColor: Boolean(metric.person.colorHex),
       rawUserLevel: metric.rawUserLevel,
@@ -531,12 +745,32 @@ export class AuditDashboardService {
       rendemenPctBps: metric.rendemenPctBps,
       susutProsesPctBps: metric.susutProsesPctBps,
       susutHilangPctBps: getEffectiveSusutHilangBps(metric),
+      gradeBaku: (rawJson.gradeBaku as string | undefined) ?? null,
+      tarifBakuPerGramRp:
+        (rawJson.tarifBakuPerGramRp as number | undefined) ?? null,
+      upahMentahRp: (rawJson.upahMentahRp as number | undefined) ?? null,
+      upahBarangJadiRp:
+        (rawJson.upahBarangJadiRp as number | undefined) ?? null,
+      upahBorongRp:
+        (rawJson.upahBorongRp as number | undefined) ??
+        metric.pieceworkWageRp,
       pieceworkWageRp: metric.pieceworkWageRp,
+      effectivePieceworkRatePerGramRp:
+        (rawJson.effectivePieceworkRatePerGramRp as number | undefined) ??
+        effectiveRates.effectivePieceworkRatePerGramRp,
+      effectivePieceworkRatePerKgRp:
+        (rawJson.effectivePieceworkRatePerKgRp as number | undefined) ??
+        effectiveRates.effectivePieceworkRatePerKgRp,
       subsidyRp: metric.subsidyRp,
       premiumRp: metric.premiumRp,
       mealAllowanceRp: metric.mealAllowanceRp,
       deductionRp: metric.deductionRp,
       netWageRp: metric.netWageRp,
+      lpCount,
+      lpRows,
+      reprocessBjd,
+      reprocessCount,
+      reprocessRows,
     };
   }
 
