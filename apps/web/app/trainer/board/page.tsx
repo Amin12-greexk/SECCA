@@ -323,7 +323,7 @@ function TrainerBoardContent() {
                                                 onClick={() => {
                                                     setCancelDialog({
                                                         open: true,
-                                                        workOrderId: card.workOrderId ?? card.id,
+                                                        workOrderId: card.workOrderId,
                                                         workerName: card.workerName,
                                                         itemCount: 1,
                                                     });

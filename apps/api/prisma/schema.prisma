@@ -506,7 +506,11 @@ model ProductionLot {
   colorGrade   Grade?       @relation("LotColorGrade", fields: [colorGradeId], references: [id])
   location     RackLocation @relation(fields: [locationId], references: [id])
   sources    LotSource[]
-  workItem   WorkOrderItem?
+  // One-to-many karena lot yang pernah di-cancel menyimpan baris CANCELED
+  // sebagai riwayat. Yang aktif dijamin maksimal satu oleh partial unique
+  // index (lihat WorkOrderItem.lotId) — pakai helper activeWorkItem() di
+  // common/inventory/active-work-item.ts untuk mengambilnya.
+  workItems  WorkOrderItem[]
   movements  InventoryMovement[]
 
   @@index([locationId, createdAt])
@@ -544,7 +548,13 @@ model WorkOrder {
 model WorkOrderItem {
   id          String               @id @default(uuid())
   workOrderId String
-  lotId       String               @unique
+  // Sengaja BUKAN @unique penuh. Satu lot boleh punya banyak baris sepanjang
+  // hanya satu yang aktif: baris CANCELED harus tetap tersimpan sebagai riwayat,
+  // tapi tidak boleh menghalangi lot itu di-assign ulang. Keunikan "satu item
+  // aktif per lot" dijaga partial unique index di migration
+  // 20260818000000_work_order_item_lot_unique_active (Prisma belum bisa
+  // mendeklarasikan partial unique index).
+  lotId       String
   mitraOrderRequestLineId String?
   status      WorkOrderItemStatus  @default(IN_PROGRESS)
   lane        WorkLane             @default(IN_PROGRESS)
@@ -565,6 +575,7 @@ model WorkOrderItem {
 
   @@index([dryingReadyAt])
   @@index([mitraOrderRequestLineId])
+  @@index([lotId])
 }
 
 model WorkerActiveWorkOrder {

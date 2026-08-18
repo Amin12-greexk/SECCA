@@ -386,6 +386,10 @@ export class WorkOrdersService {
 
       cards.push({
         id: item.id,
+        // Kartu board = WorkOrderItem. workOrderId induknya wajib ikut dikirim:
+        // aksi Cancel Order di board memanggil endpoint work-orders/:id/cancel,
+        // jadi tanpa field ini frontend tidak punya id yang benar untuk dipakai.
+        workOrderId: item.workOrderId,
         lpNumber: item.lot.externalId ?? item.lot.lotNumber,
         internalLotNumber: item.lot.lotNumber,
         orderDate,

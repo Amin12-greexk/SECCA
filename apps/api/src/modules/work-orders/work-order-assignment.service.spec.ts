@@ -37,7 +37,7 @@ describe('WorkOrderAssignmentService', () => {
     );
     const tx = {
       workOrderItem: {
-        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
         create: createWorkOrderItem,
       },
       worker: {
@@ -134,7 +134,7 @@ describe('WorkOrderAssignmentService', () => {
     };
     const tx = {
       workOrderItem: {
-        findUnique: jest.fn().mockResolvedValue(existing),
+        findFirst: jest.fn().mockResolvedValue(existing),
       },
     };
 
@@ -145,5 +145,69 @@ describe('WorkOrderAssignmentService', () => {
       }),
     ).resolves.toBe(existing);
     expect(recordMovement).not.toHaveBeenCalled();
+  });
+
+  it('ignores a canceled item so a canceled LP can be assigned again', async () => {
+    const recordMovement = jest.fn().mockResolvedValue({ id: 'movement-1' });
+    const movementService = {
+      record: recordMovement,
+    } as unknown as InventoryMovementService;
+    const service = new WorkOrderAssignmentService(movementService);
+    const createdItem = { id: 'item-2', workOrder: { id: 'work-order-2' } };
+
+    // Baris CANCELED milik worker lain masih ada di DB untuk lot yang sama.
+    // findFirst dipanggil dengan filter status != CANCELED, jadi harus null.
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const tx = {
+      workOrderItem: {
+        findFirst,
+        create: jest.fn().mockResolvedValue(createdItem),
+      },
+      worker: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'worker-2',
+          name: 'Mitra Lain',
+          productionRoomId: 'room-1',
+          trainer: null,
+        }),
+      },
+      productionRoom: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'room-1', code: 'RP1' }),
+      },
+      productionLot: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'lot-1',
+          locationId: 'order-location',
+          productionRoomId: 'room-1',
+        }),
+        update: jest.fn().mockResolvedValue({ id: 'lot-1' }),
+      },
+      rackLocation: {
+        upsert: jest.fn().mockResolvedValue({ id: 'order-location' }),
+      },
+      workerActiveWorkOrder: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'active-2' }),
+      },
+      workOrder: {
+        create: jest.fn().mockResolvedValue({ id: 'work-order-2' }),
+      },
+    };
+
+    const result = await service.assignLot(tx as never, {
+      lotId: 'lot-1',
+      workerId: 'worker-2',
+    });
+
+    expect(result).toBe(createdItem);
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          lotId: 'lot-1',
+          status: { not: WorkOrderItemStatus.CANCELED },
+        }),
+      }),
+    );
+    expect(tx.workOrderItem.create).toHaveBeenCalledTimes(1);
   });
 });

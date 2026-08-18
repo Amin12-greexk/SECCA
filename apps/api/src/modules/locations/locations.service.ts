@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, RackType } from '@prisma/client';
+import { Prisma, RackType, WorkOrderItemStatus } from '@prisma/client';
 import { conflict, badRequest, notFound } from '../../common/errors';
 import { LOCATION_CODES } from '../../common/constants';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -10,6 +10,36 @@ import {
   getFallbackRack,
   getProductionRoomRack,
 } from '../../common/inventory/rack-location';
+import {
+  activeWorkItem,
+  activeWorkItemsArg,
+} from '../../common/inventory/active-work-item';
+
+/** Kolom work item yang dikirim bersama tiap lot (dipakai 3 endpoint daftar lot). */
+const LOT_WORK_ITEM_SELECT = {
+  id: true,
+  status: true,
+  lane: true,
+  workOrder: {
+    select: {
+      id: true,
+      workerId: true,
+      worker: { select: { id: true, name: true, code: true } },
+    },
+  },
+} as const;
+
+const lotWorkItemsArg = () => activeWorkItemsArg({ select: LOT_WORK_ITEM_SELECT });
+
+/**
+ * Lot sekarang punya `workItems[]` (riwayat cancel ikut tersimpan), tapi respons
+ * API tetap memakai `workItem` tunggal supaya klien yang sudah ada tidak berubah.
+ */
+function toSingularWorkItem<
+  T extends { workItems: Array<{ status: WorkOrderItemStatus }> },
+>({ workItems, ...lot }: T) {
+  return { ...lot, workItem: activeWorkItem(workItems) };
+}
 
 @Injectable()
 export class LocationsService {
@@ -234,29 +264,14 @@ export class LocationsService {
         grade: true,
         featherGrade: true,
         colorGrade: true,
-        workItem: {
-          select: {
-            id: true,
-            status: true,
-            lane: true,
-            workOrder: {
-              select: {
-                id: true,
-                workerId: true,
-                worker: {
-                  select: { id: true, name: true, code: true },
-                },
-              },
-            },
-          },
-        },
+        workItems: lotWorkItemsArg(),
       },
       orderBy: { createdAt: 'asc' },
     });
 
     return {
       location,
-      lots,
+      lots: lots.map(toSingularWorkItem),
     };
   }
 
@@ -272,29 +287,14 @@ export class LocationsService {
         grade: true,
         featherGrade: true,
         colorGrade: true,
-        workItem: {
-          select: {
-            id: true,
-            status: true,
-            lane: true,
-            workOrder: {
-              select: {
-                id: true,
-                workerId: true,
-                worker: {
-                  select: { id: true, name: true, code: true },
-                },
-              },
-            },
-          },
-        },
+        workItems: lotWorkItemsArg(),
       },
       orderBy: { createdAt: 'asc' },
     });
 
     return {
       location,
-      lots,
+      lots: lots.map(toSingularWorkItem),
     };
   }
 
@@ -386,32 +386,13 @@ export class LocationsService {
             type: true,
           },
         },
-        workItem: {
-          select: {
-            id: true,
-            status: true,
-            lane: true,
-            workOrder: {
-              select: {
-                id: true,
-                workerId: true,
-                worker: {
-                  select: {
-                    id: true,
-                    name: true,
-                    code: true,
-                  },
-                },
-              },
-            },
-          },
-        },
+        workItems: lotWorkItemsArg(),
       },
     });
 
     return {
       location,
-      lots,
+      lots: lots.map(toSingularWorkItem),
       page: safePage,
       limit,
       total,

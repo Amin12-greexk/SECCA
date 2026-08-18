@@ -35,8 +35,14 @@ export class WorkOrderAssignmentService {
       note?: string;
     },
   ) {
-    const existing = await tx.workOrderItem.findUnique({
-      where: { lotId: input.lotId },
+    // Hanya item AKTIF yang menghalangi assign. Item CANCELED sengaja tetap
+    // tersimpan sebagai riwayat; kalau ikut dihitung di sini, lot yang pernah
+    // di-cancel tidak akan pernah bisa di-assign lagi ke siapa pun.
+    const existing = await tx.workOrderItem.findFirst({
+      where: {
+        lotId: input.lotId,
+        status: { not: WorkOrderItemStatus.CANCELED },
+      },
       include: { workOrder: true },
     });
     if (existing) {
@@ -146,8 +152,11 @@ export class WorkOrderAssignmentService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        return tx.workOrderItem.findUniqueOrThrow({
-          where: { lotId: lot.id },
+        return tx.workOrderItem.findFirstOrThrow({
+          where: {
+            lotId: lot.id,
+            status: { not: WorkOrderItemStatus.CANCELED },
+          },
           include: { workOrder: true },
         });
       }

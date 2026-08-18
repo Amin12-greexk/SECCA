@@ -8,6 +8,10 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { InventoryMovementService } from '../../common/inventory/inventory-movement.service';
+import {
+  activeWorkItem,
+  activeWorkItemsArg,
+} from '../../common/inventory/active-work-item';
 import { NumberingService } from '../../common/numbering/numbering.service';
 import { badRequest, conflict, notFound } from '../../common/errors';
 import { DEFAULT_MOISTURE_BPS, LOCATION_CODES } from '../../common/constants';
@@ -318,7 +322,7 @@ export class LotsService {
         include: {
           location: true,
           grade: true,
-          workItem: {
+          workItems: activeWorkItemsArg({
             select: {
               id: true,
               status: true,
@@ -333,7 +337,7 @@ export class LotsService {
                 },
               },
             },
-          },
+          }),
         },
       });
 
@@ -345,10 +349,11 @@ export class LotsService {
         return conflict('Lot already completed', { lotNumber: lot.lotNumber });
       }
 
+      const workItem = activeWorkItem(lot.workItems);
       const productionRoomId =
         lot.productionRoomId ??
-        lot.workItem?.workOrder.worker.trainer?.productionRoomId ??
-        lot.workItem?.workOrder.worker.productionRoomId ??
+        workItem?.workOrder.worker.trainer?.productionRoomId ??
+        workItem?.workOrder.worker.productionRoomId ??
         undefined;
       const toLocation = await this.getRackLocation(
         tx,
@@ -373,7 +378,7 @@ export class LotsService {
         );
       }
 
-      if (lot.workItem?.status === WorkOrderItemStatus.IN_PROGRESS) {
+      if (workItem?.status === WorkOrderItemStatus.IN_PROGRESS) {
         return conflict('Lot sudah masuk work order aktif', {
           lotNumber: lot.lotNumber,
         });

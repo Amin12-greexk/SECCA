@@ -587,7 +587,7 @@ export class BakuService {
       const lot = entry.pecahBonId
         ? await tx.productionLot.findFirst({
             where: { externalId: entry.pecahBonId },
-            include: { workItem: true, sources: true },
+            include: { workItems: true, sources: true },
           })
         : null;
 

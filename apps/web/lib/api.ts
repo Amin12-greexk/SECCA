@@ -600,7 +600,10 @@ export interface MitraWorkCard {
   dryingReadyAt?: string | null;
   attentionLevel: "NORMAL" | "YELLOW" | "RED";
   ageDays: number;
-  workOrderId?: string;
+  /** WorkOrder induk kartu ini. Wajib (bukan opsional) supaya pemanggil tidak
+   * diam-diam jatuh ke `card.id` — itu id WorkOrderItem, dan mengirimnya ke
+   * endpoint work-orders/:id/cancel bikin 404 "Work order not found". */
+  workOrderId: string;
 }
 
 export interface WorkOrderBoard {

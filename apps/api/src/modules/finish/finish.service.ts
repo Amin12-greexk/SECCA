@@ -10,6 +10,10 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { InventoryMovementService } from '../../common/inventory/inventory-movement.service';
+import {
+  activeWorkItem,
+  activeWorkItemsArg,
+} from '../../common/inventory/active-work-item';
 import { WorkOrderAssignmentService } from '../work-orders/work-order-assignment.service';
 import {
   badRequest,
@@ -432,7 +436,7 @@ export class FinishService {
         featherGrade: true,
         colorGrade: true,
         location: true,
-        workItem: {
+        workItems: activeWorkItemsArg({
           include: {
             finishReceipt: true,
             workOrder: {
@@ -441,7 +445,7 @@ export class FinishService {
               },
             },
           },
-        },
+        }),
       },
     });
 
@@ -449,7 +453,7 @@ export class FinishService {
       return notFound('LP tidak ditemukan', { lpCode: normalizedCode });
     }
 
-    let workItem = lot.workItem;
+    let workItem = activeWorkItem(lot.workItems);
     if (!workItem) {
       const autoAssigned = await this.assignFulfilledTrainerLotForSetoran(lot);
       if (!autoAssigned) {
@@ -469,15 +473,15 @@ export class FinishService {
           featherGrade: true,
           colorGrade: true,
           location: true,
-          workItem: {
+          workItems: activeWorkItemsArg({
             include: {
               finishReceipt: true,
               workOrder: { include: { worker: true } },
             },
-          },
+          }),
         },
       });
-      workItem = lot.workItem;
+      workItem = activeWorkItem(lot.workItems);
       if (!workItem) {
         return conflict('Gagal membuat assignment LP untuk setoran', {
           lpCode: normalizedCode,
