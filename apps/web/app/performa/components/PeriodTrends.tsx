@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type { EChartsOption } from 'echarts';
 import { Trophy } from 'lucide-react';
 import LazyEChart from '@/components/charts/LazyEChart';
@@ -17,6 +17,7 @@ import {
     valueAxis,
 } from '@/components/charts/chart-theme';
 import type { PerformaPeriodStat } from '@/lib/api';
+import { CAPACITY_TARGETS, capacityTargetMarkLine } from './capacityTarget';
 
 /**
  * Tren antar periode gaya "production/efficiency chart":
@@ -75,6 +76,9 @@ function lineSeries(params: {
     labelPosition?: 'top' | 'bottom';
     showLabel?: boolean;
     decimals?: number;
+    /** Garis target datar (dipakai kartu kapasitas) — lihat capacityTarget.ts.
+     * Tipe markLine ECharts tidak dideklarasikan lengkap di typings paket ini. */
+    markLine?: ReturnType<typeof capacityTargetMarkLine>;
 }) {
     const {
         name,
@@ -84,6 +88,7 @@ function lineSeries(params: {
         labelPosition = 'top',
         showLabel = true,
         decimals = 1,
+        markLine,
     } = params;
 
     return {
@@ -112,6 +117,7 @@ function lineSeries(params: {
             padding: [2, 5] as [number, number],
             borderRadius: 4,
         },
+        markLine,
         data,
     };
 }
@@ -177,6 +183,9 @@ function ChartCard(props: {
     growthSuffix: string;
     option: EChartsOption;
     height: number;
+    /** Legenda tambahan di bawah subtitle, mis. keterangan garis target kapasitas
+     * — dipisah dari badan chart supaya tidak tabrakan dengan label titik data. */
+    legend?: ReactNode;
 }) {
     return (
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -193,6 +202,7 @@ function ChartCard(props: {
                     ) : null}
                 </h2>
                 <p className="mt-0.5 text-xs text-gray-400">{props.subtitle}</p>
+                {props.legend}
             </div>
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-gray-50 px-4 py-2.5">
@@ -376,6 +386,7 @@ function CapacityCard({ stats, range }: { stats: PerformaPeriodStat[]; range: nu
                     area: true,
                     labelPosition: 'top',
                     showLabel,
+                    markLine: capacityTargetMarkLine(),
                 }),
             ],
         });
@@ -385,6 +396,16 @@ function CapacityCard({ stats, range }: { stats: PerformaPeriodStat[]; range: nu
         <ChartCard
             title="Rata-rata Kapasitas Harian per Anak"
             subtitle="Gram Barang Jadi per HK di tiap periode"
+            legend={
+                <div className="mt-1 flex flex-wrap items-center gap-2.5">
+                    {CAPACITY_TARGETS.map((t) => (
+                        <span key={t.weeks} className="inline-flex items-center gap-1 text-[10px] text-gray-400">
+                            <span className="h-0 w-3 border-t-2 border-dashed" style={{ borderColor: t.color }} />
+                            {t.label}
+                        </span>
+                    ))}
+                </div>
+            }
             totalPeriods={visible.length}
             heroValue={latest === null ? '–' : fmtId(latest, 1)}
             heroUnit="Gr"
@@ -392,7 +413,7 @@ function CapacityCard({ stats, range }: { stats: PerformaPeriodStat[]; range: nu
             growth={growthPct(latest, previous)}
             growthSuffix="%"
             option={option}
-            height={240}
+            height={280}
         />
     );
 }
@@ -421,10 +442,10 @@ export default function PeriodTrends({ stats }: { stats: PerformaPeriodStat[] })
                     ))}
                 </select>
             </div>
-            <div className="grid gap-5 lg:grid-cols-2">
-                <ProductionCard stats={stats} range={range} />
-                <EfficiencyCard stats={stats} range={range} />
-            </div>
+            {/* Satu grafik per baris (tidak lagi 2 bersebelahan) — dengan 13 periode,
+             * label sumbu X di kartu setengah lebar jadi terlalu rapat untuk dibaca. */}
+            <ProductionCard stats={stats} range={range} />
+            <EfficiencyCard stats={stats} range={range} />
             <CapacityCard stats={stats} range={range} />
         </div>
     );

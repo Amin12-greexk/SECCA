@@ -7,22 +7,42 @@ import {
     valueAxis,
 } from '@/components/charts/chart-theme';
 import { CAPACITY_BAND_RANGES, classifyCapacity } from './capacityBand';
+import {
+    CAPACITY_TARGETS,
+    capacityTargetMarkLine,
+    capacityTargetMarkPoint,
+    type CapacityTargetCheckpoint,
+} from './capacityTarget';
 
 export type CapacityTrendPoint = {
     label: string;
     gramPerHk: number | null;
 };
 
+/** Ambang target tertinggi (35 g/hk) — sumbu Y minimal harus memuat ini. */
+const HIGHEST_TARGET = Math.max(...CAPACITY_TARGETS.map((t) => t.value));
+
 /**
  * Tren "Kapasitas" (gram BJD/HK) antar periode: pita latar merah/kuning/
  * hijau/biru menandai bandnya, tiap titik diwarnai sesuai band nilainya
  * sendiri — naik/turun dan pergeseran band langsung kelihatan tanpa tabel.
+ * Dua garis putus-putus (kuning di 25 g/hk, hijau di 35 g/hk) menandai
+ * target minggu ke-12 dan minggu ke-20; kalau periode saat anak itu genap
+ * minggu segitu ada di data, ditambah checkpoint (belah ketupat) tepat di
+ * titik itu — lihat capacityTarget.ts.
  */
-export function capacityTrendOption(points: CapacityTrendPoint[]): EChartsOption {
+export function capacityTrendOption(
+    points: CapacityTrendPoint[],
+    checkpoints: CapacityTargetCheckpoint[] = [],
+): EChartsOption {
     const labels = points.map((p) => p.label);
     const values = points.map((p) => p.gramPerHk);
-    const highest = Math.max(75, ...values.filter((v): v is number => v != null));
+    // Sumbu Y cukup setinggi data + headroom, tapi selalu memuat garis target
+    // tertinggi. Sebelumnya dipaksa minimal 75 g/hk sehingga anak yang masih
+    // di kisaran 5–25 g/hk gepeng menempel di dasar chart.
+    const highest = Math.max(HIGHEST_TARGET, ...values.filter((v): v is number => v != null));
     const yMax = Math.ceil((highest + 10) / 10) * 10;
+    const checkpointByLabel = new Map(checkpoints.map((c) => [c.periodLabel, c]));
 
     return {
         grid: { top: 24, right: 16, bottom: 46, left: 48 },
@@ -38,9 +58,26 @@ export function capacityTrendOption(points: CapacityTrendPoint[]): EChartsOption
                 const info = first as { value?: unknown; axisValueLabel?: string };
                 const value = typeof info.value === 'number' ? info.value : null;
                 const label = info.axisValueLabel ?? '';
-                if (value == null) return `${label}<br/>–`;
-                const band = classifyCapacity(value);
-                return `${label}<br/><b>${fmtId(value, 1)} g/hk</b>${band ? ` · ${band.label}` : ''}`;
+                const lines = [label];
+                if (value == null) {
+                    lines.push('–');
+                } else {
+                    const band = classifyCapacity(value);
+                    lines.push(`<b>${fmtId(value, 1)} g/hk</b>${band ? ` · ${band.label}` : ''}`);
+                }
+                const checkpoint = checkpointByLabel.get(label);
+                if (checkpoint) {
+                    const verdict =
+                        checkpoint.achieved == null
+                            ? 'data kosong'
+                            : checkpoint.achieved
+                              ? 'tercapai'
+                              : 'belum tercapai';
+                    lines.push(
+                        `<span style="color:${checkpoint.color}">◆ Evaluasi mgg ${checkpoint.weeks} — target ${fmtId(checkpoint.target, 0)} g/hk: <b>${verdict}</b></span>`,
+                    );
+                }
+                return lines.join('<br/>');
             },
         },
         xAxis: {
@@ -63,6 +100,7 @@ export function capacityTrendOption(points: CapacityTrendPoint[]): EChartsOption
         },
         series: [
             {
+                name: 'Aktual',
                 type: 'line',
                 connectNulls: false,
                 smooth: 0.3,
@@ -91,8 +129,8 @@ export function capacityTrendOption(points: CapacityTrendPoint[]): EChartsOption
                     formatter: (item: { value?: unknown }) =>
                         item.value == null ? '' : fmtId(Number(item.value), 1),
                 },
-                // Pita latar band: tipe markArea ECharts tidak dideklarasikan lengkap
-                // di typings paket ini, jadi objeknya di-cast langsung.
+                // Pita latar band & garis target: tipe markArea/markLine ECharts tidak
+                // dideklarasikan lengkap di typings paket ini, jadi objeknya di-cast langsung.
                 markArea: {
                     silent: true,
                     itemStyle: { opacity: 0.07 },
@@ -101,6 +139,8 @@ export function capacityTrendOption(points: CapacityTrendPoint[]): EChartsOption
                         { yAxis: band.max ?? yMax },
                     ]),
                 },
+                markLine: capacityTargetMarkLine(checkpoints),
+                markPoint: capacityTargetMarkPoint(checkpoints),
             },
         ],
     } as EChartsOption;
