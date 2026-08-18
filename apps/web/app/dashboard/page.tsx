@@ -43,14 +43,16 @@ function DashboardContent() {
         }
     };
 
+    const userRole = user?.role?.toLowerCase() ?? '';
+
     useEffect(() => {
-        if (!user || user.role !== 'mitra') return;
+        if (!user || userRole !== 'mitra') return;
         if (!user.workerId) return;
         loadWeeklyStats(user.workerId);
-    }, [user]);
+    }, [user, userRole]);
 
     const getRoleWelcomeMessage = (role: string) => {
-        switch (role) {
+        switch (role.toLowerCase()) {
             case 'baku':
                 return 'Kelola penerimaan bahan baku dengan mudah';
             case 'mitra':
@@ -67,7 +69,7 @@ function DashboardContent() {
     };
 
     const getQuickActions = (role: string) => {
-        switch (role) {
+        switch (role.toLowerCase()) {
             case 'baku':
                 return [
                     { name: 'Terima Baku Baru', href: '/baku/receive', icon: '📦' },
@@ -143,7 +145,7 @@ function DashboardContent() {
                 </div>
             </div>
 
-            {user.role === 'mitra' ? (
+            {userRole === 'mitra' ? (
                 <div className="space-y-4">
                     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -261,7 +263,7 @@ function DashboardContent() {
                         )}
                     </div>
                 </div>
-            ) : user.role !== 'manager' && quickActions.length > 0 ? (
+            ) : userRole !== 'manager' && quickActions.length > 0 ? (
                 <div>
                     <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -281,7 +283,7 @@ function DashboardContent() {
                 </div>
             ) : null}
 
-            {user.role === 'trainer' && (
+            {userRole === 'trainer' && (
                 <TrainerAnalytics />
             )}
 

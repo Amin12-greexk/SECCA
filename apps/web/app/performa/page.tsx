@@ -30,6 +30,7 @@ import MitraRanking from './components/MitraRanking';
 import PayrollExpensePanel from './components/PayrollExpensePanel';
 import PeriodTrends from './components/PeriodTrends';
 import TotalBjdModal from './components/TotalBjdModal';
+import TotalUpahModal from './components/TotalUpahModal';
 import TurnoverAndShifts from './components/TurnoverAndShifts';
 
 /* ─── Helpers ─────────────────────────────────────────────────── */
@@ -247,6 +248,7 @@ export default function PerformaPage() {
     const [error, setError] = useState<string | null>(null);
     const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
     const [showBjdModal, setShowBjdModal] = useState(false);
+    const [showUpahModal, setShowUpahModal] = useState(false);
     const [importWarnings, setImportWarnings] = useState<Array<{
         rowNumber: number;
         rawName: string;
@@ -550,12 +552,14 @@ export default function PerformaPage() {
                                 maximumFractionDigits: 0,
                                 notation: 'compact',
                             }).format(
-                                (expenseSummary?.summary?.totalBorongWageRp ??
-                                    expenseSummary?.summary?.totalPieceworkWageRp ??
-                                    0) + (expenseSummary?.summary?.totalBulananWageRp ?? 0),
+                                expenseSummary?.summary?.totalNetWageRp ??
+                                    (expenseSummary?.summary?.totalBorongWageRp ??
+                                        expenseSummary?.summary?.totalPieceworkWageRp ??
+                                        0) + (expenseSummary?.summary?.totalBulananWageRp ?? 0),
                             )}
-                            hint="Rincian borong/bulanan di Payroll ↓"
+                            hint="Klik untuk upah per kg"
                             accent="#1baf7a"
+                            onClick={() => setShowUpahModal(true)}
                         />
                     </div>
                 ) : null}
@@ -573,7 +577,6 @@ export default function PerformaPage() {
                             externalSelectedId={selectedPersonId}
                             persons={persons}
                             canManage={canManage}
-                            onColorSaved={handleColorSaved}
                         />
                         <div className="mt-2 text-sm text-gray-600 bg-white border border-gray-200 px-4 py-2 rounded-lg shadow-sm inline-flex items-center gap-2">
                             <CalendarRange className="h-4 w-4 text-indigo-500" />
@@ -604,6 +607,14 @@ export default function PerformaPage() {
                 summary={stats}
                 periodLabel={summary?.period?.label}
                 rows={rows}
+            />
+
+            <TotalUpahModal
+                isOpen={showUpahModal}
+                onClose={() => setShowUpahModal(false)}
+                expenseSummary={expenseSummary?.summary ?? null}
+                performaSummary={stats}
+                periodLabel={summary?.period?.label}
             />
         </div>
     );

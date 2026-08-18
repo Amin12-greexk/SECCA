@@ -1,6 +1,6 @@
 'use client';
 
-import { Layers, RefreshCw, Scale, X } from 'lucide-react';
+import { CalendarDays, RefreshCw, Scale, TrendingUp, X } from 'lucide-react';
 import {
     Dialog,
     DialogClose,
@@ -15,36 +15,25 @@ interface TotalBjdModalProps {
     onClose: () => void;
     summary: PerformaSummaryResponse['summary'];
     periodLabel?: string;
-    rows: PerformaRow[];
+    rows?: PerformaRow[];
 }
 
 /** Detail Total BJD sekantor: pisahkan kapasitas produksi (yang menentukan Rendemen)
- * dari reprocess/barang-jadi (yang cuma ikut ke total, bukan Rendemen), plus siapa saja
- * yang mengerjakan reprocess periode ini. */
+ * dari reprocess/barang-jadi (yang cuma ikut ke total, bukan Rendemen), serta rata-rata kapasitas harian. */
 export default function TotalBjdModal({
     isOpen,
     onClose,
     summary,
     periodLabel,
-    rows,
 }: TotalBjdModalProps) {
     if (!summary) return null;
 
+    const WORK_DAYS = 6;
     const totalProduksi = summary.totalBjd;
     const totalReprocess = summary.totalReprocessBjd ?? 0;
     const totalGabungan = summary.totalBjdWithReprocess ?? totalProduksi;
-
-    const contributors = rows
-        .filter((row) => (row.reprocessBjd ?? 0) > 0)
-        .map((row) => ({
-            id: row.personId,
-            name: row.name,
-            colorHex: row.colorHex,
-            reprocessBjd: row.reprocessBjd ?? 0,
-            reprocessCount: row.reprocessCount ?? 0,
-            totalBjd: row.totalBjd ?? 0,
-        }))
-        .sort((a, b) => b.reprocessBjd - a.reprocessBjd);
+    const avgKapasitasHarian = totalGabungan / WORK_DAYS;
+    const avgProduksiHarian = totalProduksi / WORK_DAYS;
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -57,7 +46,7 @@ export default function TotalBjdModal({
                         <X className="h-5 w-5" />
                         <span className="sr-only">Tutup</span>
                     </DialogClose>
-                    <DialogTitle className="text-lg font-bold text-white">Total BJD</DialogTitle>
+                    <DialogTitle className="text-lg font-bold text-white">Total BJD & Kapasitas</DialogTitle>
                     <p className="text-xs text-slate-300 mt-0.5">
                         Gabungan produksi + reprocess, seluruh mitra
                         {periodLabel ? ` · ${periodLabel}` : ''}
@@ -65,15 +54,43 @@ export default function TotalBjdModal({
                 </div>
 
                 <div className="p-6 space-y-5 bg-slate-50/50">
-                    <div className="relative overflow-hidden rounded-xl border border-green-200 bg-gradient-to-br from-[#047f2b] to-emerald-600 p-4 text-white shadow-sm">
-                        <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-100">
-                            Total BJD Gabungan
-                        </p>
-                        <p className="mt-0.5 text-3xl font-extrabold tracking-tight">
-                            {fmtId(totalGabungan, 1)} g
-                        </p>
+                    {/* Highlighted Top Cards Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Card 1: Total BJD Gabungan */}
+                        <div className="relative overflow-hidden rounded-xl border border-green-200 bg-gradient-to-br from-[#047f2b] to-emerald-600 p-4 text-white shadow-sm">
+                            <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-100">
+                                Total BJD Gabungan
+                            </p>
+                            <p className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight">
+                                {fmtId(totalGabungan, 1)} g
+                            </p>
+                            <p className="mt-1 text-[11px] text-emerald-100/80">
+                                Produksi + Reprocess
+                            </p>
+                        </div>
+
+                        {/* Card 2: Rata-rata Kapasitas Harian (Dibagi 6 Hari Kerja) */}
+                        <div className="relative overflow-hidden rounded-xl border border-teal-300 bg-gradient-to-br from-teal-700 to-emerald-800 p-4 text-white shadow-sm">
+                            <div className="flex items-center justify-between">
+                                <p className="text-[11px] font-medium uppercase tracking-wide text-teal-100 flex items-center gap-1.5">
+                                    <TrendingUp className="h-3.5 w-3.5 text-teal-200" />
+                                    Rata-rata Kapasitas
+                                </p>
+                                <span className="inline-flex items-center gap-1 rounded-md bg-white/15 px-2 py-0.5 text-[10px] font-bold text-white uppercase tracking-wider">
+                                    <CalendarDays className="h-3 w-3" />
+                                    6 Hari Kerja
+                                </span>
+                            </div>
+                            <p className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight">
+                                {fmtId(avgKapasitasHarian, 1)} g <span className="text-xs font-normal text-teal-200">/ hari</span>
+                            </p>
+                            <p className="mt-1 text-[11px] text-teal-100/80">
+                                Total BJD ÷ 6 hari kerja
+                            </p>
+                        </div>
                     </div>
 
+                    {/* Breakdown 2 Cards */}
                     <div className="grid grid-cols-2 gap-3">
                         <div className="rounded-lg border border-slate-200 bg-white p-4">
                             <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -86,9 +103,14 @@ export default function TotalBjdModal({
                             <p className="mt-0.5 text-[11px] text-slate-400">
                                 Baku Basah {fmtId(summary.totalBakuBasah, 1)} g
                             </p>
-                            <p className="mt-1 text-xs font-semibold text-blue-700">
-                                Rendemen {fmtBpsId(summary.weightedRendemenPctBps)}
-                            </p>
+                            <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                                <span className="font-semibold text-blue-700">
+                                    Rendemen {fmtBpsId(summary.weightedRendemenPctBps)}
+                                </span>
+                                <span className="text-[11px] text-slate-500 font-medium">
+                                    ~{fmtId(avgProduksiHarian, 1)} g/hr
+                                </span>
+                            </div>
                         </div>
 
                         <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-4">
@@ -100,62 +122,13 @@ export default function TotalBjdModal({
                                 {fmtId(totalReprocess, 1)} g
                             </p>
                             <p className="mt-0.5 text-[11px] text-slate-400">
-                                {contributors.length} mitra terlibat
+                                Tidak ikut Rendemen
                             </p>
-                            <p className="mt-1 text-[10px] text-slate-400">
-                                Tidak ikut Rendemen — tidak ada baku basah baru
-                            </p>
-                        </div>
-                    </div>
-
-                    {contributors.length > 0 ? (
-                        <div>
-                            <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                                <Layers className="h-4 w-4 text-purple-600" />
-                                Rincian per Mitra ({contributors.length})
-                            </h3>
-                            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-2xs">
-                                <table className="w-full text-xs">
-                                    <thead>
-                                        <tr className="border-b border-slate-100 bg-slate-50/80 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                                            <th className="px-3 py-2">Nama</th>
-                                            <th className="px-3 py-2 text-right">BJD Produksi</th>
-                                            <th className="px-3 py-2 text-right">BJD Reprocess</th>
-                                            <th className="px-3 py-2 text-right">Total</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {contributors.map((c) => (
-                                            <tr key={c.id} className="hover:bg-slate-50">
-                                                <td className="px-3 py-2 font-medium text-slate-800">
-                                                    <span className="flex items-center gap-2">
-                                                        <span
-                                                            className="h-2 w-2 shrink-0 rounded-full"
-                                                            style={{ backgroundColor: c.colorHex }}
-                                                        />
-                                                        {c.name}
-                                                    </span>
-                                                </td>
-                                                <td className="px-3 py-2 text-right text-slate-600">
-                                                    {fmtId(c.totalBjd, 1)} g
-                                                </td>
-                                                <td className="px-3 py-2 text-right font-semibold text-purple-600">
-                                                    {fmtId(c.reprocessBjd, 1)} g
-                                                </td>
-                                                <td className="px-3 py-2 text-right font-bold text-slate-900">
-                                                    {fmtId(c.totalBjd + c.reprocessBjd, 1)} g
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                            <div className="mt-2 pt-2 border-t border-purple-100 text-[10px] text-purple-600 font-medium">
+                                Tambahan output non-basah
                             </div>
                         </div>
-                    ) : (
-                        <p className="text-xs text-slate-400 text-center py-2">
-                            Tidak ada pekerjaan reprocess di periode ini.
-                        </p>
-                    )}
+                    </div>
                 </div>
             </DialogContent>
         </Dialog>

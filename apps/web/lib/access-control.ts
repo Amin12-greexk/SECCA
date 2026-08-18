@@ -152,9 +152,11 @@ export const ROLE_DEFAULT_ACCESS: Record<UserRole, Partial<Record<UiAccessModule
 
 const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
     { matcher: /^\/dashboard(?:\/|$)/, moduleKey: 'dashboard', minLevel: 1 },
+    { matcher: /^\/performa(?:\/|$)/, moduleKey: 'dashboard', minLevel: 1 },
     { matcher: /^\/baku\/receive(?:\/|$)/, moduleKey: 'baku', minLevel: 1 },
     { matcher: /^\/baku\/grading(?:\/|$)/, moduleKey: 'baku', minLevel: 2 },
     { matcher: /^\/baku\/supplier(?:\/|$)/, moduleKey: 'baku', minLevel: 3 },
+    { matcher: /^\/baku\/orders(?:\/|$)/, moduleKey: 'baku', minLevel: 1 },
     { matcher: /^\/stock$/, moduleKey: 'stock', minLevel: 1 },
     { matcher: /^\/stock\/asal(?:\/|$)/, moduleKey: 'stock', minLevel: 1 },
     { matcher: /^\/stock\/rak(?:\/|$)/, moduleKey: 'stock', minLevel: 2 },
@@ -168,16 +170,20 @@ const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
     { matcher: /^\/trainer\/board(?:\/|$)/, moduleKey: 'trainer_orders', minLevel: 2 },
     { matcher: /^\/koreksi\/data(?:\/|$)/, moduleKey: 'koreksi', minLevel: 1 },
     { matcher: /^\/koreksi\/barang-jadi(?:\/|$)/, moduleKey: 'koreksi', minLevel: 2 },
+    { matcher: /^\/koreksi\/evaluasi(?:\/|$)/, moduleKey: 'koreksi', minLevel: 2 },
     { matcher: /^\/koreksi\/history(?:\/|$)/, moduleKey: 'koreksi', minLevel: 3 },
     { matcher: /^\/admin\/rules(?:\/|$)/, moduleKey: 'admin', minLevel: 1 },
     { matcher: /^\/admin\/users(?:\/|$)/, moduleKey: 'admin', minLevel: 2 },
     { matcher: /^\/admin\/mitra-pengawas(?:\/|$)/, moduleKey: 'admin', minLevel: 3 },
+    { matcher: /^\/admin\/locations(?:\/|$)/, moduleKey: 'admin', minLevel: 1 },
+    { matcher: /^\/admin\/rooms(?:\/|$)/, moduleKey: 'admin', minLevel: 1 },
     { matcher: /^\/settings(?:\/|$)/, moduleKey: 'settings', minLevel: 1 },
     { matcher: /^\/reports(?:\/|$)/, moduleKey: 'reports', minLevel: 1 },
 ];
 
 const DEFAULT_ROUTE_PRIORITY: Array<{ path: string; moduleKey: UiAccessModuleKey; minLevel: number }> = [
     { path: '/dashboard', moduleKey: 'dashboard', minLevel: 1 },
+    { path: '/performa', moduleKey: 'dashboard', minLevel: 1 },
     { path: '/baku/receive', moduleKey: 'baku', minLevel: 1 },
     { path: '/stock', moduleKey: 'stock', minLevel: 1 },
     { path: '/trainer/orders', moduleKey: 'trainer_orders', minLevel: 1 },
@@ -217,7 +223,8 @@ export function getEffectiveAccessMap(user: User | null | undefined) {
         }, {});
     }
 
-    return { ...(ROLE_DEFAULT_ACCESS[user.role] ?? {}) };
+    const normalizedRole = (user.role?.toLowerCase() ?? '') as UserRole;
+    return { ...(ROLE_DEFAULT_ACCESS[normalizedRole] ?? {}) };
 }
 
 export function hasModuleAccess(

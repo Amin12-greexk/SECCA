@@ -93,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionStorage.removeItem('user');
         setUser(null);
 
+
         // Redirect to login
         router.push('/login');
     }, [router]);
@@ -100,8 +101,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const hasRole = useCallback((roles: UserRole | UserRole[]) => {
         if (!user) return false;
 
-        const roleArray = Array.isArray(roles) ? roles : [roles];
-        return roleArray.includes(user.role as UserRole);
+        const userRole = (user.role?.toLowerCase() ?? '') as UserRole;
+        const roleArray = (Array.isArray(roles) ? roles : [roles]).map((r) => r.toLowerCase());
+        return roleArray.includes(userRole);
     }, [user]);
 
     const hasModuleAccess = useCallback(

@@ -19,10 +19,11 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
 
     const routeRequirement = getRouteAccessRequirement(pathname);
     const hasRouteAccess = isAuthenticated && !!user && canAccessPath(user, pathname);
+    const userRole = (user?.role?.toLowerCase() ?? '') as UserRole;
     const hasRoleAccess =
         !allowedRoles || allowedRoles.length === 0
             ? true
-            : allowedRoles.includes(user?.role as UserRole);
+            : allowedRoles.map((r) => r.toLowerCase()).includes(userRole);
     const hasPermission = routeRequirement ? hasRouteAccess : hasRoleAccess;
 
     useEffect(() => {

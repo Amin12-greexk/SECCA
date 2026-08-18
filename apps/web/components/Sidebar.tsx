@@ -20,11 +20,14 @@ interface MenuItem {
 
 const MENU_ACCESS_REQUIREMENTS: Record<string, { moduleKey: UiAccessModuleKey; minLevel: number }> = {
     Dashboard: { moduleKey: 'dashboard', minLevel: 1 },
+    Performa: { moduleKey: 'dashboard', minLevel: 1 },
     'Terima Baku': { moduleKey: 'baku', minLevel: 1 },
     'Tambah Grading': { moduleKey: 'baku', minLevel: 2 },
     'Tambah Supplier': { moduleKey: 'baku', minLevel: 3 },
+    'Permintaan Order': { moduleKey: 'baku', minLevel: 1 },
     'Data Stock': { moduleKey: 'stock', minLevel: 1 },
     Rak: { moduleKey: 'stock', minLevel: 2 },
+    'Pecah Bon': { moduleKey: 'stock', minLevel: 3 },
     'Daftar Mitra': { moduleKey: 'mitra_management', minLevel: 1 },
     'Tambah Mitra': { moduleKey: 'mitra_management', minLevel: 2 },
     'Pencabutan Mitra': { moduleKey: 'mitra', minLevel: 1 },
@@ -39,6 +42,7 @@ const MENU_ACCESS_REQUIREMENTS: Record<string, { moduleKey: UiAccessModuleKey; m
     'Manajemen Akun': { moduleKey: 'admin', minLevel: 2 },
     'Assign Pengawas': { moduleKey: 'admin', minLevel: 3 },
     'Manajemen Rak': { moduleKey: 'admin', minLevel: 1 },
+    'Ruang Produksi': { moduleKey: 'admin', minLevel: 1 },
 };
 
 const menuItems: MenuItem[] = [
@@ -53,6 +57,18 @@ const menuItems: MenuItem[] = [
             </svg>
         ),
         roles: ['mitra', 'koreksi', 'manager', 'trainer'],
+    },
+    // Performa Dashboard - warna teal / cyan
+    {
+        name: 'Performa',
+        href: '/performa',
+        colorClass: 'bg-teal-100 text-teal-700 border-teal-200/70',
+        icon: (
+            <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+        ),
+        roles: ['manager', 'trainer'],
     },
     // Menu Baku - warna amber / oranye
     {
@@ -98,6 +114,17 @@ const menuItems: MenuItem[] = [
                 ),
                 roles: ['baku', 'manager'],
             },
+            {
+                name: 'Permintaan Order',
+                href: '/baku/orders',
+                colorClass: 'bg-amber-50 text-amber-700 border-amber-200/60',
+                icon: (
+                    <svg className="w-3.5 h-3.5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                    </svg>
+                ),
+                roles: ['baku', 'manager'],
+            },
         ],
     },
     // Menu Stock - warna biru
@@ -129,6 +156,17 @@ const menuItems: MenuItem[] = [
                 icon: (
                     <svg className="w-3.5 h-3.5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                         <path d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                    </svg>
+                ),
+                roles: ['baku', 'manager'],
+            },
+            {
+                name: 'Pecah Bon',
+                href: '/stock/pecah-bon',
+                colorClass: 'bg-blue-50 text-blue-700 border-blue-200/60',
+                icon: (
+                    <svg className="w-3.5 h-3.5" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                        <path d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
                     </svg>
                 ),
                 roles: ['baku', 'manager'],
@@ -448,7 +486,8 @@ export default function Sidebar() {
             return hasModuleAccess(accessRequirement.moduleKey, accessRequirement.minLevel);
         }
 
-        return item.roles.includes(user.role as UserRole);
+        const userRole = (user.role?.toLowerCase() ?? '') as UserRole;
+        return item.roles.map((r) => r.toLowerCase()).includes(userRole);
     };
 
     const visibleMenuItems = menuItems.filter((item) => isMenuVisible(item));

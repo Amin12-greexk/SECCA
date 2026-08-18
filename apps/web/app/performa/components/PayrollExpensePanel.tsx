@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Wallet } from 'lucide-react';
 import { fmtId } from '@/components/charts/chart-theme';
 import type { PerformaExpenseSummaryResponse } from '@/lib/api';
+import { getMitraCapacityColor } from './capacityBand';
 
 const fmtRp = (value: number | null | undefined) =>
     value === null || value === undefined
@@ -194,7 +195,7 @@ export default function PayrollExpensePanel({
                                                 <span className="flex items-center gap-2">
                                                     <span
                                                         className="h-2.5 w-2.5 flex-none rounded-full"
-                                                        style={{ backgroundColor: isBulanan ? '#8b5cf6' : row.colorHex }}
+                                                        style={{ backgroundColor: getMitraCapacityColor(row) }}
                                                     />
                                                     {row.name}
                                                 </span>

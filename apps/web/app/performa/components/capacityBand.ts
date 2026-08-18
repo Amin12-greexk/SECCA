@@ -41,3 +41,21 @@ export const CAPACITY_BANDS: CapacityBand[] = [
 
 /** Ambang batas tiap band (dipakai markArea chart tren kapasitas). */
 export const CAPACITY_BAND_RANGES = BANDS.map(({ min, max, color }) => ({ min, max, color }));
+
+/** Warna identitas mitra otomatis berdasarkan band kapasitas atau status anak bulanan. */
+export function getMitraCapacityColor(row: {
+    hk?: number | null;
+    totalBjd?: number | null;
+    normalizedLevel?: string | null;
+    rawUserLevel?: string | null;
+} | null | undefined): string {
+    if (!row) return '#2a78d6';
+    const isBulanan = /bulanan/i.test(row.normalizedLevel ?? row.rawUserLevel ?? '');
+    if (isBulanan) return BULANAN_BAND.color;
+    const hk = row.hk ?? 0;
+    const bjd = row.totalBjd ?? 0;
+    const gramPerHk = hk > 0 ? bjd / hk : 0;
+    const band = classifyCapacity(gramPerHk);
+    return band ? band.color : '#d1d5db';
+}
+

@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import { fmtBpsId, fmtId } from '@/components/charts/chart-theme';
 import type { PerformaRow } from '@/lib/api';
-import { classifyCapacity } from './capacityBand';
+import { classifyCapacity, getMitraCapacityColor } from './capacityBand';
 import { describeTenure } from './tenure';
 
 const fmtRp = (value: number | null | undefined) =>
@@ -124,7 +124,7 @@ export default function MitraPayrollModal({
                     <div className="flex items-center gap-3 pr-8">
                         <span
                             className="h-10 w-10 shrink-0 rounded-full ring-4 ring-white/10 flex items-center justify-center font-bold text-slate-900"
-                            style={{ backgroundColor: isBulanan ? '#8b5cf6' : (row.colorHex || '#2a78d6') }}
+                            style={{ backgroundColor: getMitraCapacityColor(row) }}
                         >
                             {row.name.charAt(0).toUpperCase()}
                         </span>

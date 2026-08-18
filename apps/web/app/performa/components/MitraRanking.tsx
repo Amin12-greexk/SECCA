@@ -30,7 +30,6 @@ import { useToast } from '@/lib/toast';
 import {
     getPerformaSummary,
     getPerformaTrends,
-    updatePerformaPersonColor,
     type PerformaPeriod,
     type PerformaPerson,
     type PerformaRow,
@@ -38,8 +37,13 @@ import {
 import { personTrendOption, type PersonBjdRendemenTrend } from './personTrendChart';
 import { describeTenure, isVeteranTenure } from './tenure';
 import CapacityBadge from './CapacityBadge';
-import { CAPACITY_BANDS, classifyCapacity, type CapacityBand } from './capacityBand';
+import { CAPACITY_BANDS, classifyCapacity, getMitraCapacityColor, type CapacityBand } from './capacityBand';
 import { capacityTrendOption } from './capacityTrendChart';
+import {
+    CAPACITY_TARGETS,
+    capacityTargetCheckpoints,
+    type CapacityTargetCheckpoint,
+} from './capacityTarget';
 
 /** HK per periode — bar chart sederhana, jumlah hari kerja. Dipindah dari IndividualPanel
  * supaya grafik anak terpilih jadi satu tempat (tidak ada 2 panel terpisah untuk data yang sama). */
@@ -294,7 +298,10 @@ type WindowColumn = {
     isCurrent: boolean;
 };
 
-/** Titik warna kecil untuk legenda band kapasitas. */
+/** Titik warna kecil untuk legenda band kapasitas + garis target. Keterangan
+ * garis target sengaja di legenda (bukan label di badan chart) supaya tidak
+ * tabrakan dengan label titik data. Belah ketupat kecil = checkpoint di
+ * chart, muncul persis di periode saat anak itu genap minggu segitu. */
 function CapacityLegend() {
     return (
         <div className="flex flex-wrap items-center gap-2.5">
@@ -302,6 +309,61 @@ function CapacityLegend() {
                 <span key={band.key} className="inline-flex items-center gap-1 text-[10px] text-gray-500">
                     <span className="h-2 w-2 rounded-full" style={{ backgroundColor: band.color }} />
                     {band.label}
+                </span>
+            ))}
+            {CAPACITY_TARGETS.map((t) => (
+                <span key={t.weeks} className="inline-flex items-center gap-1 text-[10px] text-gray-500">
+                    <span className="flex items-center">
+                        <span className="h-0 w-2.5 border-t-2 border-dashed" style={{ borderColor: t.color }} />
+                        <span className="-ml-0.5 h-1.5 w-1.5 rotate-45" style={{ backgroundColor: t.color }} />
+                    </span>
+                    {t.label}
+                </span>
+            ))}
+        </div>
+    );
+}
+
+/**
+ * Hasil evaluasi tiap checkpoint dalam bentuk teks — supaya penilaian
+ * "tercapai/belum" terbaca tanpa harus hover belah ketupatnya di chart.
+ * Checkpoint yang periodenya belum ada di data tidak muncul sama sekali.
+ */
+function CapacityCheckpointVerdicts({
+    checkpoints,
+}: {
+    checkpoints: CapacityTargetCheckpoint[];
+}) {
+    if (checkpoints.length === 0) return null;
+
+    return (
+        <div className="mb-2 flex flex-wrap gap-2">
+            {checkpoints.map((c) => (
+                <span
+                    key={c.weeks}
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] ${
+                        c.achieved
+                            ? 'border-green-200 bg-green-50 text-green-800'
+                            : c.achieved === false
+                              ? 'border-red-200 bg-red-50 text-red-800'
+                              : 'border-gray-200 bg-white text-gray-500'
+                    }`}
+                    title={`Periode ${c.periodLabel} — saat anak ini genap ${c.weeks} minggu kerja`}
+                >
+                    <span
+                        className="h-2 w-2 rotate-45 border-2"
+                        style={{
+                            borderColor: c.color,
+                            backgroundColor: c.achieved ? c.color : 'transparent',
+                        }}
+                    />
+                    <b>Mgg {c.weeks}</b>
+                    <span className="text-gray-400">·</span>
+                    {c.actual == null ? 'data kosong' : `${fmtId(c.actual, 1)} / ${fmtId(c.target, 0)} g/hk`}
+                    <span className="font-semibold">
+                        {c.achieved ? '✓ tercapai' : c.achieved === false ? '✗ belum' : ''}
+                    </span>
+                    <span className="text-gray-400">({c.periodLabel})</span>
                 </span>
             ))}
         </div>
@@ -331,6 +393,9 @@ function CapacityTrendChart({
         label: stripPeriode(c.period.label),
         gramPerHk: perDayOf(c.row, 'totalBjd'),
     }));
+    const checkpoints = capacityTargetCheckpoints(
+        columns.map((c, i) => ({ ...points[i], row: c.row })),
+    );
 
     return (
         <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
@@ -348,7 +413,9 @@ function CapacityTrendChart({
                 </p>
             ) : null}
 
-            <LazyEChart option={capacityTrendOption(points)} height={220} />
+            <CapacityCheckpointVerdicts checkpoints={checkpoints} />
+
+            <LazyEChart option={capacityTrendOption(points, checkpoints)} height={260} />
         </div>
     );
 }
@@ -375,7 +442,7 @@ export default function MitraRanking({
     externalSelectedId?: string | null;
     persons: PerformaPerson[];
     canManage: boolean;
-    onColorSaved: (person: PerformaPerson) => void;
+    onColorSaved?: (person: PerformaPerson) => void;
 }) {
     const toast = useToast();
     const [metric, setMetric] = useState<RankMetric>('bjd');
@@ -392,8 +459,6 @@ export default function MitraRanking({
     const [periodWindow, setPeriodWindow] = useState(4);
     const [rowsByPeriod, setRowsByPeriod] = useState<Record<string, PerformaRow[]>>({});
     const [loadingWindow, setLoadingWindow] = useState(false);
-    const [draftColor, setDraftColor] = useState<string | null>(null);
-    const colorSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const active = METRICS.find((item) => item.value === metric) ?? METRICS[0];
 
@@ -512,34 +577,7 @@ export default function MitraRanking({
     );
 
     const selected = rows.find((row) => row.personId === selectedId) ?? null;
-    const selectedPerson = persons.find((item) => item.id === selectedId) ?? null;
-    const selectedColor = draftColor ?? selectedPerson?.colorHex ?? selected?.colorHex ?? '#2a78d6';
-
-    useEffect(() => {
-        setDraftColor(null);
-    }, [selectedId]);
-
-    useEffect(
-        () => () => {
-            if (colorSaveTimer.current) clearTimeout(colorSaveTimer.current);
-        },
-        [],
-    );
-
-    // Drag color picker menembak banyak event — simpan setelah jeda 450ms.
-    const handleColor = (hex: string) => {
-        if (!selectedId) return;
-        setDraftColor(hex);
-        if (colorSaveTimer.current) clearTimeout(colorSaveTimer.current);
-        colorSaveTimer.current = setTimeout(async () => {
-            try {
-                const updated = await updatePerformaPersonColor(selectedId, hex);
-                onColorSaved(updated);
-            } catch (error) {
-                toast.error(error instanceof Error ? error.message : 'Gagal menyimpan warna.');
-            }
-        }, 450);
-    };
+    const selectedColor = getMitraCapacityColor(selected);
 
     const windowColumns = useMemo<WindowColumn[]>(
         () =>
@@ -976,30 +1014,11 @@ export default function MitraRanking({
                         <>
                             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                                 <div className="flex min-w-0 items-center gap-2">
-                                    {canManage ? (
-                                        <label
-                                            className="relative inline-flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full ring-2 ring-white"
-                                            style={{ backgroundColor: selectedColor }}
-                                            title="Ubah warna identitas anak ini"
-                                        >
-                                            <input
-                                                type="color"
-                                                value={selectedColor}
-                                                onChange={(event) => handleColor(event.target.value)}
-                                                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                                                aria-label={`Warna ${selected.name}`}
-                                            />
-                                        </label>
-                                    ) : (
-                                        <span
-                                            className="h-3 w-3 shrink-0 rounded-full"
-                                            style={{
-                                                backgroundColor:
-                                                    classifyCapacity(perDayOf(selected, 'totalBjd'))
-                                                        ?.color ?? '#d1d5db',
-                                            }}
-                                        />
-                                    )}
+                                    <span
+                                        className="h-3.5 w-3.5 shrink-0 rounded-full ring-2 ring-white shadow-xs"
+                                        style={{ backgroundColor: selectedColor }}
+                                        title={selected ? (classifyCapacity(perDayOf(selected, 'totalBjd'))?.label ? `Kapasitas: ${classifyCapacity(perDayOf(selected, 'totalBjd'))?.label}` : 'Kapasitas Mitra') : ''}
+                                    />
                                     <div className="min-w-0">
                                         <p className="flex items-center gap-2 truncate text-sm font-semibold text-gray-800">
                                             {selected.name}
@@ -1062,19 +1081,26 @@ export default function MitraRanking({
                             </div>
 
                             {windowColumns.length > 1 ? (
-                                <div className="grid gap-3 lg:grid-cols-2">
+                                /* Ditumpuk (bukan 2 kolom bersebelahan): grafik kapasitas butuh
+                                 * lebar penuh supaya label periode & titik evaluasinya terbaca. */
+                                <div className="space-y-3">
                                     <CapacityTrendChart
                                         columns={windowColumns}
                                         loading={loadingWindow}
                                         missingLabels={missingWindowLabels}
                                     />
                                     {loadingTrend || !trend ? (
-                                        <div className="h-[260px] animate-pulse rounded-lg bg-gray-50" />
+                                        <div className="h-[300px] animate-pulse rounded-lg bg-gray-50" />
                                     ) : (
-                                        <LazyEChart
-                                            option={personTrendOption(trend, BJD_LINE_COLOR)}
-                                            height={260}
-                                        />
+                                        <div>
+                                            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                                                Barang jadi & rendemen per periode
+                                            </p>
+                                            <LazyEChart
+                                                option={personTrendOption(trend, BJD_LINE_COLOR)}
+                                                height={300}
+                                            />
+                                        </div>
                                     )}
                                 </div>
                             ) : (
