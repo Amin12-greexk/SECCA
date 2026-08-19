@@ -166,6 +166,8 @@ export interface PecahBonEntry {
   rawBatch?: RawBatch;
   createdAt: string;
   updatedAt: string;
+  /** Tanggal setoran (FinishReceipt.returnedAt) — null berarti LP ini belum disetor. */
+  submittedAt?: string | null;
 }
 
 export type BakuReceiveResponse = RawBatch;

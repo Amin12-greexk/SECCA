@@ -1219,7 +1219,6 @@ export class BakuService {
   async getPecahBonHistory(query: PecahBonHistoryQueryDto) {
     const { page, limit, skip } = this.resolvePagination(query);
     const order: Prisma.SortOrder = query.order === 'desc' ? 'desc' : 'asc';
-    const where: Prisma.PecahBonEntryWhereInput = {};
 
     const from = query.from ? new Date(query.from) : null;
     const to = query.to ? new Date(query.to) : null;
@@ -1238,41 +1237,79 @@ export class BakuService {
       });
     }
 
-    if (from || to) {
-      where.pecahBonDate = {};
-      if (from) where.pecahBonDate.gte = from;
-      if (to) where.pecahBonDate.lte = to;
-    }
-
     const search = query.search?.trim();
-    if (search) {
-      where.OR = [
-        { pecahBonId: { contains: search, mode: 'insensitive' } },
-        { featherCondition: { contains: search, mode: 'insensitive' } },
-        {
-          rawBatch: { batchNumber: { contains: search, mode: 'insensitive' } },
-        },
-        { grade: { code: { contains: search, mode: 'insensitive' } } },
-        { featherGrade: { code: { contains: search, mode: 'insensitive' } } },
-        { colorGrade: { code: { contains: search, mode: 'insensitive' } } },
-      ];
-    }
+    const searchPattern = search ? `%${search}%` : null;
 
-    const [total, items] = await Promise.all([
-      this.prisma.pecahBonEntry.count({ where }),
-      this.prisma.pecahBonEntry.findMany({
-        where,
-        include: {
-          rawBatch: true,
-          grade: true,
-          featherGrade: true,
-          colorGrade: true,
-        },
-        orderBy: [{ pecahBonDate: order }, { createdAt: order }],
-        skip,
-        take: limit,
-      }),
+    // Tabel ini dipakai role koreksi/setoran untuk tahu LP mana yang SUDAH
+    // disetor di rentang tanggal tertentu — jadi urut & filter tanggal harus
+    // berdasarkan tanggal SETORAN (FinishReceipt.returnedAt), bukan tanggal
+    // pecah bon (PecahBonEntry.pecahBonDate) seperti sebelumnya.
+    //
+    // PecahBonEntry tidak punya relasi FK ke ProductionLot — cuma dicocokkan
+    // lewat pecahBonId == externalId — jadi join-nya lewat raw SQL. Join ke
+    // WorkOrderItem sengaja dibatasi status <> CANCELED: sejak lotId berhenti
+    // unique penuh (lot yang di-cancel bisa punya beberapa baris WorkOrderItem
+    // sebagai riwayat), tanpa filter ini satu PecahBonEntry bisa muncul ganda.
+    const joinSql = Prisma.sql`
+      FROM "PecahBonEntry" pbe
+      LEFT JOIN "ProductionLot" lot ON lot."externalId" = pbe."pecahBonId"
+      LEFT JOIN "WorkOrderItem" woi
+        ON woi."lotId" = lot.id AND woi.status <> 'CANCELED'
+      LEFT JOIN "FinishReceipt" fr ON fr."workOrderItemId" = woi.id
+      LEFT JOIN "RawBatch" rb ON rb.id = pbe."rawBatchId"
+      LEFT JOIN "Grade" g ON g.id = pbe."gradeId"
+      LEFT JOIN "Grade" fg ON fg.id = pbe."featherGradeId"
+      LEFT JOIN "Grade" cg ON cg.id = pbe."colorGradeId"
+    `;
+
+    const whereClauses: Prisma.Sql[] = [];
+    if (searchPattern) {
+      whereClauses.push(Prisma.sql`(
+        pbe."pecahBonId" ILIKE ${searchPattern}
+        OR pbe."featherCondition" ILIKE ${searchPattern}
+        OR rb."batchNumber" ILIKE ${searchPattern}
+        OR g.code ILIKE ${searchPattern}
+        OR fg.code ILIKE ${searchPattern}
+        OR cg.code ILIKE ${searchPattern}
+      )`);
+    }
+    if (from) {
+      whereClauses.push(Prisma.sql`fr."returnedAt" >= ${from}`);
+    }
+    if (to) {
+      whereClauses.push(Prisma.sql`fr."returnedAt" <= ${to}`);
+    }
+    const whereSql =
+      whereClauses.length > 0
+        ? Prisma.sql`WHERE ${Prisma.join(whereClauses, ' AND ')}`
+        : Prisma.empty;
+
+    // NULLS LAST di kedua arah: LP yang belum disetor (fr."returnedAt" NULL)
+    // selalu tertahan di bawah, terpisah jelas dari yang sudah disetor —
+    // itulah yang bikin "mana LP yang sudah disetor" gampang dibaca dari tabel.
+    const orderSql =
+      order === 'desc'
+        ? Prisma.sql`ORDER BY fr."returnedAt" DESC NULLS LAST, pbe."createdAt" DESC`
+        : Prisma.sql`ORDER BY fr."returnedAt" ASC NULLS LAST, pbe."createdAt" ASC`;
+
+    const [countRows, idRows] = await Promise.all([
+      this.prisma.$queryRaw<{ count: bigint }[]>`
+        SELECT COUNT(DISTINCT pbe.id)::bigint AS count
+        ${joinSql}
+        ${whereSql}
+      `,
+      this.prisma.$queryRaw<
+        { id: string; submittedAt: Date | null; createdAt: Date }[]
+      >`
+        SELECT DISTINCT pbe.id, fr."returnedAt" AS "submittedAt", pbe."createdAt"
+        ${joinSql}
+        ${whereSql}
+        ${orderSql}
+        LIMIT ${limit} OFFSET ${skip}
+      `,
     ]);
+
+    const total = Number(countRows[0]?.count ?? 0);
 
     if (total === 0) {
       const lotWhere: Prisma.ProductionLotWhereInput = {};
@@ -1339,6 +1376,31 @@ export class BakuService {
         totalPages: Math.max(1, Math.ceil(lotTotal / limit)),
       };
     }
+
+    // Ambil objek lengkap (dengan relasi rawBatch/grade) lewat query Prisma
+    // biasa supaya bentuknya type-safe — raw SQL di atas cuma dipakai untuk
+    // menentukan ID, urutan, dan tanggal setoran yang benar.
+    const submittedAtById = new Map(
+      idRows.map((row) => [row.id, row.submittedAt]),
+    );
+    const orderedIds = idRows.map((row) => row.id);
+    const entries = await this.prisma.pecahBonEntry.findMany({
+      where: { id: { in: orderedIds } },
+      include: {
+        rawBatch: true,
+        grade: true,
+        featherGrade: true,
+        colorGrade: true,
+      },
+    });
+    const entryById = new Map(entries.map((entry) => [entry.id, entry]));
+    const items = orderedIds
+      .map((id) => entryById.get(id))
+      .filter((entry): entry is (typeof entries)[number] => Boolean(entry))
+      .map((entry) => ({
+        ...entry,
+        submittedAt: submittedAtById.get(entry.id)?.toISOString() ?? null,
+      }));
 
     return {
       items,

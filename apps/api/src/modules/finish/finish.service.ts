@@ -656,6 +656,7 @@ export class FinishService {
         workerId: row.workOrderItem.workOrder.workerId,
         workerName: row.workOrderItem.workOrder.worker.name,
         workerCode: row.workOrderItem.workOrder.worker.code ?? null,
+        workerPin: row.workOrderItem.workOrder.worker.pin ?? null,
         grade: `${row.workOrderItem.lot.grade.code}/${row.workOrderItem.lot.featherGrade?.code ?? '-'}/${row.workOrderItem.lot.colorGrade?.code ?? '-'}`,
         barangJadi: row.barangJadi
           ? {

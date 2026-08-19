@@ -15,8 +15,11 @@ import {
   type PaginatedResult,
 } from "@/lib/api";
 
-const ROWS_PER_PAGE = 20;
 const CSV_DELIMITER = ";";
+/** Batas atas "Semua" — samakan dengan @Max di PecahBonHistoryQueryDto/limit backend. */
+const MAX_PAGE_SIZE = 1000;
+const PAGE_SIZE_OPTIONS = [20, 50, 100, "all"] as const;
+type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
 
 type ViewTab = "manager" | "operasional";
 
@@ -43,7 +46,11 @@ function KoreksiHistoryContent() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
+  const [pageSize, setPageSize] = useState<PageSize>(20);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [copying, setCopying] = useState(false);
+
+  const effectiveLimit = pageSize === "all" ? MAX_PAGE_SIZE : pageSize;
 
   /* ── Finish Receipts Data (Manager View) ── */
   const [receiptsData, setReceiptsData] = useState<
@@ -51,7 +58,7 @@ function KoreksiHistoryContent() {
   >({
     items: [],
     page: 1,
-    limit: ROWS_PER_PAGE,
+    limit: 20,
     total: 0,
     totalPages: 1,
   });
@@ -62,7 +69,7 @@ function KoreksiHistoryContent() {
   >({
     items: [],
     page: 1,
-    limit: ROWS_PER_PAGE,
+    limit: 20,
     total: 0,
     totalPages: 1,
   });
@@ -91,22 +98,38 @@ function KoreksiHistoryContent() {
     from = dateFrom,
     to = dateTo,
     tab = viewTab,
+    limit = effectiveLimit,
   ) => {
     setLoading(true);
     try {
       if (tab === "operasional") {
+        // `order` WAJIB disamakan eksplisit di kedua call. getPecahBonHistory
+        // default 'asc', getFinishReceipts default 'desc' — kalau dibiarkan
+        // pakai default masing-masing, keduanya narik ujung tanggal yang
+        // BERLAWANAN untuk "halaman" yang sama (mis. entry terlama vs
+        // receipt terbaru), sehingga receiptsMap tidak pernah ketemu baris
+        // yang lagi ditampilkan → PIN Mitra/nama selalu kosong.
+        const order = "desc" as const;
         const [pbRes, frRes] = await Promise.all([
           getPecahBonHistoryPaginated({
             page: page + 1,
-            limit: ROWS_PER_PAGE,
+            limit,
             search: query || undefined,
             from: from || undefined,
             to: to || undefined,
+            order,
           }),
+          // Cuma pelengkap tampilan (nama mitra, hasil BJD, dll) — tanggal
+          // setoran & urutan sudah benar dari getPecahBonHistoryPaginated di
+          // atas. Rentang tanggal, limit, dan urutan disamakan supaya baris
+          // yang tampil di halaman ini benar-benar ketemu pasangannya.
           getFinishReceipts({
             page: 1,
-            limit: 100,
+            limit,
             search: query || undefined,
+            from: from || undefined,
+            to: to || undefined,
+            order,
           }).catch(() => ({ items: [] as FinishReceiptListItem[] })),
         ]);
         setPecahBonData(pbRes);
@@ -118,7 +141,7 @@ function KoreksiHistoryContent() {
       } else {
         const response = await getFinishReceipts({
           page: page + 1,
-          limit: ROWS_PER_PAGE,
+          limit,
           search: query || undefined,
           from: from || undefined,
           to: to || undefined,
@@ -161,6 +184,12 @@ function KoreksiHistoryContent() {
     viewTab === "operasional"
       ? pecahBonData.items.length
       : receiptsData.items.length;
+  /** Limit yang benar-benar dipakai memuat data yang sedang tampil — bukan
+   * `pageSize` mentah, supaya nomor baris tetap akurat walau ganti ukuran
+   * halaman belum selesai reload. */
+  const activeLimit =
+    (viewTab === "operasional" ? pecahBonData.limit : receiptsData.limit) ||
+    effectiveLimit;
 
   const allSelectedOnPage =
     activeRowCount > 0 &&
@@ -236,7 +265,9 @@ function KoreksiHistoryContent() {
     const headers = [
       "No",
       "ID LP",
-      "Tanggal",
+      "Status Setoran",
+      "Tanggal Setoran",
+      "Tanggal Pecah Bon",
       "Batch",
       "Grade Baku",
       "PCS",
@@ -254,7 +285,7 @@ function KoreksiHistoryContent() {
       "Susut Hilang (%)",
       "Rendemen Utama (%)",
     ];
-    const csvRows = exportRows.map((entry, index) => {
+    const rows = exportRows.map((entry, index) => {
       const receipt = receiptsMap[entry.pecahBonId || entry.id];
       const dryIn = receipt?.dryInGram || entry.dryWeightGram || 0;
       const mainOut = receipt?.mainOutWeightGram || 0;
@@ -288,6 +319,10 @@ function KoreksiHistoryContent() {
       return [
         startIndex + index + 1,
         entry.pecahBonId ?? "-",
+        entry.submittedAt ? "Sudah disetor" : "Belum disetor",
+        entry.submittedAt
+          ? new Date(entry.submittedAt).toLocaleDateString("id-ID")
+          : "-",
         entry.pecahBonDate
           ? new Date(entry.pecahBonDate).toLocaleDateString("id-ID")
           : "-",
@@ -307,11 +342,9 @@ function KoreksiHistoryContent() {
         receipt ? formatNumber(susutHilangG, 2) : "-",
         receipt ? formatNumber(susutHilangPct, 2) : "-",
         receipt ? formatNumber(rendemenUtama, 2) : "-",
-      ]
-        .map(escapeCsv)
-        .join(CSV_DELIMITER);
+      ];
     });
-    return { headers, csvRows };
+    return { headers, rows };
   };
 
   const buildCsvManager = (
@@ -336,7 +369,7 @@ function KoreksiHistoryContent() {
       "Tarif / Gram (Rp)",
       "Total Upah Payroll (Rp)",
     ];
-    const csvRows = exportRows.map((item, index) => {
+    const rows = exportRows.map((item, index) => {
       const dryIn = item.dryInGram || 0;
       const mainOut = item.mainOutWeightGram || 0;
       const byProduct = item.byProductWeightGram || 0;
@@ -379,22 +412,22 @@ function KoreksiHistoryContent() {
         formatNumber(rendemenUtama, 2),
         item.payroll?.rateRpPerGram ?? 0,
         item.payroll?.amountRp ?? 0,
-      ]
-        .map(escapeCsv)
-        .join(CSV_DELIMITER);
+      ];
     });
-    return { headers, csvRows };
+    return { headers, rows };
   };
 
-  const downloadCsv = (
-    content: { headers: string[]; csvRows: string[] },
-    fileName: string,
-  ) => {
-    if (content.csvRows.length === 0) {
+  type TableContent = { headers: string[]; rows: (string | number)[][] };
+
+  const downloadCsv = (content: TableContent, fileName: string) => {
+    if (content.rows.length === 0) {
       toast.error("Tidak ada data untuk diunduh.");
       return;
     }
-    const csvContent = `\uFEFF${[content.headers.join(CSV_DELIMITER), ...content.csvRows].join("\r\n")}`;
+    const csvRows = content.rows.map((row) =>
+      row.map(escapeCsv).join(CSV_DELIMITER),
+    );
+    const csvContent = `\uFEFF${[content.headers.join(CSV_DELIMITER), ...csvRows].join("\r\n")}`;
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -406,42 +439,93 @@ function KoreksiHistoryContent() {
     URL.revokeObjectURL(url);
   };
 
+  /** Sel dengan tab/baris-baru diganti spasi supaya kolom TSV tidak geser saat di-paste. */
+  const sanitizeTsvCell = (value: string | number) =>
+    String(value ?? "").replace(/[\t\r\n]+/g, " ");
+
+  const copyTableToClipboard = async (content: TableContent) => {
+    if (content.rows.length === 0) {
+      toast.error("Tidak ada data untuk disalin.");
+      return;
+    }
+    const tsv = [
+      content.headers.join("\t"),
+      ...content.rows.map((row) => row.map(sanitizeTsvCell).join("\t")),
+    ].join("\n");
+    try {
+      await navigator.clipboard.writeText(tsv);
+      toast.success(
+        `${content.rows.length} baris disalin \u2014 siap ditempel ke Excel.`,
+      );
+    } catch {
+      toast.error("Gagal menyalin ke clipboard.");
+    }
+  };
+
+  /** Baris + label yang lagi kelihatan di layar — dipakai bareng oleh Download & Salin
+   * supaya keduanya selalu merefleksikan pageSize + filter yang aktif saat ini. */
+  const buildCurrentTableContent = (): {
+    content: TableContent;
+    rowCount: number;
+  } => {
+    if (viewTab === "manager") {
+      const exportRows =
+        selectedActiveReceiptRows.length > 0
+          ? selectedActiveReceiptRows
+          : receiptsData.items;
+      return {
+        content: buildCsvManager(exportRows, currentPage * activeLimit),
+        rowCount: exportRows.length,
+      };
+    }
+    const exportRows =
+      selectedActivePecahBonRows.length > 0
+        ? selectedActivePecahBonRows
+        : pecahBonData.items;
+    return {
+      content: buildCsvOperasional(exportRows, currentPage * activeLimit),
+      rowCount: exportRows.length,
+    };
+  };
+
   const downloadExcelPage = () => {
     setExporting("page");
     try {
-      if (viewTab === "manager") {
-        const exportRows =
-          selectedActiveReceiptRows.length > 0
-            ? selectedActiveReceiptRows
-            : receiptsData.items;
-        const csv = buildCsvManager(exportRows, currentPage * ROWS_PER_PAGE);
-        downloadCsv(
-          csv,
-          `riwayat-setoran-manager-page-${currentPage + 1}-${new Date().toISOString().slice(0, 10)}.csv`,
-        );
-        toast.success(`Berhasil mengunduh ${exportRows.length} baris.`);
-      } else {
-        const exportRows =
-          selectedActivePecahBonRows.length > 0
-            ? selectedActivePecahBonRows
-            : pecahBonData.items;
-        const csv = buildCsvOperasional(
-          exportRows,
-          currentPage * ROWS_PER_PAGE,
-        );
-        downloadCsv(
-          csv,
-          `riwayat-pecah-bon-operasional-page-${currentPage + 1}-${new Date().toISOString().slice(0, 10)}.csv`,
-        );
-        toast.success(`Berhasil mengunduh ${exportRows.length} baris.`);
-      }
+      const { content, rowCount } = buildCurrentTableContent();
+      const prefix =
+        viewTab === "manager"
+          ? "riwayat-setoran-manager"
+          : "riwayat-pecah-bon-operasional";
+      downloadCsv(
+        content,
+        `${prefix}-page-${currentPage + 1}-${new Date().toISOString().slice(0, 10)}.csv`,
+      );
+      toast.success(`Berhasil mengunduh ${rowCount} baris.`);
     } finally {
       setExporting(null);
     }
   };
 
-  const fromRow = activeTotal === 0 ? 0 : currentPage * ROWS_PER_PAGE + 1;
-  const toRow = Math.min((currentPage + 1) * ROWS_PER_PAGE, activeTotal);
+  const copyTablePage = async () => {
+    setCopying(true);
+    try {
+      const { content } = buildCurrentTableContent();
+      await copyTableToClipboard(content);
+    } finally {
+      setCopying(false);
+    }
+  };
+
+  const handlePageSizeChange = (value: string) => {
+    const next = value === "all" ? "all" : (Number(value) as PageSize);
+    setPageSize(next);
+    setCurrentPage(0);
+    const nextLimit = next === "all" ? MAX_PAGE_SIZE : next;
+    void loadPage(0, tableQuery, dateFrom, dateTo, viewTab, nextLimit);
+  };
+
+  const fromRow = activeTotal === 0 ? 0 : currentPage * activeLimit + 1;
+  const toRow = Math.min((currentPage + 1) * activeLimit, activeTotal);
 
   return (
     <div className="min-h-[calc(100vh-72px)] bg-gray-50 p-6">
@@ -610,8 +694,43 @@ function KoreksiHistoryContent() {
                 {fromRow}-{toRow} dari {activeTotal} data • {selectedIds.length}{" "}
                 terpilih
               </p>
+              {viewTab === "operasional" && (
+                <p className="mt-0.5 text-[11px] text-gray-400">
+                  Diurutkan berdasarkan tanggal setoran — LP yang belum
+                  disetor ditampilkan di bagian bawah.
+                </p>
+              )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <Label
+                  htmlFor="pageSize"
+                  className="whitespace-nowrap text-xs text-gray-500"
+                >
+                  Baris/halaman
+                </Label>
+                <select
+                  id="pageSize"
+                  value={pageSize}
+                  onChange={(event) => handlePageSizeChange(event.target.value)}
+                  disabled={loading}
+                  className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 disabled:opacity-50"
+                >
+                  {PAGE_SIZE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option === "all" ? "Semua" : option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void copyTablePage()}
+                disabled={loading || activeRowCount === 0 || copying}
+              >
+                {copying ? "Menyalin..." : "Salin Tabel"}
+              </Button>
               <Button
                 type="button"
                 onClick={downloadExcelPage}
@@ -822,7 +941,9 @@ function KoreksiHistoryContent() {
                     <th className="px-3 py-2.5 text-left font-bold">
                       Pekerja / Mitra
                     </th>
-                    <th className="px-3 py-2.5 text-left font-bold">Tanggal</th>
+                    <th className="px-3 py-2.5 text-left font-bold">
+                      Status Setoran
+                    </th>
                     <th className="px-3 py-2.5 text-left font-bold">ID LP</th>
                     <th className="px-3 py-2.5 text-left font-bold">Batch</th>
                     <th className="px-3 py-2.5 text-left font-bold">
@@ -924,12 +1045,23 @@ function KoreksiHistoryContent() {
                           <td className="px-3 py-2.5 font-medium text-gray-900">
                             {receipt?.workerName ?? "-"}
                           </td>
-                          <td className="px-3 py-2.5 text-gray-600">
-                            {entry.pecahBonDate
-                              ? new Date(entry.pecahBonDate).toLocaleDateString(
-                                  "id-ID",
-                                )
-                              : "-"}
+                          <td className="px-3 py-2.5">
+                            {entry.submittedAt ? (
+                              <span className="inline-flex flex-col">
+                                <span className="inline-flex w-fit items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200">
+                                  Sudah disetor
+                                </span>
+                                <span className="mt-0.5 text-[10px] text-gray-500">
+                                  {new Date(
+                                    entry.submittedAt,
+                                  ).toLocaleDateString("id-ID")}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex w-fit items-center rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 border border-amber-200">
+                                Belum disetor
+                              </span>
+                            )}
                           </td>
                           <td className="px-3 py-2.5 font-mono font-bold text-gray-900">
                             {entry.pecahBonId ?? "-"}

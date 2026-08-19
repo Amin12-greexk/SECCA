@@ -18,16 +18,16 @@ export class PecahBonHistoryQueryDto {
   @Min(1)
   page?: number = 1;
 
-  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 })
+  @ApiPropertyOptional({ minimum: 1, maximum: 1000, default: 20 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(1000)
   limit?: number = 20;
 
   @ApiPropertyOptional({
-    description: 'Tanggal awal (YYYY-MM-DD)',
+    description: 'Tanggal setoran awal (YYYY-MM-DD) — filter pada FinishReceipt.returnedAt',
     example: '2026-02-01',
   })
   @IsOptional()
@@ -35,7 +35,7 @@ export class PecahBonHistoryQueryDto {
   from?: string;
 
   @ApiPropertyOptional({
-    description: 'Tanggal akhir (YYYY-MM-DD)',
+    description: 'Tanggal setoran akhir (YYYY-MM-DD) — filter pada FinishReceipt.returnedAt',
     example: '2026-02-29',
   })
   @IsOptional()
@@ -52,7 +52,7 @@ export class PecahBonHistoryQueryDto {
   @ApiPropertyOptional({
     enum: ['asc', 'desc'],
     default: 'asc',
-    description: 'Urutan data berdasarkan tanggal pecah dan waktu buat',
+    description: 'Urutan data berdasarkan tanggal setoran (FinishReceipt.returnedAt)',
   })
   @IsOptional()
   @IsIn(['asc', 'desc'])

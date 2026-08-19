@@ -22,7 +22,7 @@ export class QueryFinishReceiptsDto {
   @Min(1)
   page?: number;
 
-  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 })
+  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 1000 })
   @IsOptional()
   @Transform(({ value }) =>
     value === undefined || value === null || value === ''
@@ -31,7 +31,7 @@ export class QueryFinishReceiptsDto {
   )
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(1000)
   limit?: number;
 
   @ApiPropertyOptional({
