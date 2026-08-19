@@ -257,10 +257,19 @@ export class AuditDashboardService {
         }> = [];
 
         for (const period of parsed.periods) {
-          // Upload ulang sheet yang sama = perbaikan data, bukan periode baru.
-          // Periode lama dihapus (metric ikut cascade) agar dashboard tidak dobel.
+          // Upload ulang periode yang sama = perbaikan data, bukan periode
+          // baru. Periode lama dihapus (metric ikut cascade) agar dashboard
+          // tidak dobel. Dicocokkan lewat RENTANG TANGGAL, bukan teks label
+          // sheet — dua file sumber bisa menulis periode yang sama dengan
+          // teks beda (mis. "30 JULI - 05 AGUSTUS 26" vs "DATA PERIODE 30
+          // JULI - 05 AGST"), yang kalau dicocokkan lewat label mentah akan
+          // salah dianggap 2 periode berbeda. Fallback ke label kalau
+          // tanggal gagal di-parse di kedua sisi (mis. bulan tidak dikenali).
           const existing = await tx.auditDashboardPeriod.findFirst({
-            where: { label: period.label },
+            where:
+              period.startDate && period.endDate
+                ? { startDate: period.startDate, endDate: period.endDate }
+                : { label: period.label },
             orderBy: { createdAt: 'asc' },
           });
 

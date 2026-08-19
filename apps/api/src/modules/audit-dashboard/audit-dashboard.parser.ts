@@ -198,6 +198,7 @@ const MONTHS: Record<string, number> = {
   agu: 8,
   ags: 8,
   agt: 8,
+  agst: 8,
   september: 9,
   sep: 9,
   sept: 9,
@@ -292,6 +293,8 @@ export type ParsedPeriod = {
   startDate: Date | null;
   endDate: Date | null;
   year: number | null;
+  startDay: number | null;
+  startMonth: number | null;
   endDay: number | null;
   endMonth: number | null;
   rows: ParsedMetricRow[];
@@ -1449,6 +1452,8 @@ export async function parseWorkbook(
       startDate: period.startDate,
       endDate: period.endDate,
       year: period.year,
+      startDay: period.startDay,
+      startMonth: period.startMonth,
       endDay: period.endDay,
       endMonth: period.endMonth,
       rows: parsedResult.rows,
@@ -1463,6 +1468,45 @@ export async function parseWorkbook(
         `baris header berisi kolom: ${REQUIRED_COLUMNS.map((key) => COLUMN_LABELS[key]).join(', ')} ` +
         '(header laporan mingguan seperti NAMA/LAMA KERJA/HK⁄6/GRAM BJD/RD juga dikenali).',
     );
+  }
+
+  // Beberapa sheet menulis nama periode tanpa angka tahun (mis. "DATA
+  // PERIODE 30 JULI - 05 AGST" — beda dari sheet lain di workbook yang sama
+  // seperti "DATA PERIODE 23 - 29 JULI 26"). Tanpa tahun, startDate/endDate
+  // tetap null, dan dedup "upload ulang periode yang sama" di
+  // audit-dashboard.service.ts (yang mencocokkan lewat startDate/endDate)
+  // tidak akan pernah kena — hasilnya periode duplikat tiap upload file
+  // yang formatnya beda. Asumsi realistis: satu file yang diupload sekaligus
+  // mewakili batch periode di tahun yang sama, jadi tahun yang hilang
+  // di-backfill dari periode lain di workbook ini yang berhasil dapat tahun
+  // (pakai yang terbesar/terbaru).
+  const knownYears = rawPeriods
+    .map((p) => p.year)
+    .filter((y): y is number => y !== null);
+  if (knownYears.length > 0) {
+    const fallbackYear = Math.max(...knownYears);
+    for (const p of rawPeriods) {
+      if (
+        p.year === null &&
+        p.startDay !== null &&
+        p.startMonth !== null &&
+        p.endDay !== null &&
+        p.endMonth !== null
+      ) {
+        const start = new Date(
+          Date.UTC(fallbackYear, p.startMonth - 1, p.startDay),
+        );
+        const end = new Date(
+          Date.UTC(fallbackYear, p.endMonth - 1, p.endDay),
+        );
+        if (end < start) {
+          end.setUTCFullYear(end.getUTCFullYear() + 1);
+        }
+        p.year = fallbackYear;
+        p.startDate = start;
+        p.endDate = end;
+      }
+    }
   }
 
   // Konsolidasi: Kelompokkan sheet berdasarkan label periode yang sama
