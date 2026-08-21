@@ -597,12 +597,15 @@ export default function MitraRanking({
     );
 
     // Default: anak peringkat teratas — juga saat ganti periode dan anak
-    // yang terpilih tidak punya data di periode baru.
+    // yang terpilih tidak punya data di periode baru. Kalau rows lagi kosong
+    // (mis. sesaat setelah Reset Data / upload ulang), lepas dulu ke null
+    // biar effect tren di bawah tidak sempat nembak getPerformaTrends untuk
+    // personId yang sudah tidak ada lagi (404 "Data mitra tidak ditemukan").
     useEffect(() => {
         const stillExists =
             selectedId !== null && rows.some((row) => row.personId === selectedId);
-        if (!stillExists && sorted.length > 0) {
-            setSelectedId(sorted[0].row.personId);
+        if (!stillExists) {
+            setSelectedId(sorted.length > 0 ? sorted[0].row.personId : null);
         }
     }, [rows, sorted, selectedId]);
 

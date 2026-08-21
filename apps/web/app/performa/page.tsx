@@ -355,6 +355,9 @@ export default function PerformaPage() {
 
     const handleUploaded = async () => {
         setPeriodId('');
+        // Data baru/di-reset -> anak yang lagi terpilih bisa sudah tidak ada lagi,
+        // lepas dulu biar auto-pilih di bawah pilih ulang dari data terbaru.
+        setSelectedPersonId(null);
         setLoading(true);
         try {
             const periodList = await loadBase();
