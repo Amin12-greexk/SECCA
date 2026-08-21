@@ -47,11 +47,15 @@ export default function TotalUpahModal({
     const totalBjdGram = performaSummary.totalBjdWithReprocess ?? performaSummary.totalBjd;
     const totalBjdKg = totalBjdGram / 1000;
     const upahPerKg = totalBjdKg > 0 ? totalUpah / totalBjdKg : null;
+    // totalDeductionRp bisa datang negatif dari sumbernya (kolom "Potongan" di Excel
+    // memang diisi minus) — dibikin absolut dulu supaya potongan selalu MENGURANGI
+    // total, bukan malah menambah kalau kebetulan sudah negatif duluan.
+    const deductionAbs = Math.abs(expenseSummary.totalDeductionRp);
     const tunjanganBersih =
         expenseSummary.totalSubsidyRp +
         expenseSummary.totalPremiumRp +
         expenseSummary.totalMealAllowanceRp -
-        expenseSummary.totalDeductionRp;
+        deductionAbs;
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -104,39 +108,72 @@ export default function TotalUpahModal({
                         </div>
                     </div>
 
-                    {/* Breakdown 3 Cards — sama seperti panel Payroll & Biaya supaya konsisten */}
-                    <div className="grid grid-cols-3 gap-3">
-                        <div className="rounded-lg border border-slate-200 bg-white p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                                Upah Borong
-                            </p>
-                            <p className="mt-1 text-lg font-extrabold text-slate-900">
+                    {/* Breakdown — satu kolom penuh & teks diperbesar supaya lebih jelas dibaca,
+                        terutama rincian Tunjangan & Potongan yang isinya 4 komponen sekaligus. */}
+                    <div className="space-y-2.5">
+                        <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4">
+                            <div>
+                                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                                    Upah Borong
+                                </p>
+                                {expenseSummary.totalBorongCount ? (
+                                    <p className="mt-0.5 text-xs text-slate-400">
+                                        {expenseSummary.totalBorongCount} mitra
+                                    </p>
+                                ) : null}
+                            </div>
+                            <p className="text-xl font-extrabold text-slate-900">
                                 {fmtRp(expenseSummary.totalBorongWageRp ?? expenseSummary.totalPieceworkWageRp)}
                             </p>
-                            {expenseSummary.totalBorongCount ? (
-                                <p className="mt-0.5 text-[11px] text-slate-400">
-                                    {expenseSummary.totalBorongCount} mitra
-                                </p>
-                            ) : null}
                         </div>
-                        <div className="rounded-lg border border-slate-200 bg-white p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                                Gaji Bulanan
-                            </p>
-                            <p className="mt-1 text-lg font-extrabold text-slate-900">
+
+                        <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4">
+                            <div>
+                                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                                    Gaji Bulanan
+                                </p>
+                                {expenseSummary.totalBulananCount ? (
+                                    <p className="mt-0.5 text-xs text-slate-400">
+                                        {expenseSummary.totalBulananCount} mitra
+                                    </p>
+                                ) : null}
+                            </div>
+                            <p className="text-xl font-extrabold text-slate-900">
                                 {fmtRp(expenseSummary.totalBulananWageRp ?? 0)}
                             </p>
-                            {expenseSummary.totalBulananCount ? (
-                                <p className="mt-0.5 text-[11px] text-slate-400">
-                                    {expenseSummary.totalBulananCount} mitra
-                                </p>
-                            ) : null}
                         </div>
+
                         <div className="rounded-lg border border-slate-200 bg-white p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                                Tunjangan − Potongan
-                            </p>
-                            <p className="mt-1 text-lg font-extrabold text-slate-900">{fmtRp(tunjanganBersih)}</p>
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                                    Tunjangan &amp; Potongan
+                                </p>
+                                <p className="text-xl font-extrabold text-slate-900">{fmtRp(tunjanganBersih)}</p>
+                            </div>
+                            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-slate-100 pt-3 text-sm">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-slate-500">Subsidi</span>
+                                    <span className="font-semibold text-slate-700">
+                                        {fmtRp(expenseSummary.totalSubsidyRp)}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-slate-500">Premi</span>
+                                    <span className="font-semibold text-slate-700">
+                                        {fmtRp(expenseSummary.totalPremiumRp)}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-slate-500">Uang Makan</span>
+                                    <span className="font-semibold text-slate-700">
+                                        {fmtRp(expenseSummary.totalMealAllowanceRp)}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-slate-500">Potongan</span>
+                                    <span className="font-semibold text-red-600">-{fmtRp(deductionAbs)}</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

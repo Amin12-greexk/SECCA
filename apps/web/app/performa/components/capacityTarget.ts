@@ -65,6 +65,67 @@ export function capacityTargetCheckpoints(
     return result;
 }
 
+/** Warna status tetap (bukan warna target) — dipakai konsisten di badge & marker chart,
+ * supaya "belum tercapai, mendekati tenggat" vs "sudah lampaui lebih cepat" langsung
+ * terbaca sebagai status, terlepas dari target mana (mgg 12/20) yang sedang dituju. */
+export const PROGRESS_WARNING_COLOR = '#f59e0b';
+export const PROGRESS_AHEAD_COLOR = '#059669';
+
+export type CapacityTargetProgress = {
+    /** Target berikutnya yang belum genap tenggatnya. */
+    weeks: number;
+    target: number;
+    label: string;
+    /** Lama kerja anak ini di periode terbaru yang datanya ada. */
+    tenureNow: number;
+    /** Sisa minggu sampai tenggat (selalu >= 1 — begitu genap, ini jadi checkpoint, bukan progress). */
+    weeksRemaining: number;
+    /** Kapasitas nyata di periode terbaru itu. */
+    actual: number;
+    /** Periode terbaru yang dipakai sebagai acuan (buat naruh marker chart). */
+    periodLabel: string;
+    /** true = kapasitas sekarang sudah >= target meski tenggatnya belum jatuh tempo. */
+    achievedEarly: boolean;
+};
+
+/**
+ * Status "berjalan" menuju target berikutnya yang BELUM jatuh tempo — pelengkap
+ * capacityTargetCheckpoints() yang cuma menilai TEPAT di minggu ke-12/20. Dipakai
+ * untuk kasih peringatan dini ("tinggal 2 minggu lagi") atau info anak yang sudah
+ * lampaui target lebih cepat dari jadwal.
+ *
+ * Selalu dihitung dari titik data TERBARU yang datanya ada (bukan rata-rata), sesuai
+ * cara checkpoint juga membaca "kapasitas nyata". Anak Bulanan/Mandiri (tenureWeeks
+ * null) atau yang sudah lewat semua target -> null, tidak ada yang perlu diperingatkan.
+ */
+export function capacityTargetProgress(
+    points: Array<{
+        label: string;
+        gramPerHk: number | null;
+        row: { rawUserLevel?: string | null; levelNumber?: number | null } | null;
+    }>,
+): CapacityTargetProgress | null {
+    for (let i = points.length - 1; i >= 0; i--) {
+        const p = points[i];
+        if (p.gramPerHk == null) continue;
+        const tenureNow = tenureWeeks(p.row?.rawUserLevel, p.row?.levelNumber);
+        if (tenureNow == null) return null;
+        const next = CAPACITY_TARGETS.find((t) => t.weeks > tenureNow);
+        if (!next) return null;
+        return {
+            weeks: next.weeks,
+            target: next.value,
+            label: next.label,
+            tenureNow,
+            weeksRemaining: next.weeks - tenureNow,
+            actual: p.gramPerHk,
+            periodLabel: p.label,
+            achievedEarly: p.gramPerHk >= next.value,
+        };
+    }
+    return null;
+}
+
 /**
  * markLine ECharts siap pakai di series line manapun yang sumbu-Y-nya gram
  * BJD/HK: dua garis target datar, plus garis tegak tipis di periode
@@ -96,22 +157,52 @@ export function capacityTargetMarkLine(checkpoints: CapacityTargetCheckpoint[] =
 
 /**
  * markPoint ECharts: belah ketupat tepat di perpotongan garis target dengan
- * periode checkpoint. Isi penuh = target tercapai, isi kosong (putih) =
- * belum — dibedakan lewat isian, bukan cuma warna, supaya tetap terbaca.
+ * periode checkpoint (isi penuh = tercapai, isi kosong = belum), ditambah — kalau
+ * ada — satu "pin" di titik data terbaru menandai progres menuju target berikutnya
+ * yang belum jatuh tempo (kuning "!" = mendekati tenggat belum tercapai, hijau "✓" =
+ * sudah lampaui lebih cepat dari jadwal). Simbolnya sengaja beda (belah ketupat vs
+ * pin) supaya "sudah dievaluasi" dan "masih berjalan" tidak tertukar sekilas lihat.
  */
-export function capacityTargetMarkPoint(checkpoints: CapacityTargetCheckpoint[]) {
+export function capacityTargetMarkPoint(
+    checkpoints: CapacityTargetCheckpoint[],
+    progress: CapacityTargetProgress | null = null,
+) {
     return {
         silent: true,
         symbol: 'diamond' as const,
         symbolSize: 14,
-        data: checkpoints.map((c) => ({
-            coord: [c.periodLabel, c.target] as [string, number],
-            itemStyle: {
-                color: c.achieved ? c.color : '#ffffff',
-                borderColor: c.color,
-                borderWidth: 2.5,
-            },
-            label: { show: false },
-        })),
+        data: [
+            ...checkpoints.map((c) => ({
+                coord: [c.periodLabel, c.target] as [string, number],
+                itemStyle: {
+                    color: c.achieved ? c.color : '#ffffff',
+                    borderColor: c.color,
+                    borderWidth: 2.5,
+                },
+                label: { show: false },
+            })),
+            ...(progress
+                ? [
+                      {
+                          coord: [progress.periodLabel, progress.actual] as [string, number],
+                          symbol: 'pin' as const,
+                          symbolSize: 32,
+                          symbolOffset: [0, '-70%'] as [number, string],
+                          itemStyle: {
+                              color: progress.achievedEarly ? PROGRESS_AHEAD_COLOR : PROGRESS_WARNING_COLOR,
+                              shadowColor: 'rgba(0,0,0,0.18)',
+                              shadowBlur: 4,
+                          },
+                          label: {
+                              show: true,
+                              formatter: progress.achievedEarly ? '✓' : '!',
+                              color: '#fff',
+                              fontWeight: 700 as const,
+                              fontSize: 12,
+                          },
+                      },
+                  ]
+                : []),
+        ],
     };
 }

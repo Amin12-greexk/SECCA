@@ -65,6 +65,27 @@ export function fallbackColor(personId: string): string {
   return DEFAULT_COLORS[hash[0] % DEFAULT_COLORS.length];
 }
 
+/**
+ * Baris "REKAP PAYROLL" (rekap Upah Borong/HK/Subsidi/dst per pekerja per minggu)
+ * ikut terbawa ke daftar lpRows karena parser membaca sheet DATA PERIODE dan REKAP
+ * PAYROLL sekaligus — tapi baris ini bukan transaksi LP sungguhan, cuma pengulangan
+ * total Upah Borong yang sudah kelihatan dari baris-baris LP produksi lain (Upah
+ * Borong-nya = SUMIFS dari kolom yang sama di sheet DATA PERIODE). Kalau tidak
+ * disaring, muncul di modal "Rincian Lot Produksi" sebagai LP fiktif ("LP-4") dengan
+ * semua kolom kosong kecuali Upah Borong. Datanya sendiri tetap dipakai di tempat
+ * lain (HK, Subsidi, Premi, dst sudah diambil terpisah lewat kolom metric) — ini
+ * cuma menyaring TAMPILAN daftar LP-nya.
+ */
+function isProductionLpRow(lp: {
+  lpNumber?: string | null;
+  totalBakuBasah?: number | null;
+  totalBjd?: number | null;
+}): boolean {
+  const hasLpNumber = typeof lp.lpNumber === 'string' && lp.lpNumber.trim() !== '';
+  const hasOwnData = lp.totalBakuBasah != null || lp.totalBjd != null;
+  return hasLpNumber || hasOwnData;
+}
+
 type AggregatableMetric = {
   hk: number | null;
   totalBakuBasah: number | null;
@@ -309,6 +330,7 @@ export class AuditDashboardService {
                 (lp) =>
                   lp.transactionType !== 'REPROCESS' &&
                   lp.transactionType !== 'UNKNOWN' &&
+                  isProductionLpRow(lp) &&
                   lp.workerNames.some(
                     (w) => normalizePersonName(w) === row.normalizedName,
                   ),
@@ -533,7 +555,15 @@ export class AuditDashboardService {
         metric.person.workerId ??
         null;
 
-      const lpRows = (rawJson.lpRows as unknown[] | undefined) ?? [];
+      const lpRows = (
+        (rawJson.lpRows as
+          | Array<{
+              lpNumber?: string | null;
+              totalBakuBasah?: number | null;
+              totalBjd?: number | null;
+            }>
+          | undefined) ?? []
+      ).filter(isProductionLpRow);
       const lpCount =
         (rawJson.lpCount as number | undefined) ??
         (lpRows.length > 0 ? lpRows.length : metric.totalBakuBasah ? 1 : 0);
@@ -707,7 +737,9 @@ export class AuditDashboardService {
       (rawJson.lpRows as Array<Record<string, unknown>> | undefined) ?? [];
     const lpRows = rawLpRows.filter(
       (lp) =>
-        lp.transactionType !== 'REPROCESS' && lp.transactionType !== 'UNKNOWN',
+        lp.transactionType !== 'REPROCESS' &&
+        lp.transactionType !== 'UNKNOWN' &&
+        isProductionLpRow(lp as { lpNumber?: string | null; totalBakuBasah?: number | null; totalBjd?: number | null }),
     );
     const uniqueLpSet = new Set<string>();
     let unnamedLps = 0;

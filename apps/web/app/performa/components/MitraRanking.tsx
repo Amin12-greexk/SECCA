@@ -42,7 +42,11 @@ import { capacityTrendOption } from './capacityTrendChart';
 import {
     CAPACITY_TARGETS,
     capacityTargetCheckpoints,
+    capacityTargetProgress,
+    PROGRESS_AHEAD_COLOR,
+    PROGRESS_WARNING_COLOR,
     type CapacityTargetCheckpoint,
+    type CapacityTargetProgress,
 } from './capacityTarget';
 
 /** HK per periode — bar chart sederhana, jumlah hari kerja. Dipindah dari IndividualPanel
@@ -371,6 +375,47 @@ function CapacityCheckpointVerdicts({
 }
 
 /**
+ * Notifikasi "sedang berjalan" menuju target berikutnya yang belum jatuh tempo —
+ * pelengkap CapacityCheckpointVerdicts yang cuma menilai tepat di minggu ke-12/20.
+ * Cuma satu baris (target terdekat berikutnya saja) supaya tidak menumpuk dengan
+ * badge checkpoint di atasnya.
+ */
+function CapacityProgressNotice({ progress }: { progress: CapacityTargetProgress | null }) {
+    if (!progress) return null;
+    const ahead = progress.achievedEarly;
+    const color = ahead ? PROGRESS_AHEAD_COLOR : PROGRESS_WARNING_COLOR;
+    const gap = Math.abs(progress.actual - progress.target);
+
+    return (
+        <div
+            className={`mb-2 flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] ${
+                ahead ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'
+            }`}
+            title={`Berdasarkan data terbaru — periode ${progress.periodLabel}`}
+        >
+            <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" style={{ color }} />
+            {ahead ? (
+                <span>
+                    Sekarang <b>minggu ke-{progress.tenureNow}</b> kerja, kapasitas{' '}
+                    <b>{fmtId(progress.actual, 1)} g/hk</b> — sudah{' '}
+                    <b className="text-emerald-700">lampaui {fmtId(gap, 1)} g/hk</b> di atas target{' '}
+                    {fmtId(progress.target, 0)} g/hk yang baru jatuh tempo minggu ke-{progress.weeks} (lebih cepat{' '}
+                    {progress.weeksRemaining} minggu dari jadwal).
+                </span>
+            ) : (
+                <span>
+                    Sekarang <b>minggu ke-{progress.tenureNow}</b> kerja, kapasitas{' '}
+                    <b>{fmtId(progress.actual, 1)} g/hk</b> — masih{' '}
+                    <b className="text-amber-700">kurang {fmtId(gap, 1)} g/hk</b> dari target{' '}
+                    {fmtId(progress.target, 0)} g/hk yang harus tercapai di minggu ke-{progress.weeks}, sisa{' '}
+                    <b>{progress.weeksRemaining} minggu lagi</b>.
+                </span>
+            )}
+        </div>
+    );
+}
+
+/**
  * Tren kapasitas (gram BJD/HK) satu mitra melintasi N periode — grafik
  * garis dengan pita latar band & tiap titik diwarnai sesuai bandnya,
  * supaya naik/turun antar periode langsung kelihatan tanpa tabel.
@@ -385,7 +430,7 @@ function CapacityTrendChart({
     missingLabels: string[];
 }) {
     if (loading) {
-        return <div className="h-[260px] animate-pulse rounded-lg bg-gray-50" />;
+        return <div className="h-[320px] animate-pulse rounded-lg bg-gray-50" />;
     }
     if (columns.length === 0) return null;
 
@@ -393,9 +438,9 @@ function CapacityTrendChart({
         label: stripPeriode(c.period.label),
         gramPerHk: perDayOf(c.row, 'totalBjd'),
     }));
-    const checkpoints = capacityTargetCheckpoints(
-        columns.map((c, i) => ({ ...points[i], row: c.row })),
-    );
+    const pointsWithRow = columns.map((c, i) => ({ ...points[i], row: c.row }));
+    const checkpoints = capacityTargetCheckpoints(pointsWithRow);
+    const progress = capacityTargetProgress(pointsWithRow);
 
     return (
         <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
@@ -414,8 +459,9 @@ function CapacityTrendChart({
             ) : null}
 
             <CapacityCheckpointVerdicts checkpoints={checkpoints} />
+            <CapacityProgressNotice progress={progress} />
 
-            <LazyEChart option={capacityTrendOption(points, checkpoints)} height={260} />
+            <LazyEChart option={capacityTrendOption(points, checkpoints, progress)} height={320} />
         </div>
     );
 }

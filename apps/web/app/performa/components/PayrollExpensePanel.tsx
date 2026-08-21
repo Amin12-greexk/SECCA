@@ -126,10 +126,10 @@ export default function PayrollExpensePanel({
                             summary.totalSubsidyRp +
                                 summary.totalPremiumRp +
                                 summary.totalMealAllowanceRp -
-                                summary.totalDeductionRp,
+                                Math.abs(summary.totalDeductionRp),
                         )}
                         accent="#eda100"
-                        hint={`Subsidi ${fmtRp(summary.totalSubsidyRp)} · Premi ${fmtRp(summary.totalPremiumRp)} · Makan ${fmtRp(summary.totalMealAllowanceRp)} · Potongan -${fmtRp(summary.totalDeductionRp)}`}
+                        hint={`Subsidi ${fmtRp(summary.totalSubsidyRp)} · Premi ${fmtRp(summary.totalPremiumRp)} · Makan ${fmtRp(summary.totalMealAllowanceRp)} · Potongan -${fmtRp(Math.abs(summary.totalDeductionRp))}`}
                     />
                     <ExpenseTile
                         label="Akumulasi Upah"

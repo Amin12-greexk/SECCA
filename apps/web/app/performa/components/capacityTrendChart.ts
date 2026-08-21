@@ -12,6 +12,7 @@ import {
     capacityTargetMarkLine,
     capacityTargetMarkPoint,
     type CapacityTargetCheckpoint,
+    type CapacityTargetProgress,
 } from './capacityTarget';
 
 export type CapacityTrendPoint = {
@@ -34,6 +35,7 @@ const HIGHEST_TARGET = Math.max(...CAPACITY_TARGETS.map((t) => t.value));
 export function capacityTrendOption(
     points: CapacityTrendPoint[],
     checkpoints: CapacityTargetCheckpoint[] = [],
+    progress: CapacityTargetProgress | null = null,
 ): EChartsOption {
     const labels = points.map((p) => p.label);
     const values = points.map((p) => p.gramPerHk);
@@ -45,7 +47,9 @@ export function capacityTrendOption(
     const checkpointByLabel = new Map(checkpoints.map((c) => [c.periodLabel, c]));
 
     return {
-        grid: { top: 24, right: 16, bottom: 46, left: 48 },
+        // top dilebihkan supaya pin progres (yang nongol di atas titik datanya)
+        // tidak kepotong; bottom juga sedikit lebih longgar untuk label sumbu-X.
+        grid: { top: 44, right: 16, bottom: 50, left: 48 },
         tooltip: {
             trigger: 'axis',
             axisPointer: {
@@ -75,6 +79,16 @@ export function capacityTrendOption(
                               : 'belum tercapai';
                     lines.push(
                         `<span style="color:${checkpoint.color}">◆ Evaluasi mgg ${checkpoint.weeks} — target ${fmtId(checkpoint.target, 0)} g/hk: <b>${verdict}</b></span>`,
+                    );
+                }
+                if (progress && progress.periodLabel === label) {
+                    const progressColor = progress.achievedEarly ? '#059669' : '#f59e0b';
+                    const gap = Math.abs(progress.actual - progress.target);
+                    const progressText = progress.achievedEarly
+                        ? `mgg ${progress.tenureNow} kerja — sudah lampaui ${fmtId(gap, 1)} g/hk di atas target ${fmtId(progress.target, 0)} g/hk (tenggat mgg ${progress.weeks}, lebih cepat ${progress.weeksRemaining} minggu)`
+                        : `mgg ${progress.tenureNow} kerja — masih kurang ${fmtId(gap, 1)} g/hk dari target ${fmtId(progress.target, 0)} g/hk (mgg ${progress.weeks}, sisa ${progress.weeksRemaining} minggu)`;
+                    lines.push(
+                        `<span style="color:${progressColor}">📍 <b>${progressText}</b></span>`,
                     );
                 }
                 return lines.join('<br/>');
@@ -140,7 +154,7 @@ export function capacityTrendOption(
                     ]),
                 },
                 markLine: capacityTargetMarkLine(checkpoints),
-                markPoint: capacityTargetMarkPoint(checkpoints),
+                markPoint: capacityTargetMarkPoint(checkpoints, progress),
             },
         ],
     } as EChartsOption;

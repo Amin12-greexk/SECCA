@@ -227,28 +227,6 @@ export default function MitraPayrollModal({
 
                             <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
                                 <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
-                                    Tarif Efektif / Gram
-                                </span>
-                                <span className="text-sm font-bold text-slate-800 mt-1 block">
-                                    {isBulanan || row.effectivePieceworkRatePerGramRp == null
-                                        ? '—'
-                                        : `${fmtRp(row.effectivePieceworkRatePerGramRp)} / g`}
-                                </span>
-                            </div>
-
-                            <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
-                                    Tarif Efektif / Kg
-                                </span>
-                                <span className="text-sm font-bold text-slate-800 mt-1 block">
-                                    {isBulanan || row.effectivePieceworkRatePerKgRp == null
-                                        ? '—'
-                                        : `${fmtRp(row.effectivePieceworkRatePerKgRp)} / kg`}
-                                </span>
-                            </div>
-
-                            <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
                                     Subsidi Mingguan
                                 </span>
                                 <span className="text-sm font-bold text-emerald-700 mt-1 block">
