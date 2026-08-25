@@ -77,8 +77,11 @@ export function capacityTrendOption(
                             : checkpoint.achieved
                               ? 'tercapai'
                               : 'belum tercapai';
+                    const evalLabel = checkpoint.isApprox
+                        ? `Evaluasi ≈mgg ${checkpoint.actualWeeks} (checkpoint dini, target aslinya mgg ${checkpoint.weeks})`
+                        : `Evaluasi mgg ${checkpoint.weeks}`;
                     lines.push(
-                        `<span style="color:${checkpoint.color}">◆ Evaluasi mgg ${checkpoint.weeks} — target ${fmtId(checkpoint.target, 0)} g/hk: <b>${verdict}</b></span>`,
+                        `<span style="color:${checkpoint.color}">◆ ${evalLabel} — target ${fmtId(checkpoint.target, 0)} g/hk: <b>${verdict}</b></span>`,
                     );
                 }
                 if (progress && progress.periodLabel === label) {

@@ -108,6 +108,13 @@ export class AuditDashboardController {
     return this.auditDashboardService.getExpenseSummary(query.periodId);
   }
 
+  @Get('harian-summary')
+  @Public()
+  @ApiOperation({ summary: 'Ringkasan payroll Anak Harian per periode' })
+  getHarianSummary(@Query() query: SummaryQueryDto) {
+    return this.auditDashboardService.getHarianSummary(query.periodId);
+  }
+
   @Get('persons')
   @Public()
   @ApiOperation({ summary: 'Daftar mitra beserta warnanya' })

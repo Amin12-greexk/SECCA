@@ -261,6 +261,29 @@ export class AuditDashboardService {
           personIdByName.set(normalizedName, person.id);
         }
 
+        // Anak Harian (staf pendukung dibayar harian) — populasi & identitas
+        // terpisah dari mitra bulu, lihat AuditDashboardHarianPerson di schema.
+        const harianPersonIdByName = new Map<string, string>();
+        const uniqueHarianNames = new Map<string, { rawName: string; pin: string | null }>();
+        for (const period of parsed.periods) {
+          for (const row of period.harianRows ?? []) {
+            if (!uniqueHarianNames.has(row.normalizedName)) {
+              uniqueHarianNames.set(row.normalizedName, {
+                rawName: row.rawName,
+                pin: row.pin,
+              });
+            }
+          }
+        }
+        for (const [normalizedName, info] of uniqueHarianNames) {
+          const person = await tx.auditDashboardHarianPerson.upsert({
+            where: { normalizedName },
+            create: { name: info.rawName, normalizedName, pin: info.pin },
+            update: {},
+          });
+          harianPersonIdByName.set(normalizedName, person.id);
+        }
+
         const maxSortOrder =
           (
             await tx.auditDashboardPeriod.aggregate({
@@ -382,6 +405,8 @@ export class AuditDashboardService {
               upahMentahRp: row.upahMentahRp,
               upahBarangJadiRp: row.upahBarangJadiRp,
               upahBorongRp: row.upahBorongRp,
+              cabutRumahRatePerUnitRp: row.cabutRumahRatePerUnitRp ?? null,
+              cabutRumahQty: row.cabutRumahQty ?? null,
               effectivePieceworkRatePerGramRp:
                 row.effectivePieceworkRatePerGramRp,
               effectivePieceworkRatePerKgRp: row.effectivePieceworkRatePerKgRp,
@@ -433,6 +458,39 @@ export class AuditDashboardService {
           await tx.auditDashboardMetric.createMany({
             data: Array.from(metricsMap.values()),
           });
+
+          const harianRowsMap = new Map<
+            string,
+            Prisma.AuditDashboardHarianRowCreateManyInput
+          >();
+          for (const row of period.harianRows ?? []) {
+            const personId = harianPersonIdByName.get(row.normalizedName);
+            if (!personId || harianRowsMap.has(personId)) continue;
+            harianRowsMap.set(personId, {
+              periodId: created.id,
+              personId,
+              pin: row.pin,
+              rawName: row.rawName,
+              bagian: row.bagian,
+              gapokRp: row.gapokRp,
+              hariKerjaRaw: row.hariKerjaRaw,
+              hariKerja: row.hariKerja,
+              upahRp: row.upahRp,
+              upahLemburWeekdayRp: row.upahLemburWeekdayRp,
+              upahLemburWeekendRp: row.upahLemburWeekendRp,
+              uangMakanRp: row.uangMakanRp,
+              premiRp: row.premiRp,
+              tunjanganRp: row.tunjanganRp,
+              potonganRp: row.potonganRp,
+              totalUpahRp: row.totalUpahRp,
+              rawRowJson: row.rawRowJson as unknown as Prisma.InputJsonValue,
+            });
+          }
+          if (harianRowsMap.size > 0) {
+            await tx.auditDashboardHarianRow.createMany({
+              data: Array.from(harianRowsMap.values()),
+            });
+          }
 
           periods.push({
             id: created.id,
@@ -601,6 +659,9 @@ export class AuditDashboardService {
           (rawJson.upahBorongRp as number | undefined) ??
           metric.pieceworkWageRp,
         pieceworkWageRp: metric.pieceworkWageRp,
+        cabutRumahRatePerUnitRp:
+          (rawJson.cabutRumahRatePerUnitRp as number | undefined) ?? null,
+        cabutRumahQty: (rawJson.cabutRumahQty as number | undefined) ?? null,
         effectivePieceworkRatePerGramRp:
           (rawJson.effectivePieceworkRatePerGramRp as number | undefined) ??
           effectiveRates.effectivePieceworkRatePerGramRp,
@@ -663,6 +724,90 @@ export class AuditDashboardService {
         totalNetWageRp,
       },
       rows,
+    };
+  }
+
+  /* ── Anak Harian (staf pendukung dibayar harian) ───────────────── */
+
+  /**
+   * Rekap "Anak Harian" untuk satu periode — populasi & skema gajinya
+   * terpisah total dari mitra bulu (tidak ada Baku Basah/BJD/Rendemen),
+   * lihat AuditDashboardHarianRow di schema & parseHarianRowsFromGrid di
+   * parser untuk asal datanya.
+   */
+  async getHarianSummary(periodId?: string) {
+    const period = periodId
+      ? await this.prisma.auditDashboardPeriod.findUnique({
+          where: { id: periodId },
+        })
+      : await this.prisma.auditDashboardPeriod.findFirst({
+          orderBy: [{ sortOrder: 'desc' }, { createdAt: 'desc' }],
+        });
+
+    if (!period) {
+      return { period: null, summary: null, rows: [], byBagian: [] };
+    }
+
+    const harianRows = await this.prisma.auditDashboardHarianRow.findMany({
+      where: { periodId: period.id },
+      include: { person: true },
+      orderBy: { rawName: 'asc' },
+    });
+
+    const rows = harianRows.map((row) => ({
+      id: row.id,
+      personId: row.personId,
+      name: row.person.name,
+      rawName: row.rawName,
+      pin: row.pin ?? row.person.pin,
+      bagian: row.bagian,
+      gapokRp: row.gapokRp,
+      hariKerjaRaw: row.hariKerjaRaw,
+      hariKerja: row.hariKerja,
+      upahRp: row.upahRp,
+      upahLemburWeekdayRp: row.upahLemburWeekdayRp,
+      upahLemburWeekendRp: row.upahLemburWeekendRp,
+      uangMakanRp: row.uangMakanRp,
+      premiRp: row.premiRp,
+      tunjanganRp: row.tunjanganRp,
+      potonganRp: row.potonganRp,
+      totalUpahRp: row.totalUpahRp,
+    }));
+
+    const summary = {
+      totalPeople: rows.length,
+      totalGapokRp: sumOf(rows.map((r) => r.gapokRp)),
+      totalUpahRp: sumOf(rows.map((r) => r.upahRp)),
+      totalUpahLemburWeekdayRp: sumOf(rows.map((r) => r.upahLemburWeekdayRp)),
+      totalUpahLemburWeekendRp: sumOf(rows.map((r) => r.upahLemburWeekendRp)),
+      totalUangMakanRp: sumOf(rows.map((r) => r.uangMakanRp)),
+      totalPremiRp: sumOf(rows.map((r) => r.premiRp)),
+      totalTunjanganRp: sumOf(rows.map((r) => r.tunjanganRp)),
+      totalPotonganRp: sumOf(rows.map((r) => Math.abs(r.potonganRp ?? 0))),
+      totalUpahBersihRp: sumOf(rows.map((r) => r.totalUpahRp)),
+    };
+
+    const byBagianMap = new Map<string, { bagian: string; count: number; totalUpahRp: number }>();
+    for (const row of rows) {
+      const key = row.bagian ?? 'Lainnya';
+      const entry = byBagianMap.get(key) ?? { bagian: key, count: 0, totalUpahRp: 0 };
+      entry.count += 1;
+      entry.totalUpahRp += row.totalUpahRp ?? 0;
+      byBagianMap.set(key, entry);
+    }
+    const byBagian = Array.from(byBagianMap.values()).sort(
+      (a, b) => b.totalUpahRp - a.totalUpahRp,
+    );
+
+    return {
+      period: {
+        id: period.id,
+        label: period.label,
+        sheetName: period.sheetName,
+      },
+      summary,
+      rows,
+      byBagian,
     };
   }
 
@@ -796,6 +941,9 @@ export class AuditDashboardService {
         (rawJson.upahBorongRp as number | undefined) ??
         metric.pieceworkWageRp,
       pieceworkWageRp: metric.pieceworkWageRp,
+      cabutRumahRatePerUnitRp:
+        (rawJson.cabutRumahRatePerUnitRp as number | undefined) ?? null,
+      cabutRumahQty: (rawJson.cabutRumahQty as number | undefined) ?? null,
       effectivePieceworkRatePerGramRp:
         (rawJson.effectivePieceworkRatePerGramRp as number | undefined) ??
         effectiveRates.effectivePieceworkRatePerGramRp,

@@ -18,7 +18,7 @@ const fmtRp = (value: number | null | undefined) =>
 const SELECT_CLASS =
     'w-48 rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none transition';
 
-function ExpenseTile({
+export function ExpenseTile({
     label,
     value,
     accent,

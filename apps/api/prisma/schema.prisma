@@ -676,8 +676,9 @@ model AuditDashboardPeriod {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  import  AuditDashboardImport   @relation(fields: [importId], references: [id], onDelete: Cascade)
-  metrics AuditDashboardMetric[]
+  import     AuditDashboardImport       @relation(fields: [importId], references: [id], onDelete: Cascade)
+  metrics    AuditDashboardMetric[]
+  harianRows AuditDashboardHarianRow[]
 
   @@index([importId])
   @@index([sortOrder, createdAt])
@@ -724,6 +725,58 @@ model AuditDashboardMetric {
 
   period AuditDashboardPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
   person AuditDashboardPerson @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, personId])
+  @@index([personId, createdAt])
+  @@index([periodId])
+}
+
+/**
+ * Pekerja "Anak Harian" (staf pendukung pabrik dibayar harian: Cleaning Service,
+ * QC, Trainer, dst) — tabel terpisah dari mitra bulu (AuditDashboardPerson) karena
+ * populasi, PIN, dan skema gajinya sama sekali beda (tidak ada Baku Basah/BJD/
+ * Rendemen/Kapasitas). Muncul di sheet REKAP PAYROLL sebagai tabel ketiga yang
+ * berdampingan dengan tabel mitra borong/bulanan, lihat audit-dashboard.parser.ts.
+ */
+model AuditDashboardHarianPerson {
+  id             String   @id @default(uuid())
+  name           String
+  normalizedName String   @unique
+  pin            String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  rows AuditDashboardHarianRow[]
+
+  @@index([pin])
+}
+
+model AuditDashboardHarianRow {
+  id                   String   @id @default(uuid())
+  periodId             String
+  personId             String
+  pin                  String?
+  rawName              String
+  bagian               String?
+  gapokRp              Float?
+  /** Teks asli kolom "Hari Kerja" — formatnya tidak konsisten antar periode
+   * (kadang "6/6", kadang angka polos), jadi disimpan mentah + hasil parsing-nya. */
+  hariKerjaRaw         String?
+  hariKerja            Float?
+  upahRp               Float?
+  upahLemburWeekdayRp  Float?
+  upahLemburWeekendRp  Float?
+  uangMakanRp          Float?
+  premiRp              Float?
+  tunjanganRp          Float?
+  potonganRp           Float?
+  totalUpahRp          Float?
+  rawRowJson           Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  period AuditDashboardPeriod       @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  person AuditDashboardHarianPerson @relation(fields: [personId], references: [id], onDelete: Cascade)
 
   @@unique([periodId, personId])
   @@index([personId, createdAt])

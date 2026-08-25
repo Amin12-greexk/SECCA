@@ -250,6 +250,11 @@ export type ParsedMetricRow = {
   mealAllowanceRp: number | null;
   deductionRp: number | null;
   netWageRp: number | null;
+  /** Tarif per unit & jumlah unit — cuma terisi untuk baris "CABUT RUMAH"
+   * (cabut bulu di rumah, di luar pabrik), lihat komentar isCabutRumah di
+   * parser untuk kenapa ini dipisah dari pieceworkWageRp/subsidyRp. */
+  cabutRumahRatePerUnitRp?: number | null;
+  cabutRumahQty?: number | null;
   lpCount?: number | null;
   reprocessId?: string | null;
   sourceBoxId?: string | null;
@@ -280,6 +285,34 @@ export type ParsedReprocessRow = {
   rawRowJson: Record<string, unknown>;
 };
 
+/**
+ * Satu baris pekerja "Anak Harian" (staf pendukung dibayar harian: Cleaning
+ * Service, QC, Trainer, dst) — dibaca dari tabel ketiga yang berdampingan
+ * dengan tabel mitra borong/bulanan di sheet REKAP PAYROLL, lihat
+ * parseHarianRowsFromGrid(). Populasi & skema gajinya sama sekali beda dari
+ * mitra bulu (tidak ada Baku Basah/BJD/Rendemen).
+ */
+export type ParsedHarianRow = {
+  rowNumber: number;
+  pin: string | null;
+  rawName: string;
+  normalizedName: string;
+  bagian: string | null;
+  gapokRp: number | null;
+  /** Teks asli kolom Hari Kerja — kadang "6/6", kadang angka polos. */
+  hariKerjaRaw: string | null;
+  hariKerja: number | null;
+  upahRp: number | null;
+  upahLemburWeekdayRp: number | null;
+  upahLemburWeekendRp: number | null;
+  uangMakanRp: number | null;
+  premiRp: number | null;
+  tunjanganRp: number | null;
+  potonganRp: number | null;
+  totalUpahRp: number | null;
+  rawRowJson: Record<string, unknown>;
+};
+
 export type ParseWarning = {
   rowNumber: number;
   rawName: string;
@@ -301,6 +334,7 @@ export type ParsedPeriod = {
   lpRows?: ParsedMetricRow[];
   reprocessRows?: ParsedReprocessRow[];
   unknownRows?: ParsedMetricRow[];
+  harianRows?: ParsedHarianRow[];
   warnings: ParseWarning[];
 };
 
@@ -938,22 +972,36 @@ function parseRawRowsFromGrid(
     );
 
     // Upah Borong & komponen payroll lainnya
-    const pieceworkWageRp = parseIndonesianNumber(
+    const rawPieceworkWageRp = parseIndonesianNumber(
       cellAt('pieceworkWage').value,
     );
-    const upahBorongRp =
-      pieceworkWageRp ??
-      (upahBarangJadiRp !== null && upahMentahRp !== null
-        ? Math.max(0, upahBarangJadiRp - upahMentahRp)
-        : null);
-
-    const subsidyRp = parseIndonesianNumber(cellAt('subsidy').value);
+    const rawSubsidyRp = parseIndonesianNumber(cellAt('subsidy').value);
     const premiumRp = parseIndonesianNumber(cellAt('premium').value);
     const mealAllowanceRp = parseIndonesianNumber(
       cellAt('mealAllowance').value,
     );
     const deductionRp = parseIndonesianNumber(cellAt('deduction').value);
     const netWageRp = parseIndonesianNumber(cellAt('netWage').value);
+
+    // "CABUT RUMAH" (cabut bulu di rumah, di luar pabrik, tanpa konsep BJD/
+    // kapasitas/target sama sekali) menulis ULANG kolom UPAH BORONG & SUBSIDI
+    // dengan arti beda: TARIF per unit dan JUMLAH unit (Upah Bersih = tarif ×
+    // jumlah), bukan upah borong & subsidi sungguhan. Dibiarkan apa adanya,
+    // "26 unit" kebaca sebagai "Rp 26 subsidi" dan tarifnya kebaca sebagai
+    // total upah orang itu — mencemari agregat Subsidi & Upah Borong
+    // perusahaan. Tarif+jumlahnya disimpan terpisah untuk rincian di modal.
+    const isCabutRumah = /cabut rumah/i.test(level.rawUserLevel ?? '');
+    const cabutRumahRatePerUnitRp = isCabutRumah ? rawPieceworkWageRp : null;
+    const cabutRumahQty = isCabutRumah ? rawSubsidyRp : null;
+    const subsidyRp = isCabutRumah ? null : rawSubsidyRp;
+    const pieceworkWageRp = isCabutRumah
+      ? (netWageRp ?? rawPieceworkWageRp)
+      : rawPieceworkWageRp;
+    const upahBorongRp =
+      pieceworkWageRp ??
+      (upahBarangJadiRp !== null && upahMentahRp !== null
+        ? Math.max(0, upahBarangJadiRp - upahMentahRp)
+        : null);
 
     // Cek hadUncachedFormula & formula errors pada seluruh kolom
     for (const key of ALL_COLUMNS) {
@@ -1075,6 +1123,8 @@ function parseRawRowsFromGrid(
       mealAllowanceRp,
       deductionRp,
       netWageRp,
+      cabutRumahRatePerUnitRp,
+      cabutRumahQty,
       lpCount: transactionType === 'REPROCESS' || transactionType === 'UNKNOWN' ? 0 : 1,
       reprocessId,
       sourceBoxId,
@@ -1084,6 +1134,143 @@ function parseRawRowsFromGrid(
   }
 
   return { columns, rows, warnings };
+}
+
+/** Parse "hari kerja" harian: kadang teks "6/6" (kerja/target), kadang angka
+ * polos — ambil angka kerja aktualnya (pembilang), bukan target di belakang "/". */
+function parseHariKerja(raw: unknown): number | null {
+  if (isBlank(raw)) return null;
+  const text = String(raw).trim();
+  const slashMatch = text.match(/^(\d+(?:[.,]\d+)?)\s*\/\s*\d+(?:[.,]\d+)?$/);
+  if (slashMatch) return parseIndonesianNumber(slashMatch[1]);
+  return parseIndonesianNumber(text);
+}
+
+/**
+ * Baca tabel "Anak Harian" (Cleaning Service, QC, Trainer, dst) yang duduk
+ * berdampingan dengan tabel mitra borong/bulanan di sheet REKAP PAYROLL —
+ * kolom ditemukan lewat header "Bagian" sebagai jangkar (unik, tidak muncul
+ * di tabel manapun selain ini), lalu PIN/Nama dicari ke KIRI dan kolom upah
+ * lain dicari ke KANAN dari situ. Ini perlu supaya "Premi"/"Uang Makan" yang
+ * juga jadi nama kolom di tabel mitra borong (di kiri "Bagian") tidak
+ * tertukar dengan kolom Anak Harian (di kanan "Bagian").
+ *
+ * Sheet lama (belum ada Anak Harian) atau sheet DATA PERIODE (tidak relevan)
+ * otomatis balik array kosong karena tidak ada header "Bagian".
+ */
+function parseHarianRowsFromGrid(
+  grid: CellSnapshot[][],
+  headerTexts: string[],
+  headerRowIndex: number,
+): ParsedHarianRow[] {
+  const normalized = headerTexts.map((t) => normalizeHeader(t ?? ''));
+  const bagianCol = normalized.findIndex((t) => t === 'bagian');
+  if (bagianCol === -1) return [];
+
+  let namaCol = -1;
+  for (let c = bagianCol - 1; c >= 0; c -= 1) {
+    if (normalized[c] === 'nama') {
+      namaCol = c;
+      break;
+    }
+  }
+  let pinCol = -1;
+  for (let c = namaCol - 1; c >= 0; c -= 1) {
+    if (normalized[c] === 'pin') {
+      pinCol = c;
+      break;
+    }
+  }
+  if (namaCol === -1 || pinCol === -1) return [];
+
+  const findRight = (...labels: string[]) => {
+    for (let c = bagianCol + 1; c < normalized.length; c += 1) {
+      if (labels.includes(normalized[c])) return c;
+    }
+    return -1;
+  };
+  const gapokCol = findRight('gapok');
+  const hariKerjaCol = findRight('hari kerja');
+  const upahCol = findRight('upah');
+  const upahLemburWeekdayCol = findRight('upah lembur weekday');
+  const upahLemburWeekendCol = findRight(
+    'upah lembur sabtu/minggu',
+    'upah lembur weekend',
+  );
+  const uangMakanCol = findRight('uang makan');
+  const premiCol = findRight('premi');
+  const tunjanganCol = findRight('tunjangan');
+  const potonganCol = findRight('(potongan)', 'potongan');
+  const totalUpahCol = findRight('total upah');
+
+  const valueAt = (row: CellSnapshot[], col: number) =>
+    col === -1 ? null : (row[col]?.value ?? null);
+
+  // Header tabel Anak Harian ada di baris yang sama dengan header tabel
+  // utama (headerRowIndex dari findHeaderRow) karena "Bagian" cs. duduk di
+  // kolom-kolom berikutnya pada baris header yang sama.
+  const rows: ParsedHarianRow[] = [];
+  for (
+    let rowIndex = headerRowIndex + 1;
+    rowIndex < grid.length;
+    rowIndex += 1
+  ) {
+    const row = grid[rowIndex];
+    const pinVal = valueAt(row, pinCol);
+    const namaVal = valueAt(row, namaCol);
+    if (isBlank(pinVal) && isBlank(namaVal)) continue;
+    if (isBlank(namaVal)) continue;
+
+    const rawName = String(namaVal).trim().replace(/\s+/g, ' ');
+    const bagianVal = valueAt(row, bagianCol);
+    const hariKerjaVal = valueAt(row, hariKerjaCol);
+
+    const rawRowJson: Record<string, unknown> = {};
+    [
+      ['pin', pinCol],
+      ['nama', namaCol],
+      ['bagian', bagianCol],
+      ['gapok', gapokCol],
+      ['hariKerja', hariKerjaCol],
+      ['upah', upahCol],
+      ['upahLemburWeekday', upahLemburWeekdayCol],
+      ['upahLemburWeekend', upahLemburWeekendCol],
+      ['uangMakan', uangMakanCol],
+      ['premi', premiCol],
+      ['tunjangan', tunjanganCol],
+      ['potongan', potonganCol],
+      ['totalUpah', totalUpahCol],
+    ].forEach(([key, col]) => {
+      const v = valueAt(row, col as number);
+      if (v !== null) rawRowJson[key as string] = v instanceof Date ? v.toISOString() : v;
+    });
+
+    rows.push({
+      rowNumber: rowIndex + 1,
+      pin: isBlank(pinVal) ? null : String(pinVal).trim(),
+      rawName,
+      normalizedName: normalizePersonName(rawName),
+      bagian: isBlank(bagianVal) ? null : String(bagianVal).trim(),
+      gapokRp: parseIndonesianNumber(valueAt(row, gapokCol)),
+      hariKerjaRaw: isBlank(hariKerjaVal) ? null : String(hariKerjaVal).trim(),
+      hariKerja: parseHariKerja(hariKerjaVal),
+      upahRp: parseIndonesianNumber(valueAt(row, upahCol)),
+      upahLemburWeekdayRp: parseIndonesianNumber(
+        valueAt(row, upahLemburWeekdayCol),
+      ),
+      upahLemburWeekendRp: parseIndonesianNumber(
+        valueAt(row, upahLemburWeekendCol),
+      ),
+      uangMakanRp: parseIndonesianNumber(valueAt(row, uangMakanCol)),
+      premiRp: parseIndonesianNumber(valueAt(row, premiCol)),
+      tunjanganRp: parseIndonesianNumber(valueAt(row, tunjanganCol)),
+      potonganRp: parseIndonesianNumber(valueAt(row, potonganCol)),
+      totalUpahRp: parseIndonesianNumber(valueAt(row, totalUpahCol)),
+      rawRowJson,
+    });
+  }
+
+  return rows;
 }
 
 function applyBulananWageFallback(row: ParsedMetricRow): ParsedMetricRow {
@@ -1373,7 +1560,9 @@ export async function parseWorkbook(
     throw new ExcelParseError('File Excel tidak punya sheet apa pun.');
   }
 
-  const rawPeriods: Array<ParsedPeriod & { rawLpRows: ParsedMetricRow[] }> = [];
+  const rawPeriods: Array<
+    ParsedPeriod & { rawLpRows: ParsedMetricRow[]; rawHarianRows: ParsedHarianRow[] }
+  > = [];
 
   for (const worksheet of workbook.worksheets) {
     if (worksheet.state !== 'visible') continue;
@@ -1445,6 +1634,10 @@ export async function parseWorkbook(
     );
     if (!parsedResult || parsedResult.rows.length === 0) continue;
 
+    const harianRows = headerRow
+      ? parseHarianRowsFromGrid(normalizedGrid, headerTexts, headerRow.rowIndex)
+      : [];
+
     const period = parsePeriodLabel(worksheet.name);
     rawPeriods.push({
       sheetName: worksheet.name,
@@ -1458,6 +1651,7 @@ export async function parseWorkbook(
       endMonth: period.endMonth,
       rows: parsedResult.rows,
       rawLpRows: parsedResult.rows,
+      rawHarianRows: harianRows,
       warnings: parsedResult.warnings,
     });
   }
@@ -1512,7 +1706,7 @@ export async function parseWorkbook(
   // Konsolidasi: Kelompokkan sheet berdasarkan label periode yang sama
   const labelGroups = new Map<
     string,
-    Array<ParsedPeriod & { rawLpRows: ParsedMetricRow[] }>
+    Array<ParsedPeriod & { rawLpRows: ParsedMetricRow[]; rawHarianRows: ParsedHarianRow[] }>
   >();
   for (const p of rawPeriods) {
     const list = labelGroups.get(p.label) ?? [];
@@ -1529,8 +1723,10 @@ export async function parseWorkbook(
     });
 
     let combinedLpRows: ParsedMetricRow[] = [];
+    let combinedHarianRows: ParsedHarianRow[] = [];
     sheetPeriods.forEach((sp) => {
       combinedLpRows = combinedLpRows.concat(sp.rawLpRows);
+      combinedHarianRows = combinedHarianRows.concat(sp.rawHarianRows);
     });
 
     const reprocessRows: ParsedReprocessRow[] = [];
@@ -1576,6 +1772,7 @@ export async function parseWorkbook(
         lpRows: productionLpRows,
         reprocessRows,
         unknownRows,
+        harianRows: combinedHarianRows,
         warnings: combinedWarnings,
       });
     } else {
@@ -1587,6 +1784,7 @@ export async function parseWorkbook(
         lpRows: productionLpRows,
         reprocessRows,
         unknownRows,
+        harianRows: combinedHarianRows,
         warnings: combinedWarnings,
       });
     }

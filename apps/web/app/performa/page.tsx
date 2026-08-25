@@ -1,17 +1,21 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
+    ArrowRight,
     BarChart3,
     CalendarRange,
     Loader2,
     RefreshCw,
     Upload,
+    Wallet,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useToast } from '@/lib/toast';
 import {
     getPerformaExpenseSummary,
+    getPerformaHarianSummary,
     getPerformaPeriodStats,
     getPerformaPeriods,
     getPerformaPersons,
@@ -24,10 +28,10 @@ import {
     type PerformaRow,
     type PerformaSummaryResponse,
     type PerformaExpenseSummaryResponse,
+    type PerformaHarianSummaryResponse,
 } from '@/lib/api';
 import DeltaBadge from './components/DeltaBadge';
 import MitraRanking from './components/MitraRanking';
-import PayrollExpensePanel from './components/PayrollExpensePanel';
 import PeriodTrends from './components/PeriodTrends';
 import TotalBjdModal from './components/TotalBjdModal';
 import TotalUpahModal from './components/TotalUpahModal';
@@ -244,6 +248,7 @@ export default function PerformaPage() {
     const [summary, setSummary] = useState<PerformaSummaryResponse | null>(null);
     const [prevSummary, setPrevSummary] = useState<PerformaSummaryResponse | null>(null);
     const [expenseSummary, setExpenseSummary] = useState<PerformaExpenseSummaryResponse | null>(null);
+    const [harianSummary, setHarianSummary] = useState<PerformaHarianSummaryResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
@@ -278,13 +283,15 @@ export default function PerformaPage() {
             const periodList = await loadBase();
             // Periode terbaru = sortOrder terbesar (backend memakai default yang sama).
             const targetId = periodId || periodList[periodList.length - 1]?.id || '';
-            const [data, expenseData] = await Promise.all([
+            const [data, expenseData, harianData] = await Promise.all([
                 getPerformaSummary(targetId || undefined),
                 getPerformaExpenseSummary(targetId || undefined).catch(() => null),
+                getPerformaHarianSummary(targetId || undefined).catch(() => null),
             ]);
             setSummary(data);
             setExpenseSummary(expenseData);
-            
+            setHarianSummary(harianData);
+
             const currentIndex = periodList.findIndex(p => p.id === (data.period?.id ?? targetId));
             const prevId = currentIndex > 0 ? periodList[currentIndex - 1].id : null;
             if (prevId) {
@@ -312,12 +319,14 @@ export default function PerformaPage() {
         setLoading(true);
         setError(null);
         try {
-            const [data, expenseData] = await Promise.all([
+            const [data, expenseData, harianData] = await Promise.all([
                 getPerformaSummary(nextId || undefined),
                 getPerformaExpenseSummary(nextId || undefined).catch(() => null),
+                getPerformaHarianSummary(nextId || undefined).catch(() => null),
             ]);
             setSummary(data);
             setExpenseSummary(expenseData);
+            setHarianSummary(harianData);
 
             const currentIndex = periods.findIndex(p => p.id === (data.period?.id ?? nextId));
             const prevId = currentIndex > 0 ? periods[currentIndex - 1].id : null;
@@ -362,13 +371,15 @@ export default function PerformaPage() {
         try {
             const periodList = await loadBase();
             const latest = periodList[periodList.length - 1]?.id;
-            const [data, expenseData] = await Promise.all([
+            const [data, expenseData, harianData] = await Promise.all([
                 getPerformaSummary(latest),
                 getPerformaExpenseSummary(latest).catch(() => null),
+                getPerformaHarianSummary(latest).catch(() => null),
             ]);
             setSummary(data);
             setExpenseSummary(expenseData);
-            
+            setHarianSummary(harianData);
+
             const prevId = periodList.length > 1 ? periodList[periodList.length - 2].id : null;
             if (prevId) {
                 setPrevSummary(await getPerformaSummary(prevId));
@@ -384,7 +395,14 @@ export default function PerformaPage() {
         }
     };
 
-    const rows = useMemo(() => summary?.rows ?? [], [summary]);
+    // "Cabut Rumah" (cabut bulu di rumah, di luar pabrik) tidak punya konsep
+    // BJD/kapasitas/target sama sekali — disaring dari ranking kapasitas di sini
+    // supaya tidak nongol sebagai baris "0 g/hk" yang membingungkan. Tetap ikut
+    // di payroll (Upah Borong) karena upahnya tetap biaya perusahaan yang sah.
+    const rows = useMemo(
+        () => (summary?.rows ?? []).filter((row) => !/cabut rumah/i.test(row.rawUserLevel ?? '')),
+        [summary],
+    );
 
     // Auto-pilih anak dengan BJD tertinggi (produksi + reprocess digabung, sama seperti
     // urutan ranking di MitraRanking) supaya panel individu tidak kosong.
@@ -409,6 +427,16 @@ export default function PerformaPage() {
     const currentStat =
         periodStats.find((stat) => stat.id === summary?.period?.id) ?? null;
     const isEmpty = !loading && !error && periods.length === 0;
+
+    // Total Upah gabungan = mitra borong/bulanan + anak harian, supaya kartu
+    // ini mencerminkan biaya tenaga kerja perusahaan seutuhnya, bukan cuma mitra.
+    const totalUpahMitra =
+        expenseSummary?.summary?.totalNetWageRp ??
+        (expenseSummary?.summary?.totalBorongWageRp ??
+            expenseSummary?.summary?.totalPieceworkWageRp ??
+            0) + (expenseSummary?.summary?.totalBulananWageRp ?? 0);
+    const totalUpahHarian = harianSummary?.summary?.totalUpahBersihRp ?? 0;
+    const totalUpahGabungan = totalUpahMitra + totalUpahHarian;
 
     return (
         <div className="p-4 sm:p-8">
@@ -554,12 +582,7 @@ export default function PerformaPage() {
                                 currency: 'IDR',
                                 maximumFractionDigits: 0,
                                 notation: 'compact',
-                            }).format(
-                                expenseSummary?.summary?.totalNetWageRp ??
-                                    (expenseSummary?.summary?.totalBorongWageRp ??
-                                        expenseSummary?.summary?.totalPieceworkWageRp ??
-                                        0) + (expenseSummary?.summary?.totalBulananWageRp ?? 0),
-                            )}
+                            }).format(totalUpahGabungan)}
                             hint="Klik untuk upah per kg"
                             accent="#1baf7a"
                             onClick={() => setShowUpahModal(true)}
@@ -588,12 +611,23 @@ export default function PerformaPage() {
                     </div>
                 ) : null}
 
-                {/* Payroll & Biaya Perusahaan / Rekap Payroll Anak Borong */}
-                <PayrollExpensePanel
-                    data={expenseSummary}
-                    periodLabel={summary?.period?.label}
-                    onSelect={selectPerson}
-                />
+                {/* Payroll & Biaya Perusahaan (mitra borong/bulanan + anak harian) dipindah ke
+                    halaman sendiri supaya dashboard ini tetap ringkas — cukup link ke sana. */}
+                {expenseSummary || harianSummary ? (
+                    <Link
+                        href="/performa/payroll"
+                        className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm transition-colors hover:bg-gray-50"
+                    >
+                        <span className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                            <Wallet className="h-4 w-4 text-green-600" />
+                            Payroll &amp; Biaya Perusahaan
+                        </span>
+                        <span className="flex items-center gap-1 text-xs font-medium text-green-700">
+                            Lihat rincian lengkap
+                            <ArrowRight className="h-3.5 w-3.5" />
+                        </span>
+                    </Link>
+                ) : null}
 
                 {/* Turnover & Shifts (Khusus Manager) */}
                 {canManage && prevSummary && (
@@ -616,6 +650,7 @@ export default function PerformaPage() {
                 isOpen={showUpahModal}
                 onClose={() => setShowUpahModal(false)}
                 expenseSummary={expenseSummary?.summary ?? null}
+                harianSummary={harianSummary?.summary ?? null}
                 performaSummary={stats}
                 periodLabel={summary?.period?.label}
             />

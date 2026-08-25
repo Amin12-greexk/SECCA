@@ -29,7 +29,6 @@ import {
 import { useToast } from '@/lib/toast';
 import {
     getPerformaSummary,
-    getPerformaTrends,
     type PerformaPeriod,
     type PerformaPerson,
     type PerformaRow,
@@ -352,7 +351,11 @@ function CapacityCheckpointVerdicts({
                               ? 'border-red-200 bg-red-50 text-red-800'
                               : 'border-gray-200 bg-white text-gray-500'
                     }`}
-                    title={`Periode ${c.periodLabel} — saat anak ini genap ${c.weeks} minggu kerja`}
+                    title={
+                        c.isApprox
+                            ? `Periode ${c.periodLabel} — data pas minggu ke-${c.weeks} tidak ada (loncat/naik status lebih cepat), dipakai minggu ke-${c.actualWeeks} sebagai gantinya`
+                            : `Periode ${c.periodLabel} — saat anak ini genap ${c.weeks} minggu kerja`
+                    }
                 >
                     <span
                         className="h-2 w-2 rotate-45 border-2"
@@ -361,7 +364,14 @@ function CapacityCheckpointVerdicts({
                             backgroundColor: c.achieved ? c.color : 'transparent',
                         }}
                     />
-                    <b>Mgg {c.weeks}</b>
+                    <b>
+                        {c.isApprox ? `≈Mgg ${c.actualWeeks}` : `Mgg ${c.weeks}`}
+                    </b>
+                    {c.isApprox ? (
+                        <span className="rounded bg-gray-100 px-1 text-[9px] font-semibold text-gray-500">
+                            checkpoint dini
+                        </span>
+                    ) : null}
                     <span className="text-gray-400">·</span>
                     {c.actual == null ? 'data kosong' : `${fmtId(c.actual, 1)} / ${fmtId(c.target, 0)} g/hk`}
                     <span className="font-semibold">
@@ -497,8 +507,6 @@ export default function MitraRanking({
     const [bandFilter, setBandFilter] = useState<CapacityBand['key'] | null>(null);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [activePayrollModalRow, setActivePayrollModalRow] = useState<PerformaRow | null>(null);
-    const [trend, setTrend] = useState<PersonTrend | null>(null);
-    const [loadingTrend, setLoadingTrend] = useState(false);
     /** Jumlah HK untuk estimasi barang jadi; default 5 hari kerja. */
     const [estDays, setEstDays] = useState(5);
     /** Jumlah periode yang dibandingkan sekaligus; 0 = semua periode. */
@@ -645,8 +653,7 @@ export default function MitraRanking({
     // Default: anak peringkat teratas — juga saat ganti periode dan anak
     // yang terpilih tidak punya data di periode baru. Kalau rows lagi kosong
     // (mis. sesaat setelah Reset Data / upload ulang), lepas dulu ke null
-    // biar effect tren di bawah tidak sempat nembak getPerformaTrends untuk
-    // personId yang sudah tidak ada lagi (404 "Data mitra tidak ditemukan").
+    // supaya tidak nyangkut ke personId yang sudah tidak ada lagi.
     useEffect(() => {
         const stillExists =
             selectedId !== null && rows.some((row) => row.personId === selectedId);
@@ -673,45 +680,24 @@ export default function MitraRanking({
         onSelect(personId);
     };
 
-    useEffect(() => {
-        if (!selectedId) {
-            setTrend(null);
-            return;
-        }
-        let alive = true;
-        setLoadingTrend(true);
-        Promise.all([
-            getPerformaTrends([selectedId], 'totalBjd'),
-            getPerformaTrends([selectedId], 'rendemen'),
-            getPerformaTrends([selectedId], 'hk'),
-        ])
-            .then(([bjd, rendemen, hk]) => {
-                if (!alive) return;
-                setTrend({
-                    labels: bjd.periods.map((period) => stripPeriode(period.label)),
-                    bjd: bjd.series[0]?.points ?? [],
-                    rendemen: (rendemen.series[0]?.points ?? []).map((point) =>
-                        point === null ? null : Math.round(point) / 100,
-                    ),
-                    hk: hk.series[0]?.points ?? [],
-                });
-            })
-            .catch((error) => {
-                if (alive) {
-                    toast.error(
-                        error instanceof Error ? error.message : 'Gagal memuat grafik BJD anak.',
-                    );
-                }
-            })
-            .finally(() => {
-                if (alive) setLoadingTrend(false);
-            });
-        return () => {
-            alive = false;
+    // Diturunkan langsung dari windowColumns (bukan fetch getPerformaTrends terpisah)
+    // supaya chart "Barang Jadi & Rendemen" dan "HK per Periode" di bawah SELALU pakai
+    // jendela periode yang sama persis dengan chart "Tren Kapasitas" di atasnya — dulu
+    // dua-duanya independen: grafik kapasitas ikut selector "Bandingkan", grafik BJD/HK
+    // selalu nembak seluruh histori, jadi kelihatan beda jumlah periode padahal untuk
+    // anak yang sama. totalBjd sengaja TANPA reprocess (samakan definisi lama di backend
+    // getTrends: metric 'totalBjd' = row.totalBjd murni, bukan gabungan).
+    const trend = useMemo<PersonTrend | null>(() => {
+        if (!selectedId || windowColumns.length === 0) return null;
+        return {
+            labels: windowColumns.map((c) => stripPeriode(c.period.label)),
+            bjd: windowColumns.map((c) => c.row?.totalBjd ?? null),
+            rendemen: windowColumns.map((c) =>
+                c.row?.rendemenPctBps == null ? null : Math.round(c.row.rendemenPctBps) / 100,
+            ),
+            hk: windowColumns.map((c) => c.row?.hk ?? null),
         };
-        // toast stabil dari provider; tidak dijadikan dependency.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedId]);
+    }, [selectedId, windowColumns]);
 
     const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
@@ -1138,7 +1124,7 @@ export default function MitraRanking({
                                         loading={loadingWindow}
                                         missingLabels={missingWindowLabels}
                                     />
-                                    {loadingTrend || !trend ? (
+                                    {loadingWindow || !trend ? (
                                         <div className="h-[300px] animate-pulse rounded-lg bg-gray-50" />
                                     ) : (
                                         <div>
@@ -1155,7 +1141,7 @@ export default function MitraRanking({
                             ) : (
                                 <>
                                     <PerDayBreakdown row={selected} periodLabel={periodLabel} />
-                                    {loadingTrend || !trend ? (
+                                    {loadingWindow || !trend ? (
                                         <div className="h-[300px] animate-pulse rounded-lg bg-gray-50" />
                                     ) : (
                                         <LazyEChart
@@ -1166,7 +1152,7 @@ export default function MitraRanking({
                                 </>
                             )}
 
-                            {!loadingTrend && trend ? (
+                            {!loadingWindow && trend ? (
                                 <div className="mt-3">
                                     <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                                         HK per periode

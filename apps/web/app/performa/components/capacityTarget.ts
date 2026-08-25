@@ -1,4 +1,4 @@
-import { tenureWeeks } from './tenure';
+import { isVeteranTenure, tenureWeeks } from './tenure';
 
 /**
  * Dua ambang target kapasitas (gram BJD/HK) yang dipakai bisnis untuk
@@ -19,25 +19,44 @@ export type CapacityTargetCheckpoint = {
     /** Ambang yang harus dicapai di minggu itu. */
     target: number;
     color: string;
-    /** Label periode saat anak itu genap `weeks` minggu kerja. */
+    /** Label periode yang dipakai sebagai titik evaluasi. */
     periodLabel: string;
     /** Kapasitas nyata anak di periode itu; null bila HK/BJD-nya kosong. */
     actual: number | null;
     /** true = target tercapai, false = belum, null = nilainya tidak diketahui. */
     achieved: boolean | null;
+    /** Lama kerja nyata di titik evaluasi ini — sama dengan `weeks` kalau pas,
+     * beda kalau checkpoint-nya hasil fallback (lihat `isApprox`). */
+    actualWeeks: number;
+    /** true = titik evaluasi ini BUKAN pas di minggu target (data minggu itu
+     * terlewat saat upload, atau anak naik status "Mandiri" lebih cepat dari
+     * jadwal sebelum sempat tercatat pas di minggu target) — checkpoint tetap
+     * ditampilkan supaya tidak "hilang", tapi labelnya harus bilang ini
+     * evaluasi mendekati/dini, bukan pas di minggu itu. */
+    isApprox: boolean;
 };
 
 /**
- * Titik evaluasi di garis target: dipasang tepat di periode saat lama kerja
- * anak itu genap minggu ke-12 / ke-20 (dibaca dari status "Mitra Perintis N"
- * pada baris periode itu — lihat tenure.ts), lalu dibandingkan dengan
- * kapasitas nyatanya di periode yang sama supaya bisa langsung dinilai
- * tercapai/belum.
+ * Titik evaluasi di garis target: idealnya dipasang tepat di periode saat
+ * lama kerja anak itu genap minggu ke-12 / ke-20 (dibaca dari status "Mitra
+ * Perintis N" — lihat tenure.ts), dibandingkan dengan kapasitas nyatanya di
+ * periode yang sama supaya bisa langsung dinilai tercapai/belum.
  *
- * Kalau periode itu belum ada di rentang yang ditampilkan (anak belum sampai
- * seumur itu, atau di luar filter rentang), checkpoint-nya dilewati saja —
- * tidak dipaksakan tampil. Jadi titik hijau baru muncul kalau datanya memang
- * sudah sampai minggu ke-20.
+ * Data lapangan ternyata sering tidak punya baris PAS di minggu targetnya:
+ * 1. Nomor minggu bisa "meloncat" antar upload (mis. Perintis8 -> Perintis19,
+ *    minggu 9-18 tidak pernah ke-upload) — dicari periode PERTAMA yang lama
+ *    kerjanya sudah >= target sebagai gantinya.
+ * 2. Anak bisa naik status ke "Mandiri" LEBIH CEPAT dari minggu ke-20 (jadi
+ *    nomor minggunya berhenti tercatat sebelum sempat genap 20) — dipakai
+ *    baris "Perintis N" TERAKHIR (N tertinggi di bawah target) sebagai
+ *    checkpoint dini, HANYA kalau anak itu memang lanjut jadi veteran
+ *    (Mandiri/Perintis>20) di data yang tersedia — supaya tidak asal tebak
+ *    kalau anaknya belum tentu akan lanjut ke sana.
+ *
+ * Checkpoint dari fallback ini ditandai `isApprox: true` supaya UI bisa kasih
+ * label "checkpoint dini"/"~mgg N" alih-alih mengaku itu pas di minggu target.
+ * Kalau sama sekali tidak ada data yang bisa dipakai (mis. anak sudah Mandiri
+ * sejak sebelum data mulai direkam), checkpoint-nya dilewati — tidak dipaksakan.
  */
 export function capacityTargetCheckpoints(
     points: Array<{
@@ -47,10 +66,50 @@ export function capacityTargetCheckpoints(
     }>,
 ): CapacityTargetCheckpoint[] {
     const result: CapacityTargetCheckpoint[] = [];
+    const weeksAt = (p: (typeof points)[number]) =>
+        tenureWeeks(p.row?.rawUserLevel, p.row?.levelNumber);
+
     for (const target of CAPACITY_TARGETS) {
-        const hit = points.find(
-            (p) => tenureWeeks(p.row?.rawUserLevel, p.row?.levelNumber) === target.weeks,
-        );
+        let hit: (typeof points)[number] | undefined;
+        let actualWeeks: number = target.weeks;
+        let isApprox = false;
+
+        // 1. Kecocokan persis di minggu target — kasus normal.
+        hit = points.find((p) => weeksAt(p) === target.weeks);
+
+        // 2. Meloncat: periode PERTAMA yang lama kerjanya sudah >= target.
+        if (!hit) {
+            const candidates = points
+                .map((p) => ({ p, w: weeksAt(p) }))
+                .filter((x): x is { p: (typeof points)[number]; w: number } => x.w !== null && x.w >= target.weeks)
+                .sort((a, b) => a.w - b.w);
+            if (candidates.length > 0) {
+                hit = candidates[0].p;
+                actualWeeks = candidates[0].w;
+                isApprox = true;
+            }
+        }
+
+        // 3. Naik Mandiri lebih cepat dari target: pakai baris Perintis
+        //    terakhir (paling mendekati target) sebagai checkpoint dini —
+        //    cuma kalau anaknya memang lanjut jadi veteran di data ini.
+        if (!hit) {
+            const becomesVeteran = points.some((p) =>
+                isVeteranTenure(p.row?.rawUserLevel, p.row?.levelNumber),
+            );
+            if (becomesVeteran) {
+                const candidates = points
+                    .map((p) => ({ p, w: weeksAt(p) }))
+                    .filter((x): x is { p: (typeof points)[number]; w: number } => x.w !== null && x.w < target.weeks)
+                    .sort((a, b) => b.w - a.w);
+                if (candidates.length > 0) {
+                    hit = candidates[0].p;
+                    actualWeeks = candidates[0].w;
+                    isApprox = true;
+                }
+            }
+        }
+
         if (!hit) continue;
         const actual = hit.gramPerHk;
         result.push({
@@ -60,6 +119,8 @@ export function capacityTargetCheckpoints(
             periodLabel: hit.label,
             actual,
             achieved: actual == null ? null : actual >= target.value,
+            actualWeeks,
+            isApprox,
         });
     }
     return result;

@@ -3744,6 +3744,11 @@ export interface PerformaRow {
   upahBarangJadiRp?: number | null;
   upahBorongRp?: number | null;
   pieceworkWageRp?: number | null;
+  /** Cuma terisi untuk "CABUT RUMAH" (cabut bulu di rumah, di luar pabrik) —
+   * upahBorongRp/subsidyRp untuk kategori ini bukan angka upah/subsidi
+   * sungguhan, jadi tarif+jumlahnya dipisah ke sini untuk rincian di modal. */
+  cabutRumahRatePerUnitRp?: number | null;
+  cabutRumahQty?: number | null;
   effectivePieceworkRatePerGramRp?: number | null;
   effectivePieceworkRatePerKgRp?: number | null;
   subsidyRp?: number | null;
@@ -3815,6 +3820,8 @@ export interface PerformaExpenseRow {
   upahBarangJadiRp?: number | null;
   upahBorongRp?: number | null;
   pieceworkWageRp: number | null;
+  cabutRumahRatePerUnitRp?: number | null;
+  cabutRumahQty?: number | null;
   effectivePieceworkRatePerGramRp?: number | null;
   effectivePieceworkRatePerKgRp?: number | null;
   subsidyRp: number | null;
@@ -4023,6 +4030,78 @@ export async function getPerformaExpenseSummary(
     return unwrap<PerformaExpenseSummaryResponse>(json);
   } catch (error) {
     console.error("Error fetching performa expense summary:", error);
+    throw error;
+  }
+}
+
+/** Satu pekerja "Anak Harian" (staf pendukung dibayar harian — Cleaning
+ * Service, QC, Trainer, dst) — populasi & skema gaji terpisah total dari
+ * mitra bulu, tidak ada Baku Basah/BJD/Rendemen/Kapasitas. */
+export interface PerformaHarianRow {
+  id: string;
+  personId: string;
+  name: string;
+  rawName: string;
+  pin: string | null;
+  bagian: string | null;
+  gapokRp: number | null;
+  hariKerjaRaw: string | null;
+  hariKerja: number | null;
+  upahRp: number | null;
+  upahLemburWeekdayRp: number | null;
+  upahLemburWeekendRp: number | null;
+  uangMakanRp: number | null;
+  premiRp: number | null;
+  tunjanganRp: number | null;
+  potonganRp: number | null;
+  totalUpahRp: number | null;
+}
+
+export interface PerformaHarianSummary {
+  totalPeople: number;
+  totalGapokRp: number;
+  totalUpahRp: number;
+  totalUpahLemburWeekdayRp: number;
+  totalUpahLemburWeekendRp: number;
+  totalUangMakanRp: number;
+  totalPremiRp: number;
+  totalTunjanganRp: number;
+  totalPotonganRp: number;
+  totalUpahBersihRp: number;
+}
+
+export interface PerformaHarianBagianStat {
+  bagian: string;
+  count: number;
+  totalUpahRp: number;
+}
+
+export interface PerformaHarianSummaryResponse {
+  period: PerformaPeriodRef | null;
+  summary: PerformaHarianSummary | null;
+  rows: PerformaHarianRow[];
+  byBagian: PerformaHarianBagianStat[];
+}
+
+export async function getPerformaHarianSummary(
+  periodId?: string,
+): Promise<PerformaHarianSummaryResponse> {
+  try {
+    const url = `${API_BASE_URL}/api/audit-dashboard/harian-summary${buildQueryString({ periodId })}`;
+    const response = await fetch(url, {
+      headers: getAuthHeaders({ json: false }),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        await readApiError(response, "Gagal memuat ringkasan Anak Harian."),
+      );
+    }
+
+    const json = await response.json();
+    return unwrap<PerformaHarianSummaryResponse>(json);
+  } catch (error) {
+    console.error("Error fetching performa harian summary:", error);
     throw error;
   }
 }

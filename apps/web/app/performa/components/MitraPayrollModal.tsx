@@ -59,6 +59,11 @@ export default function MitraPayrollModal({
     if (!row) return null;
 
     const isBulanan = /bulanan/i.test(row.normalizedLevel ?? row.rawUserLevel ?? '');
+    // Cabut bulu di rumah, di luar pabrik — dibayar per unit (tarif × jumlah), tidak
+    // ada Baku Basah/BJD/Rendemen/target kapasitas sama sekali. upahBorongRp/subsidyRp
+    // bawaan untuk kategori ini sudah dikoreksi di backend (lihat isCabutRumah di
+    // parser), jadi di sini cukup tampilkan rincian tarif×jumlah-nya secara terpisah.
+    const isCabutRumah = /cabut rumah/i.test(row.rawUserLevel ?? '');
     const hk = row.hk ?? null;
     const bjd = row.totalBjd ?? null;
     const bakuBasah = row.totalBakuBasah ?? null;
@@ -135,6 +140,10 @@ export default function MitraPayrollModal({
                                     <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/30 px-2 py-0.5 text-[10px] font-semibold text-purple-200 border border-purple-400/30">
                                         Bulanan (Rp 60.000/hari)
                                     </span>
+                                ) : isCabutRumah ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/30 px-2 py-0.5 text-[10px] font-semibold text-amber-200 border border-amber-400/30">
+                                        Cabut Rumah (di luar pabrik)
+                                    </span>
                                 ) : band ? (
                                     <span
                                         className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
@@ -150,7 +159,7 @@ export default function MitraPayrollModal({
                                     <User className="h-3 w-3 text-slate-400" />
                                     {row.pin ? `PIN: ${row.pin} · ` : ''}
                                     {row.rawUserLevel ?? 'Mitra'}
-                                    {tenure ? ` (${tenure.label})` : ''}
+                                    {tenure && tenure.label !== row.rawUserLevel ? ` (${tenure.label})` : ''}
                                 </span>
                                 {periodLabel ? (
                                     <span className="flex items-center gap-1 border-l border-slate-700 pl-2">
@@ -215,64 +224,86 @@ export default function MitraPayrollModal({
                         </div>
 
                         {/* Breakdown Komponen Upah */}
-                        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                            <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
-                                    {isBulanan ? 'Tarif Harian' : 'Upah Borong'}
+                        {isCabutRumah ? (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 shadow-2xs">
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 block">
+                                    Rincian Cabut Rumah
                                 </span>
-                                <span className="text-sm font-bold text-slate-800 mt-1 block">
-                                    {isBulanan ? 'Rp 60.000 / hari' : fmtRp(row.pieceworkWageRp ?? row.upahBorongRp)}
+                                <span className="mt-1 flex flex-wrap items-baseline gap-1.5 text-sm font-bold text-slate-800">
+                                    {fmtRp(row.cabutRumahRatePerUnitRp)}
+                                    <span className="text-xs font-normal text-slate-500">/ unit</span>
+                                    <span className="text-slate-400">×</span>
+                                    {row.cabutRumahQty == null ? '–' : fmtId(row.cabutRumahQty, 0)}
+                                    <span className="text-xs font-normal text-slate-500">unit</span>
+                                    <span className="text-slate-400">=</span>
+                                    <span className="text-emerald-700">{fmtRp(row.netWageRp)}</span>
                                 </span>
+                                <p className="mt-1.5 text-[10px] text-slate-500">
+                                    Pekerjaan di luar pabrik (di rumah) — tidak ada Baku Basah/BJD/target kapasitas.
+                                </p>
                             </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                                <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
+                                        {isBulanan ? 'Tarif Harian' : 'Upah Borong'}
+                                    </span>
+                                    <span className="text-sm font-bold text-slate-800 mt-1 block">
+                                        {isBulanan ? 'Rp 60.000 / hari' : fmtRp(row.pieceworkWageRp ?? row.upahBorongRp)}
+                                    </span>
+                                </div>
 
-                            <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
-                                    Subsidi Mingguan
-                                </span>
-                                <span className="text-sm font-bold text-emerald-700 mt-1 block">
-                                    {fmtRp(row.subsidyRp)}
-                                </span>
-                            </div>
+                                <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
+                                        Subsidi Mingguan
+                                    </span>
+                                    <span className="text-sm font-bold text-emerald-700 mt-1 block">
+                                        {fmtRp(row.subsidyRp)}
+                                    </span>
+                                </div>
 
-                            <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
-                                    Premi / Bonus
-                                </span>
-                                <span className="text-sm font-bold text-amber-600 mt-1 block">
-                                    {fmtRp(row.premiumRp)}
-                                </span>
-                            </div>
+                                <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
+                                        Premi / Bonus
+                                    </span>
+                                    <span className="text-sm font-bold text-amber-600 mt-1 block">
+                                        {fmtRp(row.premiumRp)}
+                                    </span>
+                                </div>
 
-                            <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
-                                    Uang Makan
-                                </span>
-                                <span className="text-sm font-bold text-indigo-700 mt-1 block">
-                                    {fmtRp(row.mealAllowanceRp)}
-                                </span>
-                            </div>
+                                <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
+                                        Uang Makan
+                                    </span>
+                                    <span className="text-sm font-bold text-indigo-700 mt-1 block">
+                                        {fmtRp(row.mealAllowanceRp)}
+                                    </span>
+                                </div>
 
-                            <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
-                                    Potongan
-                                </span>
-                                <span className="text-sm font-bold text-rose-600 mt-1 block">
-                                    {fmtRp(row.deductionRp)}
-                                </span>
-                            </div>
+                                <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">
+                                        Potongan
+                                    </span>
+                                    <span className="text-sm font-bold text-rose-600 mt-1 block">
+                                        {fmtRp(row.deductionRp)}
+                                    </span>
+                                </div>
 
-                            <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 shadow-2xs">
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800 block">
-                                    Hari Kerja (HK)
-                                </span>
-                                <span className="text-sm font-bold text-emerald-900 mt-1 block">
-                                    {hk == null ? '–' : `${fmtId(hk, 0)} hari`}
-                                </span>
+                                <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 shadow-2xs">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800 block">
+                                        Hari Kerja (HK)
+                                    </span>
+                                    <span className="text-sm font-bold text-emerald-900 mt-1 block">
+                                        {hk == null ? '–' : `${fmtId(hk, 0)} hari`}
+                                    </span>
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
 
-                    {/* Section 2: Ringkasan Hasil Kerja & Kapasitas Produksi */}
+                    {/* Section 2: Ringkasan Hasil Kerja & Kapasitas Produksi — dilewati untuk
+                        Cabut Rumah karena tidak punya Baku Basah/BJD/Rendemen sama sekali. */}
+                    {!isCabutRumah ? (
                     <div className="space-y-3">
                         <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
                             <Scale className="h-4 w-4 text-blue-600" />
@@ -359,6 +390,7 @@ export default function MitraPayrollModal({
                             </div>
                         </div>
                     </div>
+                    ) : null}
 
                     {/* Section 3: Detail LP (Tabel LP) */}
                     {prodLpRows && prodLpRows.length > 0 ? (

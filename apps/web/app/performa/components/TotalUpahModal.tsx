@@ -1,6 +1,6 @@
 'use client';
 
-import { Package, Wallet, X } from 'lucide-react';
+import { HardHat, Package, Wallet, X } from 'lucide-react';
 import {
     Dialog,
     DialogClose,
@@ -8,7 +8,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { fmtId } from '@/components/charts/chart-theme';
-import type { PerformaExpenseSummary, PerformaSummaryResponse } from '@/lib/api';
+import type { PerformaExpenseSummary, PerformaHarianSummary, PerformaSummaryResponse } from '@/lib/api';
 
 const fmtRp = (value: number | null | undefined) =>
     value === null || value === undefined
@@ -23,27 +23,30 @@ interface TotalUpahModalProps {
     isOpen: boolean;
     onClose: () => void;
     expenseSummary: PerformaExpenseSummary | null;
+    harianSummary?: PerformaHarianSummary | null;
     performaSummary: PerformaSummaryResponse['summary'];
     periodLabel?: string;
 }
 
 /**
  * Detail Total Upah: metrik utamanya "Upah per Kg" — akumulasi upah bersih
- * (borong + bulanan + tunjangan − potongan) dibagi total Barang Jadi (kg),
- * jadi kelihatan biaya tenaga kerja per kg output, bukan cuma angka Rupiah
- * mentah. Breakdown borong/bulanan/tunjangan disamakan dengan panel
- * Payroll & Biaya supaya angkanya konsisten di seluruh halaman.
+ * (borong + bulanan + tunjangan − potongan + anak harian) dibagi total Barang
+ * Jadi (kg), jadi kelihatan biaya tenaga kerja per kg output seutuhnya, bukan
+ * cuma mitra bulu. Breakdown borong/bulanan/tunjangan/anak harian disamakan
+ * dengan halaman Payroll & Biaya supaya angkanya konsisten di seluruh app.
  */
 export default function TotalUpahModal({
     isOpen,
     onClose,
     expenseSummary,
+    harianSummary,
     performaSummary,
     periodLabel,
 }: TotalUpahModalProps) {
     if (!expenseSummary || !performaSummary) return null;
 
-    const totalUpah = expenseSummary.totalNetWageRp;
+    const totalUpahHarian = harianSummary?.totalUpahBersihRp ?? 0;
+    const totalUpah = expenseSummary.totalNetWageRp + totalUpahHarian;
     const totalBjdGram = performaSummary.totalBjdWithReprocess ?? performaSummary.totalBjd;
     const totalBjdKg = totalBjdGram / 1000;
     const upahPerKg = totalBjdKg > 0 ? totalUpah / totalBjdKg : null;
@@ -88,6 +91,7 @@ export default function TotalUpahModal({
                             </p>
                             <p className="mt-1 text-[11px] text-emerald-100/80">
                                 Borong + Bulanan + Tunjangan − Potongan
+                                {harianSummary ? ' + Anak Harian' : ''}
                             </p>
                         </div>
 
@@ -114,7 +118,7 @@ export default function TotalUpahModal({
                         <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4">
                             <div>
                                 <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                                    Upah Borong
+                                    Upah Bersih
                                 </p>
                                 {expenseSummary.totalBorongCount ? (
                                     <p className="mt-0.5 text-xs text-slate-400">
@@ -175,6 +179,23 @@ export default function TotalUpahModal({
                                 </div>
                             </div>
                         </div>
+
+                        {harianSummary ? (
+                            <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4">
+                                <div>
+                                    <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
+                                        <HardHat className="h-3.5 w-3.5 text-amber-600" />
+                                        Anak Harian
+                                    </p>
+                                    <p className="mt-0.5 text-xs text-slate-400">
+                                        {fmtId(harianSummary.totalPeople, 0)} anak harian
+                                    </p>
+                                </div>
+                                <p className="text-xl font-extrabold text-slate-900">
+                                    {fmtRp(harianSummary.totalUpahBersihRp)}
+                                </p>
+                            </div>
+                        ) : null}
                     </div>
 
                     <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-500">
