@@ -93,7 +93,7 @@ export default function PayrollPage() {
                             </Link>
                             <h1 className="flex items-center gap-2 text-lg font-bold text-gray-900">
                                 <Wallet className="h-5 w-5 text-green-600" />
-                                Payroll &amp; Biaya Perusahaan
+                                Payroll &amp; Biaya Borong/Bulanan
                             </h1>
                             <p className="mt-0.5 text-xs text-gray-500">{periodLabel ?? 'Data periode'}</p>
                         </div>

@@ -551,6 +551,8 @@ export interface PecahBonHistoryQuery {
   to?: string;
   search?: string;
   order?: "asc" | "desc";
+  /** "yes" = cuma yang sudah disetor, "no" = cuma yang belum disetor. */
+  submitted?: "all" | "yes" | "no";
 }
 
 export type WorkLane = "NEXT_DAY" | "IN_PROGRESS" | "READY_TO_SUBMIT";
@@ -2236,6 +2238,7 @@ export async function getPecahBonHistoryPaginated(
       to: query.to,
       search: query.search,
       order: query.order,
+      submitted: query.submitted,
     });
     const response = await fetch(
       `${API_BASE_URL}/api/baku/pecah-bon/history${queryString}`,

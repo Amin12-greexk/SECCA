@@ -57,4 +57,14 @@ export class PecahBonHistoryQueryDto {
   @IsOptional()
   @IsIn(['asc', 'desc'])
   order?: 'asc' | 'desc' = 'asc';
+
+  @ApiPropertyOptional({
+    enum: ['all', 'yes', 'no'],
+    default: 'all',
+    description:
+      'Filter status setoran: "yes" cuma yang sudah disetor (FinishReceipt.returnedAt terisi), "no" cuma yang belum disetor',
+  })
+  @IsOptional()
+  @IsIn(['all', 'yes', 'no'])
+  submitted?: 'all' | 'yes' | 'no' = 'all';
 }

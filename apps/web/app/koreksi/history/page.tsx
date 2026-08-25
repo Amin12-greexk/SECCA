@@ -45,6 +45,10 @@ function KoreksiHistoryContent() {
   const [tableQuery, setTableQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  /** Cuma dipakai tab operasional — manager tidak punya kolom Status Setoran. */
+  const [submittedFilter, setSubmittedFilter] = useState<"all" | "yes" | "no">(
+    "all",
+  );
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState<PageSize>(20);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -99,6 +103,7 @@ function KoreksiHistoryContent() {
     to = dateTo,
     tab = viewTab,
     limit = effectiveLimit,
+    submitted = submittedFilter,
   ) => {
     setLoading(true);
     try {
@@ -118,6 +123,7 @@ function KoreksiHistoryContent() {
             from: from || undefined,
             to: to || undefined,
             order,
+            submitted,
           }),
           // Cuma pelengkap tampilan (nama mitra, hasil BJD, dll) — tanggal
           // setoran & urutan sudah benar dari getPecahBonHistoryPaginated di
@@ -670,8 +676,9 @@ function KoreksiHistoryContent() {
                   setTableQuery("");
                   setDateFrom("");
                   setDateTo("");
+                  setSubmittedFilter("all");
                   setCurrentPage(0);
-                  void loadPage(0, "", "", "", viewTab);
+                  void loadPage(0, "", "", "", viewTab, effectiveLimit, "all");
                 }}
                 disabled={loading}
               >
@@ -679,6 +686,47 @@ function KoreksiHistoryContent() {
               </Button>
             </div>
           </div>
+
+          {viewTab === "operasional" ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
+              <Label className="text-xs font-medium text-gray-500">
+                Status Setoran:
+              </Label>
+              {(
+                [
+                  { value: "all", label: "Semua" },
+                  { value: "no", label: "Belum disetor" },
+                  { value: "yes", label: "Sudah disetor" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    setSubmittedFilter(opt.value);
+                    setCurrentPage(0);
+                    void loadPage(
+                      0,
+                      tableQuery,
+                      dateFrom,
+                      dateTo,
+                      viewTab,
+                      effectiveLimit,
+                      opt.value,
+                    );
+                  }}
+                  disabled={loading}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    submittedFilter === opt.value
+                      ? "border-[#059833] bg-[#059833] text-white"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {/* ── Main Data Table ── */}

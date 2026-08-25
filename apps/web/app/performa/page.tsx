@@ -620,7 +620,7 @@ export default function PerformaPage() {
                     >
                         <span className="flex items-center gap-2 text-sm font-semibold text-gray-800">
                             <Wallet className="h-4 w-4 text-green-600" />
-                            Payroll &amp; Biaya Perusahaan
+                            Payroll &amp; Biaya Borong/Bulanan
                         </span>
                         <span className="flex items-center gap-1 text-xs font-medium text-green-700">
                             Lihat rincian lengkap

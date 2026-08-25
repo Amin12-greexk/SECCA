@@ -1279,6 +1279,11 @@ export class BakuService {
     if (to) {
       whereClauses.push(Prisma.sql`fr."returnedAt" <= ${to}`);
     }
+    if (query.submitted === 'yes') {
+      whereClauses.push(Prisma.sql`fr."returnedAt" IS NOT NULL`);
+    } else if (query.submitted === 'no') {
+      whereClauses.push(Prisma.sql`fr."returnedAt" IS NULL`);
+    }
     const whereSql =
       whereClauses.length > 0
         ? Prisma.sql`WHERE ${Prisma.join(whereClauses, ' AND ')}`
@@ -1311,7 +1316,11 @@ export class BakuService {
 
     const total = Number(countRows[0]?.count ?? 0);
 
-    if (total === 0) {
+    // Fallback lot lama (di bawah) tidak punya konsep status setoran sama sekali —
+    // kalau filter status setoran lagi aktif dan hasilnya nihil, itu jawaban yang
+    // benar (mis. "tidak ada yang belum disetor"), bukan alasan untuk jatuh ke
+    // data lot lawas yang tidak terkait filter ini.
+    if (total === 0 && (!query.submitted || query.submitted === 'all')) {
       const lotWhere: Prisma.ProductionLotWhereInput = {};
       if (search) {
         lotWhere.OR = [
