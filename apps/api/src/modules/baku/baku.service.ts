@@ -1273,11 +1273,18 @@ export class BakuService {
         OR cg.code ILIKE ${searchPattern}
       )`);
     }
+    // COALESCE ke pecahBonDate WAJIB: fr."returnedAt" NULL untuk LP yang belum
+    // disetor, dan di SQL `NULL >= tanggal` bernilai NULL (bukan TRUE), sehingga
+    // versi lama diam-diam membuang SEMUA baris belum-setor begitu rentang
+    // tanggal diisi — filter "Semua" jadi tidak pernah benar-benar semua, dan
+    // "Belum disetor" + tanggal selalu nihil. Baris yang sudah disetor tetap
+    // difilter pakai tanggal setoran; yang belum, pakai tanggal pecah bon-nya.
+    const filterDateSql = Prisma.sql`COALESCE(fr."returnedAt", pbe."pecahBonDate")`;
     if (from) {
-      whereClauses.push(Prisma.sql`fr."returnedAt" >= ${from}`);
+      whereClauses.push(Prisma.sql`${filterDateSql} >= ${from}`);
     }
     if (to) {
-      whereClauses.push(Prisma.sql`fr."returnedAt" <= ${to}`);
+      whereClauses.push(Prisma.sql`${filterDateSql} <= ${to}`);
     }
     if (query.submitted === 'yes') {
       whereClauses.push(Prisma.sql`fr."returnedAt" IS NOT NULL`);
@@ -1289,13 +1296,21 @@ export class BakuService {
         ? Prisma.sql`WHERE ${Prisma.join(whereClauses, ' AND ')}`
         : Prisma.empty;
 
-    // NULLS LAST di kedua arah: LP yang belum disetor (fr."returnedAt" NULL)
-    // selalu tertahan di bawah, terpisah jelas dari yang sudah disetor —
-    // itulah yang bikin "mana LP yang sudah disetor" gampang dibaca dari tabel.
+    // Urut berdasarkan NOMOR LP, bukan tanggal setoran. Versi lama memakai
+    // `fr."returnedAt" NULLS LAST`, yang melempar semua LP belum-setor ke
+    // halaman paling belakang — akibatnya halaman 1 (dan CSV yang mengekspor
+    // halaman aktif) cuma berisi LP yang sudah disetor walau filter "Semua".
+    //
+    // Format pecahBonId: TEI-0001-26 → bagian ke-2 nomor urut (4 digit), bagian
+    // ke-3 tahun (2 digit). Keduanya zero-padded lebar tetap, jadi aman
+    // dibandingkan sebagai string; tahun didahulukan supaya lintas tahun tetap
+    // urut benar (TEI-0002-26 sebelum TEI-0001-27).
+    const lpYearSql = Prisma.sql`split_part(pbe."pecahBonId", '-', 3)`;
+    const lpSeqSql = Prisma.sql`split_part(pbe."pecahBonId", '-', 2)`;
     const orderSql =
       order === 'desc'
-        ? Prisma.sql`ORDER BY fr."returnedAt" DESC NULLS LAST, pbe."createdAt" DESC`
-        : Prisma.sql`ORDER BY fr."returnedAt" ASC NULLS LAST, pbe."createdAt" ASC`;
+        ? Prisma.sql`ORDER BY ${lpYearSql} DESC, ${lpSeqSql} DESC, pbe."createdAt" DESC`
+        : Prisma.sql`ORDER BY ${lpYearSql} ASC, ${lpSeqSql} ASC, pbe."createdAt" ASC`;
 
     const [countRows, idRows] = await Promise.all([
       this.prisma.$queryRaw<{ count: bigint }[]>`
@@ -1304,9 +1319,17 @@ export class BakuService {
         ${whereSql}
       `,
       this.prisma.$queryRaw<
-        { id: string; submittedAt: Date | null; createdAt: Date }[]
+        {
+          id: string;
+          submittedAt: Date | null;
+          createdAt: Date;
+          lpYear: string | null;
+          lpSeq: string | null;
+        }[]
       >`
-        SELECT DISTINCT pbe.id, fr."returnedAt" AS "submittedAt", pbe."createdAt"
+        SELECT DISTINCT pbe.id, fr."returnedAt" AS "submittedAt", pbe."createdAt",
+          ${lpYearSql} AS "lpYear",
+          ${lpSeqSql} AS "lpSeq"
         ${joinSql}
         ${whereSql}
         ${orderSql}

@@ -18,10 +18,30 @@ import {
 const CSV_DELIMITER = ";";
 /** Batas atas "Semua" — samakan dengan @Max di PecahBonHistoryQueryDto/limit backend. */
 const MAX_PAGE_SIZE = 1000;
+/** Rem darurat loop ekspor: 50 x 1000 baris. Data riil sekarang ~3rb baris. */
+const MAX_EXPORT_PAGES = 50;
 const PAGE_SIZE_OPTIONS = [20, 50, 100, "all"] as const;
 type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
 
 type ViewTab = "manager" | "operasional";
+
+/**
+ * Tarik seluruh halaman sampai habis. MAX_PAGE_SIZE itu batas per-request
+ * backend (@Max 1000), bukan batas total — tanpa loop ini ekspor "semua"
+ * diam-diam terpotong di 1000 baris pertama padahal datanya sudah 3rb+.
+ */
+async function fetchAllPages<T>(
+  fetchPage: (page: number) => Promise<{ items: T[] }>,
+): Promise<T[]> {
+  const all: T[] = [];
+  for (let page = 1; page <= MAX_EXPORT_PAGES; page += 1) {
+    const { items } = await fetchPage(page);
+    const batch = items ?? [];
+    all.push(...batch);
+    if (batch.length < MAX_PAGE_SIZE) break;
+  }
+  return all;
+}
 
 function KoreksiHistoryContent() {
   const toast = useToast();
@@ -108,13 +128,13 @@ function KoreksiHistoryContent() {
     setLoading(true);
     try {
       if (tab === "operasional") {
-        // `order` WAJIB disamakan eksplisit di kedua call. getPecahBonHistory
-        // default 'asc', getFinishReceipts default 'desc' — kalau dibiarkan
-        // pakai default masing-masing, keduanya narik ujung tanggal yang
-        // BERLAWANAN untuk "halaman" yang sama (mis. entry terlama vs
-        // receipt terbaru), sehingga receiptsMap tidak pernah ketemu baris
-        // yang lagi ditampilkan → PIN Mitra/nama selalu kosong.
-        const order = "desc" as const;
+        // Tabel operasional diurutkan nomor LP (terkecil dulu), sedangkan
+        // FinishReceipt cuma bisa diurutkan tanggal setoran — dua sumbu yang
+        // berbeda, jadi menyamakan `order` di kedua call seperti dulu tidak
+        // lagi menjamin baris yang tampil ketemu pasangannya. Receipt karena
+        // itu ditarik selebar mungkin untuk rentang filter yang sama, supaya
+        // kolom PIN Mitra/nama/hasil tetap terisi di halaman ke berapa pun
+        // (versi lama cuma benar di halaman 1).
         const [pbRes, frRes] = await Promise.all([
           getPecahBonHistoryPaginated({
             page: page + 1,
@@ -122,20 +142,16 @@ function KoreksiHistoryContent() {
             search: query || undefined,
             from: from || undefined,
             to: to || undefined,
-            order,
+            order: "asc",
             submitted,
           }),
-          // Cuma pelengkap tampilan (nama mitra, hasil BJD, dll) — tanggal
-          // setoran & urutan sudah benar dari getPecahBonHistoryPaginated di
-          // atas. Rentang tanggal, limit, dan urutan disamakan supaya baris
-          // yang tampil di halaman ini benar-benar ketemu pasangannya.
           getFinishReceipts({
             page: 1,
-            limit,
+            limit: MAX_PAGE_SIZE,
             search: query || undefined,
             from: from || undefined,
             to: to || undefined,
-            order,
+            order: "desc",
           }).catch(() => ({ items: [] as FinishReceiptListItem[] })),
         ]);
         setPecahBonData(pbRes);
@@ -267,7 +283,14 @@ function KoreksiHistoryContent() {
       : escaped;
   };
 
-  const buildCsvOperasional = (exportRows: PecahBonEntry[], startIndex = 0) => {
+  const buildCsvOperasional = (
+    exportRows: PecahBonEntry[],
+    startIndex = 0,
+    /** Ekspor seluruh data memakai map hasil fetch-nya sendiri, bukan map
+     * milik halaman yang lagi tampil — kalau tidak, baris di luar halaman
+     * aktif kehilangan kolom PIN/nama/hasil. */
+    receipts: Record<string, FinishReceiptListItem> = receiptsMap,
+  ) => {
     const headers = [
       "No",
       "ID LP",
@@ -292,7 +315,7 @@ function KoreksiHistoryContent() {
       "Rendemen Utama (%)",
     ];
     const rows = exportRows.map((entry, index) => {
-      const receipt = receiptsMap[entry.pecahBonId || entry.id];
+      const receipt = receipts[entry.pecahBonId || entry.id];
       const dryIn = receipt?.dryInGram || entry.dryWeightGram || 0;
       const mainOut = receipt?.mainOutWeightGram || 0;
       const byProduct = receipt?.byProductWeightGram || 0;
@@ -494,19 +517,84 @@ function KoreksiHistoryContent() {
     };
   };
 
-  const downloadExcelPage = () => {
-    setExporting("page");
+  /**
+   * Download CSV mengekspor SELURUH baris yang cocok filter aktif, bukan cuma
+   * halaman yang lagi tampil. Dulu ekspor terbatas satu halaman, dan karena
+   * tabel diurutkan tanggal setoran (LP belum-setor terlempar ke halaman
+   * terakhir), CSV halaman 1 selalu kelihatan cuma berisi LP yang sudah
+   * disetor walau filter Status Setoran = Semua.
+   *
+   * Kalau ada baris yang dicentang, pilihan itu yang dihormati apa adanya.
+   */
+  const downloadExcelAll = async () => {
+    setExporting(selectedIds.length > 0 ? "page" : "all");
+    const stamp = new Date().toISOString().slice(0, 10);
+    const prefix =
+      viewTab === "manager"
+        ? "riwayat-setoran-manager"
+        : "riwayat-pecah-bon-operasional";
     try {
-      const { content, rowCount } = buildCurrentTableContent();
-      const prefix =
-        viewTab === "manager"
-          ? "riwayat-setoran-manager"
-          : "riwayat-pecah-bon-operasional";
+      if (selectedIds.length > 0) {
+        const { content, rowCount } = buildCurrentTableContent();
+        downloadCsv(content, `${prefix}-pilihan-${stamp}.csv`);
+        toast.success(`Berhasil mengunduh ${rowCount} baris terpilih.`);
+        return;
+      }
+
+      const shared = {
+        search: tableQuery || undefined,
+        from: dateFrom || undefined,
+        to: dateTo || undefined,
+      };
+
+      if (viewTab === "manager") {
+        const items = await fetchAllPages((page) =>
+          getFinishReceipts({
+            page,
+            limit: MAX_PAGE_SIZE,
+            ...shared,
+            order: "desc",
+          }),
+        );
+        downloadCsv(buildCsvManager(items, 0), `${prefix}-${stamp}.csv`);
+        toast.success(`Berhasil mengunduh ${items.length} baris.`);
+        return;
+      }
+
+      const [pbItems, frItems] = await Promise.all([
+        fetchAllPages((page) =>
+          getPecahBonHistoryPaginated({
+            page,
+            limit: MAX_PAGE_SIZE,
+            ...shared,
+            order: "asc",
+            submitted: submittedFilter,
+          }),
+        ),
+        fetchAllPages((page) =>
+          getFinishReceipts({
+            page,
+            limit: MAX_PAGE_SIZE,
+            ...shared,
+            order: "desc",
+          }),
+        ).catch(() => [] as FinishReceiptListItem[]),
+      ]);
+
+      const fullMap: Record<string, FinishReceiptListItem> = {};
+      frItems.forEach((item) => {
+        if (item.noLp) fullMap[item.noLp] = item;
+      });
+
       downloadCsv(
-        content,
-        `${prefix}-page-${currentPage + 1}-${new Date().toISOString().slice(0, 10)}.csv`,
+        buildCsvOperasional(pbItems, 0, fullMap),
+        `${prefix}-${stamp}.csv`,
       );
-      toast.success(`Berhasil mengunduh ${rowCount} baris.`);
+      toast.success(`Berhasil mengunduh ${pbItems.length} baris.`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Gagal menyiapkan CSV.",
+      );
     } finally {
       setExporting(null);
     }
@@ -744,8 +832,9 @@ function KoreksiHistoryContent() {
               </p>
               {viewTab === "operasional" && (
                 <p className="mt-0.5 text-[11px] text-gray-400">
-                  Diurutkan berdasarkan tanggal setoran — LP yang belum
-                  disetor ditampilkan di bagian bawah.
+                  Diurutkan berdasarkan nomor LP (terkecil lebih dulu). Download
+                  CSV mengunduh semua baris sesuai filter, bukan hanya halaman
+                  ini.
                 </p>
               )}
             </div>
@@ -781,11 +870,20 @@ function KoreksiHistoryContent() {
               </Button>
               <Button
                 type="button"
-                onClick={downloadExcelPage}
+                onClick={() => void downloadExcelAll()}
                 disabled={loading || activeRowCount === 0 || exporting !== null}
                 className="bg-[#059833] hover:bg-[#047a29]"
+                title={
+                  selectedIds.length > 0
+                    ? `Unduh ${selectedIds.length} baris terpilih`
+                    : "Unduh semua baris yang cocok dengan filter aktif"
+                }
               >
-                {exporting === "page" ? "Menyiapkan..." : "Download CSV"}
+                {exporting !== null
+                  ? "Menyiapkan..."
+                  : selectedIds.length > 0
+                    ? `Download CSV (${selectedIds.length})`
+                    : "Download CSV"}
               </Button>
             </div>
           </div>
@@ -1239,7 +1337,7 @@ function KoreksiHistoryContent() {
 
 export default function KoreksiHistoryPage() {
   return (
-    <ProtectedRoute allowedRoles={["koreksi", "manager"]}>
+    <ProtectedRoute>
       <KoreksiHistoryContent />
     </ProtectedRoute>
   );

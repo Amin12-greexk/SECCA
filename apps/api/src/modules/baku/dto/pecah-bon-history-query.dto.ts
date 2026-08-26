@@ -27,7 +27,8 @@ export class PecahBonHistoryQueryDto {
   limit?: number = 20;
 
   @ApiPropertyOptional({
-    description: 'Tanggal setoran awal (YYYY-MM-DD) — filter pada FinishReceipt.returnedAt',
+    description:
+      'Tanggal awal (YYYY-MM-DD). Difilter pada COALESCE(FinishReceipt.returnedAt, PecahBonEntry.pecahBonDate) — sudah disetor pakai tanggal setoran, belum disetor pakai tanggal pecah bon.',
     example: '2026-02-01',
   })
   @IsOptional()
@@ -35,7 +36,8 @@ export class PecahBonHistoryQueryDto {
   from?: string;
 
   @ApiPropertyOptional({
-    description: 'Tanggal setoran akhir (YYYY-MM-DD) — filter pada FinishReceipt.returnedAt',
+    description:
+      'Tanggal akhir (YYYY-MM-DD). Difilter pada COALESCE(FinishReceipt.returnedAt, PecahBonEntry.pecahBonDate).',
     example: '2026-02-29',
   })
   @IsOptional()
@@ -52,7 +54,8 @@ export class PecahBonHistoryQueryDto {
   @ApiPropertyOptional({
     enum: ['asc', 'desc'],
     default: 'asc',
-    description: 'Urutan data berdasarkan tanggal setoran (FinishReceipt.returnedAt)',
+    description:
+      'Urutan berdasarkan nomor LP (PecahBonEntry.pecahBonId). "asc" = LP terkecil di baris pertama.',
   })
   @IsOptional()
   @IsIn(['asc', 'desc'])
