@@ -13,13 +13,11 @@ import {
     type PerformaPeriod,
     type PerformaRow,
 } from '@/lib/api';
-import ProtectedRoute from '@/components/ProtectedRoute';
+import PeriodPicker from '../components/PeriodPicker';
+import { formatPeriodLabel } from '../components/periodLabel';
 import HarianPayrollPanel from '../components/HarianPayrollPanel';
 import MitraPayrollModal from '../components/MitraPayrollModal';
 import PayrollExpensePanel from '../components/PayrollExpensePanel';
-
-const SELECT_CLASS =
-    'rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none transition';
 
 /**
  * Payroll & Biaya Perusahaan — halaman sendiri, dipisah dari /performa supaya
@@ -27,7 +25,7 @@ const SELECT_CLASS =
  * gaji (mitra borong/bulanan + anak harian) yang panjang tetap punya tempat
  * lega tanpa membuat dashboard produksi penuh sesak.
  */
-function PayrollContent() {
+export default function PayrollPage() {
     const [periods, setPeriods] = useState<PerformaPeriod[]>([]);
     const [periodId, setPeriodId] = useState('');
     const [expenseSummary, setExpenseSummary] = useState<PerformaExpenseSummaryResponse | null>(null);
@@ -76,7 +74,10 @@ function PayrollContent() {
         loadForPeriod(nextId);
     };
 
-    const periodLabel = expenseSummary?.period?.label ?? harianSummary?.period?.label ?? undefined;
+    // Dinormalisasi dari startDate/endDate supaya sama persis dengan /performa;
+    // kedua endpoint sekarang ikut mengirim tanggalnya.
+    const periodRef = expenseSummary?.period ?? harianSummary?.period ?? null;
+    const periodLabel = periodRef ? formatPeriodLabel(periodRef) : undefined;
     const isEmpty = !loading && !error && periods.length === 0;
 
     return (
@@ -100,28 +101,12 @@ function PayrollContent() {
                         </div>
 
                         <div className="flex flex-wrap items-end gap-3">
-                            <div>
-                                <label
-                                    htmlFor="payroll-period"
-                                    className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-500"
-                                >
-                                    Periode
-                                </label>
-                                <select
-                                    id="payroll-period"
-                                    value={periodId}
-                                    onChange={(event) => handlePeriodChange(event.target.value)}
-                                    disabled={periods.length === 0}
-                                    className={`${SELECT_CLASS} disabled:opacity-50`}
-                                >
-                                    {periods.length === 0 ? <option value="">Belum ada data</option> : null}
-                                    {periods.map((period) => (
-                                        <option key={period.id} value={period.id}>
-                                            {period.label} ({period.totalMetrics})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                            <PeriodPicker
+                                periods={periods}
+                                value={periodId}
+                                onChange={handlePeriodChange}
+                                disabled={loading}
+                            />
 
                             <button
                                 type="button"
@@ -167,13 +152,5 @@ function PayrollContent() {
                 periodLabel={periodLabel}
             />
         </div>
-    );
-}
-
-export default function PayrollPage() {
-    return (
-        <ProtectedRoute>
-            <PayrollContent />
-        </ProtectedRoute>
     );
 }

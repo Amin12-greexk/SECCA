@@ -149,8 +149,12 @@ export const ROLE_DEFAULT_ACCESS: Record<UserRole, Partial<Record<UiAccessModule
         trainer_orders: 2,
     },
     // Admin sistem: hanya administrasi (data master, akun, assign pengawas) +
-    // settings. Sengaja TIDAK diberi `dashboard`, karena level 1 pun sudah
-    // membuka /performa yang memuat rincian upah mitra — lihat ROUTE_ACCESS_RULES.
+    // settings. Tanpa `dashboard`, sehingga /dashboard (analytics manager) dan
+    // menu sidebar-nya tidak muncul.
+    //
+    // Catatan: ini TIDAK menyembunyikan /performa — halaman itu memang publik
+    // (ada tombol "Buka Dashboard" di halaman awal untuk pengunjung yang belum
+    // login), jadi siapa pun bisa melihatnya, role apa pun.
     admin: {
         admin: 3,
         settings: 1,

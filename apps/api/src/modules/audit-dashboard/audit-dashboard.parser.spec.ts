@@ -240,6 +240,25 @@ describe('parsePeriodLabel', () => {
     expect(parsed.endMonth).toBeNull();
   });
 
+  // Singkatan bulan yang tidak dikenal bikin parsePeriodLabel jatuh ke `empty`,
+  // jadi periodenya kehilangan tanggal tanpa error apa pun — cuma ketahuan
+  // belakangan lewat label yang tidak bisa dirapikan. Kunci alias yang dipakai
+  // penulis sheet di sini.
+  it.each([
+    ['agsts', 8],
+    ['agus', 8],
+    ['agst', 8],
+    ['ags', 8],
+    ['peb', 2],
+    ['nopember', 11],
+  ])('recognises the month abbreviation %s', (abbrev, expectedMonth) => {
+    const parsed = parsePeriodLabel(`06 - 12 ${abbrev} 26`);
+    expect(parsed.startMonth).toBe(expectedMonth);
+    expect(parsed.endMonth).toBe(expectedMonth);
+    expect(parsed.year).toBe(2026);
+    expect(parsed.startDate).not.toBeNull();
+  });
+
   it('parses months written on both sides of the dash', () => {
     const noYear = parsePeriodLabel('28 MEI - 03 JUNI');
     expect(noYear.startMonth).toBe(5);

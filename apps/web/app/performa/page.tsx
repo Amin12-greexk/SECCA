@@ -12,7 +12,6 @@ import {
     Wallet,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
-import ProtectedRoute from '@/components/ProtectedRoute';
 import { useToast } from '@/lib/toast';
 import {
     getPerformaExpenseSummary,
@@ -32,6 +31,8 @@ import {
     type PerformaHarianSummaryResponse,
 } from '@/lib/api';
 import DeltaBadge from './components/DeltaBadge';
+import PeriodPicker from './components/PeriodPicker';
+import { formatPeriodLabel } from './components/periodLabel';
 import MitraRanking from './components/MitraRanking';
 import PeriodTrends from './components/PeriodTrends';
 import TotalBjdModal from './components/TotalBjdModal';
@@ -52,9 +53,6 @@ const fmtBps = (value: number | null | undefined, fd = 1) =>
 
 const fmtNum = (value: number | null | undefined, fd = 1) =>
     value === null || value === undefined ? '–' : fmt(value, fd);
-
-const SELECT_CLASS =
-    'rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none transition';
 
 /* ─── Stat tile ───────────────────────────────────────────────── */
 
@@ -238,7 +236,15 @@ function UploadCard({
 
 /* ─── Page ────────────────────────────────────────────────────── */
 
-function PerformaContent() {
+/**
+ * Dashboard performa SENGAJA bisa dibuka tanpa login — halaman awal `/` punya
+ * tombol "Buka Dashboard" yang mengarah ke sini untuk pengunjung yang belum
+ * masuk. Jangan bungkus dengan ProtectedRoute.
+ *
+ * Pembedaannya ada di `canManage` (login + dashboard level 2), yang menentukan
+ * upload, reset, dan panel Turnover & Shift — bukan di akses halamannya.
+ */
+export default function PerformaPage() {
     const { isAuthenticated, hasModuleAccess } = useAuth();
     const toast = useToast();
 
@@ -451,33 +457,17 @@ function PerformaContent() {
                                 Dashboard Performa
                             </h1>
                             <p className="mt-0.5 text-xs text-gray-500">
-                                {summary?.period ? summary.period.label : 'Data periode'}
+                                {summary?.period ? formatPeriodLabel(summary.period) : 'Data periode'}
                             </p>
                         </div>
 
                         <div className="flex flex-wrap items-end gap-3">
-                            <div>
-                                <label
-                                    htmlFor="performa-period"
-                                    className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-500"
-                                >
-                                    Periode
-                                </label>
-                                <select
-                                    id="performa-period"
-                                    value={periodId}
-                                    onChange={(event) => handlePeriodChange(event.target.value)}
-                                    disabled={periods.length === 0}
-                                    className={`${SELECT_CLASS} disabled:opacity-50`}
-                                >
-                                    {periods.length === 0 ? <option value="">Belum ada data</option> : null}
-                                    {periods.map((period) => (
-                                        <option key={period.id} value={period.id}>
-                                            {period.label} ({period.totalMetrics})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                            <PeriodPicker
+                                periods={periods}
+                                value={periodId}
+                                onChange={handlePeriodChange}
+                                disabled={loading}
+                            />
 
                             <button
                                 type="button"
@@ -599,7 +589,7 @@ function PerformaContent() {
                             rows={rows}
                             periods={periods}
                             periodId={periodId}
-                            periodLabel={summary?.period?.label}
+                            periodLabel={formatPeriodLabel(summary?.period)}
                             onSelect={selectPerson}
                             externalSelectedId={selectedPersonId}
                             persons={persons}
@@ -643,7 +633,7 @@ function PerformaContent() {
                 isOpen={showBjdModal}
                 onClose={() => setShowBjdModal(false)}
                 summary={stats}
-                periodLabel={summary?.period?.label}
+                periodLabel={formatPeriodLabel(summary?.period)}
                 rows={rows}
             />
 
@@ -653,16 +643,8 @@ function PerformaContent() {
                 expenseSummary={expenseSummary?.summary ?? null}
                 harianSummary={harianSummary?.summary ?? null}
                 performaSummary={stats}
-                periodLabel={summary?.period?.label}
+                periodLabel={formatPeriodLabel(summary?.period)}
             />
         </div>
-    );
-}
-
-export default function PerformaPage() {
-    return (
-        <ProtectedRoute>
-            <PerformaContent />
-        </ProtectedRoute>
     );
 }

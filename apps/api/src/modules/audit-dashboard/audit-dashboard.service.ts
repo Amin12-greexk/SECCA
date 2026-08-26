@@ -710,6 +710,12 @@ export class AuditDashboardService {
         id: period.id,
         label: period.label,
         sheetName: period.sheetName,
+        // Ikut disertakan supaya frontend bisa merapikan label periode dari
+        // tanggal (mis. "13 - 19 AGST" → "13 – 19 Agustus 2026") sama persis
+        // seperti di /performa; tanpa ini halaman payroll jatuh ke label mentah.
+        startDate: period.startDate,
+        endDate: period.endDate,
+        year: period.year,
       },
       summary: {
         totalPieceworkWageRp,
@@ -804,6 +810,9 @@ export class AuditDashboardService {
         id: period.id,
         label: period.label,
         sheetName: period.sheetName,
+        startDate: period.startDate,
+        endDate: period.endDate,
+        year: period.year,
       },
       summary,
       rows,
