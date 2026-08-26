@@ -225,7 +225,7 @@ function MitraAddContent() {
 
 export default function MitraAddPage() {
     return (
-        <ProtectedRoute allowedRoles={['trainer', 'manager']}>
+        <ProtectedRoute>
             <MitraAddContent />
         </ProtectedRoute>
     );

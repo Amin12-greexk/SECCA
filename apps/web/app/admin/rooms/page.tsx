@@ -315,7 +315,7 @@ function RoomsContent() {
 
 export default function RoomsPage() {
   return (
-    <ProtectedRoute allowedRoles={['manager', 'baku']}>
+    <ProtectedRoute>
       <RoomsContent />
     </ProtectedRoute>
   );

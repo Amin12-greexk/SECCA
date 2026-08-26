@@ -1266,7 +1266,7 @@ function MitraBoardContent() {
 
 export default function MitraBoardPage() {
   return (
-    <ProtectedRoute allowedRoles={["mitra", "manager"]}>
+    <ProtectedRoute>
       <MitraBoardContent />
     </ProtectedRoute>
   );

@@ -3466,7 +3466,7 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
 
 export default function PecahBonPage() {
   return (
-    <ProtectedRoute allowedRoles={["baku", "manager"]}>
+    <ProtectedRoute>
       <PecahBonContent />
     </ProtectedRoute>
   );

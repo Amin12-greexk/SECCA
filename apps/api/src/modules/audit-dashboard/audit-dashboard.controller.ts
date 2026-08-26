@@ -38,7 +38,7 @@ export class AuditDashboardController {
    * public agar halaman /performa bisa dibuka tanpa login.
    */
   @Post('import')
-  @Roles('manager', 'admin')
+  @Roles('manager')
   @ApiBearerAuth()
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Upload workbook Excel berisi data periode' })
@@ -78,7 +78,7 @@ export class AuditDashboardController {
   }
 
   @Post('reset')
-  @Roles('manager', 'admin')
+  @Roles('manager')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Reset semua data dashboard performa' })
   async resetData() {
@@ -135,11 +135,17 @@ export class AuditDashboardController {
   @Public()
   @ApiOperation({ summary: 'Tren satu/beberapa mitra antar periode' })
   getTrends(@Query() query: TrendsQueryDto) {
-    return this.auditDashboardService.getTrends(query.personIds, query.metric);
+    // `personIds` dijamin ada & tidak kosong oleh @ArrayNotEmpty; `?? []` cuma
+    // menjembatani tipe DTO yang `string[] | undefined` (properti tanpa
+    // inisialisasi di bawah strictPropertyInitialization).
+    return this.auditDashboardService.getTrends(
+      query.personIds ?? [],
+      query.metric,
+    );
   }
 
   @Patch('persons/:id/color')
-  @Roles('manager', 'admin')
+  @Roles('manager')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Set warna custom untuk satu mitra' })
   updatePersonColor(

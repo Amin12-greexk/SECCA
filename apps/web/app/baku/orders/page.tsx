@@ -541,7 +541,7 @@ function BakuOrdersContent() {
 
 export default function BakuOrdersPage() {
     return (
-        <ProtectedRoute allowedRoles={['baku', 'manager']}>
+        <ProtectedRoute>
             <BakuOrdersContent />
         </ProtectedRoute>
     );

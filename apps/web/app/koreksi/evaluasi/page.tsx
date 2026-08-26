@@ -236,7 +236,7 @@ function KoreksiEvaluasiContent() {
 
 export default function KoreksiEvaluasiPage() {
     return (
-        <ProtectedRoute allowedRoles={['koreksi', 'manager']}>
+        <ProtectedRoute>
             <KoreksiEvaluasiContent />
         </ProtectedRoute>
     );

@@ -1167,7 +1167,7 @@ export function StockAsalContent({ embedded = false }: { embedded?: boolean }) {
 
 export default function StockAsalPage() {
     return (
-        <ProtectedRoute allowedRoles={['baku', 'manager']}>
+        <ProtectedRoute>
             <StockAsalContent />
         </ProtectedRoute>
     );

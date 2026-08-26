@@ -30,7 +30,7 @@ import {
   type Worker,
 } from '@/lib/api';
 
-type RoleOption = 'baku' | 'mitra' | 'koreksi' | 'manager' | 'trainer';
+type RoleOption = 'baku' | 'mitra' | 'koreksi' | 'manager' | 'trainer' | 'admin';
 type UiAccessDraft = Partial<Record<UiAccessModuleKey, number>>;
 
 function buildUiAccessDraft(
@@ -335,6 +335,7 @@ function UsersContent() {
                     <SelectItem value="koreksi">Koreksi</SelectItem>
                     <SelectItem value="manager">Manager</SelectItem>
                     <SelectItem value="trainer">Trainer</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -653,6 +654,7 @@ function UsersContent() {
                   <SelectItem value="koreksi">Koreksi</SelectItem>
                   <SelectItem value="manager">Manager</SelectItem>
                   <SelectItem value="trainer">Trainer</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -802,7 +804,7 @@ function UsersContent() {
 
 export default function UsersPage() {
   return (
-    <ProtectedRoute allowedRoles={['manager']}>
+    <ProtectedRoute>
       <UsersContent />
     </ProtectedRoute>
   );

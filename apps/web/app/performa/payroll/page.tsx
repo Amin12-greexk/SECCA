@@ -13,6 +13,7 @@ import {
     type PerformaPeriod,
     type PerformaRow,
 } from '@/lib/api';
+import ProtectedRoute from '@/components/ProtectedRoute';
 import HarianPayrollPanel from '../components/HarianPayrollPanel';
 import MitraPayrollModal from '../components/MitraPayrollModal';
 import PayrollExpensePanel from '../components/PayrollExpensePanel';
@@ -26,7 +27,7 @@ const SELECT_CLASS =
  * gaji (mitra borong/bulanan + anak harian) yang panjang tetap punya tempat
  * lega tanpa membuat dashboard produksi penuh sesak.
  */
-export default function PayrollPage() {
+function PayrollContent() {
     const [periods, setPeriods] = useState<PerformaPeriod[]>([]);
     const [periodId, setPeriodId] = useState('');
     const [expenseSummary, setExpenseSummary] = useState<PerformaExpenseSummaryResponse | null>(null);
@@ -166,5 +167,13 @@ export default function PayrollPage() {
                 periodLabel={periodLabel}
             />
         </div>
+    );
+}
+
+export default function PayrollPage() {
+    return (
+        <ProtectedRoute>
+            <PayrollContent />
+        </ProtectedRoute>
     );
 }

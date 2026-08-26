@@ -15,7 +15,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
 @ApiTags('production-rooms')
 @ApiBearerAuth()
-@Roles('manager', 'baku', 'koreksi', 'trainer')
+@Roles('manager', 'baku', 'koreksi', 'trainer', 'admin')
 @Controller('production-rooms')
 export class ProductionRoomsController {
   constructor(
@@ -23,31 +23,31 @@ export class ProductionRoomsController {
   ) {}
 
   @Post()
-  @Roles('manager')
+  @Roles('manager', 'admin')
   create(@Body() dto: CreateProductionRoomDto) {
     return this.productionRoomsService.create(dto);
   }
 
   @Get()
-  @Roles('manager', 'baku', 'koreksi', 'trainer')
+  @Roles('manager', 'baku', 'koreksi', 'trainer', 'admin')
   findAll() {
     return this.productionRoomsService.findAll();
   }
 
   @Get(':id')
-  @Roles('manager', 'baku', 'koreksi', 'trainer')
+  @Roles('manager', 'baku', 'koreksi', 'trainer', 'admin')
   findOne(@Param('id') id: string) {
     return this.productionRoomsService.findOne(id);
   }
 
   @Put(':id')
-  @Roles('manager')
+  @Roles('manager', 'admin')
   update(@Param('id') id: string, @Body() dto: UpdateProductionRoomDto) {
     return this.productionRoomsService.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles('manager')
+  @Roles('manager', 'admin')
   delete(@Param('id') id: string) {
     return this.productionRoomsService.delete(id);
   }

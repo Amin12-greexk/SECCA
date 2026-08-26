@@ -12,6 +12,7 @@ import {
     Wallet,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
+import ProtectedRoute from '@/components/ProtectedRoute';
 import { useToast } from '@/lib/toast';
 import {
     getPerformaExpenseSummary,
@@ -237,7 +238,7 @@ function UploadCard({
 
 /* ─── Page ────────────────────────────────────────────────────── */
 
-export default function PerformaPage() {
+function PerformaContent() {
     const { isAuthenticated, hasModuleAccess } = useAuth();
     const toast = useToast();
 
@@ -655,5 +656,13 @@ export default function PerformaPage() {
                 periodLabel={summary?.period?.label}
             />
         </div>
+    );
+}
+
+export default function PerformaPage() {
+    return (
+        <ProtectedRoute>
+            <PerformaContent />
+        </ProtectedRoute>
     );
 }

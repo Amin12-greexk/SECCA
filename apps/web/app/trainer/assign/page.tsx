@@ -299,7 +299,7 @@ function TrainerAssignContent() {
 
 export default function TrainerAssignPage() {
     return (
-        <ProtectedRoute allowedRoles={['trainer', 'manager']}>
+        <ProtectedRoute>
             <TrainerAssignContent />
         </ProtectedRoute>
     );

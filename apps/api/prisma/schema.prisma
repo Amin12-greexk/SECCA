@@ -55,6 +55,7 @@ enum UserRole {
   KOREKSI
   MANAGER
   TRAINER
+  ADMIN
 }
 
 enum GradeType {

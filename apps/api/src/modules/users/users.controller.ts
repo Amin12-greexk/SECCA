@@ -7,7 +7,7 @@ import { UsersService } from './users.service';
 
 @ApiTags('users')
 @ApiBearerAuth()
-@Roles('manager')
+@Roles('manager', 'admin')
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}

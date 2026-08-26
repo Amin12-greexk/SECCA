@@ -1234,7 +1234,7 @@ function KoreksiDataContent() {
 
 export default function KoreksiDataPage() {
   return (
-    <ProtectedRoute allowedRoles={['koreksi', 'manager']}>
+    <ProtectedRoute>
       <KoreksiDataContent />
     </ProtectedRoute>
   );

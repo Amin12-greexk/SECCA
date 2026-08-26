@@ -1,4 +1,4 @@
-export type UserRole = 'baku' | 'mitra' | 'koreksi' | 'manager' | 'trainer';
+export type UserRole = 'baku' | 'mitra' | 'koreksi' | 'manager' | 'trainer' | 'admin';
 
 export type UiAccessModuleKey =
     | 'dashboard'

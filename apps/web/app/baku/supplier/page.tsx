@@ -269,7 +269,7 @@ function SupplierContent() {
 
 export default function SupplierPage() {
     return (
-        <ProtectedRoute allowedRoles={['baku', 'manager']}>
+        <ProtectedRoute>
             <SupplierContent />
         </ProtectedRoute>
     );

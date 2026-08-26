@@ -11,7 +11,7 @@ export default function StockPage() {
     const [activeTab, setActiveTab] = useState<StockTab>('asal');
 
     return (
-        <ProtectedRoute allowedRoles={['baku', 'manager']}>
+        <ProtectedRoute>
             <div className="min-h-[calc(100vh-72px)] bg-green-50 py-8 px-4">
                 <div className="mx-auto max-w-6xl">
                     <div className="mb-6">

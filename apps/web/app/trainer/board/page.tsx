@@ -406,7 +406,7 @@ function TrainerBoardContent() {
 
 export default function TrainerBoardPage() {
     return (
-        <ProtectedRoute allowedRoles={['trainer', 'manager']}>
+        <ProtectedRoute>
             <div className="p-6 md:p-8">
                 <TrainerBoardContent />
             </div>

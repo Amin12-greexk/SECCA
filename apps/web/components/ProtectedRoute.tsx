@@ -9,6 +9,13 @@ import { canAccessPath, getRouteAccessRequirement } from '@/lib/access-control';
 
 interface ProtectedRouteProps {
     children: React.ReactNode;
+    /**
+     * Fallback berbasis role, HANYA dipakai kalau pathname tidak punya entry di
+     * ROUTE_ACCESS_RULES (lihat lib/access-control.ts). Begitu sebuah route punya
+     * rule, module-level access yang menang dan prop ini diabaikan — jadi jangan
+     * pakai ini untuk halaman yang sudah terdaftar di sana, karena akan terbaca
+     * seolah menjaga padahal tidak. Sumber kebenaran akses = access-control.ts.
+     */
     allowedRoles?: UserRole[];
 }
 

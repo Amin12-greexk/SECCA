@@ -323,7 +323,7 @@ function MitraOrderContent() {
 
 export default function MitraOrderPage() {
     return (
-        <ProtectedRoute allowedRoles={['baku', 'manager']}>
+        <ProtectedRoute>
             <MitraOrderContent />
         </ProtectedRoute>
     );

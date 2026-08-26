@@ -346,7 +346,7 @@ function MitraListContent() {
 
 export default function MitraListPage() {
     return (
-        <ProtectedRoute allowedRoles={['trainer', 'manager']}>
+        <ProtectedRoute>
             <MitraListContent />
         </ProtectedRoute>
     );

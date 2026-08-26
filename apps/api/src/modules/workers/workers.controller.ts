@@ -15,7 +15,7 @@ import { WorkersService } from './workers.service';
 
 @ApiTags('workers')
 @ApiBearerAuth()
-@Roles('manager', 'baku', 'mitra', 'koreksi', 'trainer')
+@Roles('manager', 'baku', 'mitra', 'koreksi', 'trainer', 'admin')
 @Controller('workers')
 export class WorkersController {
   constructor(private readonly workersService: WorkersService) {}

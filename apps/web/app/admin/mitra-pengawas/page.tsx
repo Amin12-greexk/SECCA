@@ -377,7 +377,7 @@ function MitraPengawasContent() {
 
 export default function MitraPengawasPage() {
     return (
-        <ProtectedRoute allowedRoles={['manager']}>
+        <ProtectedRoute>
             <MitraPengawasContent />
         </ProtectedRoute>
     );

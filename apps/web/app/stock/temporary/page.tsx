@@ -49,7 +49,7 @@ function TemporaryContent() {
 
 export default function TemporaryPage() {
     return (
-        <ProtectedRoute allowedRoles={['baku', 'manager']}>
+        <ProtectedRoute>
             <TemporaryContent />
         </ProtectedRoute>
     );

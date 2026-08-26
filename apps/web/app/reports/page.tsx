@@ -61,7 +61,7 @@ const toDateStr = (date: Date) => {
 
 export default function ReportsPage() {
   return (
-    <ProtectedRoute allowedRoles={['manager']}>
+    <ProtectedRoute>
       <ReportsContent />
     </ProtectedRoute>
   );

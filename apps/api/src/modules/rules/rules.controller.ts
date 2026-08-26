@@ -20,13 +20,13 @@ import { RulesService } from './rules.service';
 
 @ApiTags('rules')
 @ApiBearerAuth()
-@Roles('manager', 'baku', 'mitra', 'koreksi')
+@Roles('manager', 'baku', 'mitra', 'koreksi', 'admin')
 @Controller('rules')
 export class RulesController {
   constructor(private readonly rulesService: RulesService) {}
 
   @Post('grade-tariffs')
-  @Roles('manager')
+  @Roles('manager', 'admin')
   createGradeTariff(
     @Body() dto: CreateGradeTariffDto,
     @Req() req: { user?: { sub?: string } },
@@ -40,7 +40,7 @@ export class RulesController {
   }
 
   @Patch('grade-tariffs/:id')
-  @Roles('manager')
+  @Roles('manager', 'admin')
   updateGradeTariff(
     @Param('id') id: string,
     @Body() dto: Partial<CreateGradeTariffDto>,
@@ -50,7 +50,7 @@ export class RulesController {
   }
 
   @Delete('grade-tariffs/:id')
-  @Roles('manager')
+  @Roles('manager', 'admin')
   deleteGradeTariff(
     @Param('id') id: string,
     @Req() req: { user?: { sub?: string } },
@@ -59,7 +59,7 @@ export class RulesController {
   }
 
   @Post('moisture')
-  @Roles('manager')
+  @Roles('manager', 'admin')
   createMoistureRule(@Body() dto: CreateMoistureRuleDto) {
     return this.rulesService.createMoistureRule(dto);
   }
@@ -70,13 +70,13 @@ export class RulesController {
   }
 
   @Delete('moisture/:id')
-  @Roles('manager')
+  @Roles('manager', 'admin')
   deleteMoistureRule(@Param('id') id: string) {
     return this.rulesService.deleteMoistureRule(id);
   }
 
   @Post('pecah-bon-presets')
-  @Roles('manager')
+  @Roles('manager', 'admin')
   createPreset(@Body() dto: CreatePecahBonPresetDto) {
     return this.rulesService.createPecahBonPreset(dto);
   }
@@ -87,13 +87,13 @@ export class RulesController {
   }
 
   @Delete('pecah-bon-presets/:id')
-  @Roles('manager')
+  @Roles('manager', 'admin')
   deletePreset(@Param('id') id: string) {
     return this.rulesService.deletePecahBonPreset(id);
   }
 
   @Post('result-grade-tariffs')
-  @Roles('manager')
+  @Roles('manager', 'admin')
   createResultGradeTariff(
     @Body()
     dto: {
@@ -112,7 +112,7 @@ export class RulesController {
   }
 
   @Patch('result-grade-tariffs/:id')
-  @Roles('manager')
+  @Roles('manager', 'admin')
   updateResultGradeTariff(
     @Param('id') id: string,
     @Body() dto: { rateRpPerGram?: number; effectiveFrom?: string },
@@ -122,7 +122,7 @@ export class RulesController {
   }
 
   @Delete('result-grade-tariffs/:id')
-  @Roles('manager')
+  @Roles('manager', 'admin')
   deleteResultGradeTariff(
     @Param('id') id: string,
     @Req() req: { user?: { sub?: string } },
@@ -141,7 +141,7 @@ export class RulesController {
   }
 
   @Post('settings')
-  @Roles('manager')
+  @Roles('manager', 'admin')
   setSetting(@Body() dto: { key: string; value: string }) {
     return this.rulesService.setSetting(dto.key, dto.value);
   }

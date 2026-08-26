@@ -309,7 +309,7 @@ function TerimaBakuContent() {
 
 export default function TerimaBakuPage() {
     return (
-        <ProtectedRoute allowedRoles={['baku', 'manager']}>
+        <ProtectedRoute>
             <TerimaBakuContent />
         </ProtectedRoute>
     );

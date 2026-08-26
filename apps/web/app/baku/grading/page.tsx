@@ -332,7 +332,7 @@ function GradingContent() {
 
 export default function GradingPage() {
     return (
-        <ProtectedRoute allowedRoles={['baku', 'manager']}>
+        <ProtectedRoute>
             <GradingContent />
         </ProtectedRoute>
     );

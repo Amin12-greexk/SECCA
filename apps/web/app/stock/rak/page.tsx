@@ -933,7 +933,7 @@ function RackContent() {
 
 export default function RakPage() {
     return (
-        <ProtectedRoute allowedRoles={['baku', 'manager']}>
+        <ProtectedRoute>
             <RackContent />
         </ProtectedRoute>
     );

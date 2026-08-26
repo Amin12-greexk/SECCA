@@ -818,7 +818,7 @@ function BarangJadiContent() {
 
 export default function BarangJadiPage() {
   return (
-    <ProtectedRoute allowedRoles={['koreksi', 'manager']}>
+    <ProtectedRoute>
       <BarangJadiContent />
     </ProtectedRoute>
   );

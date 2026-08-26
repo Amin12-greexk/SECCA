@@ -15,7 +15,7 @@ import { GradesService } from './grades.service';
 
 @ApiTags('grades')
 @ApiBearerAuth()
-@Roles('manager', 'baku', 'mitra', 'koreksi')
+@Roles('manager', 'baku', 'mitra', 'koreksi', 'admin')
 @Controller('grades')
 export class GradesController {
   constructor(private readonly gradesService: GradesService) {}

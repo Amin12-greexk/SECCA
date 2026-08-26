@@ -331,7 +331,7 @@ function LocationsContent() {
 
 export default function LocationsPage() {
   return (
-    <ProtectedRoute allowedRoles={['manager', 'baku']}>
+    <ProtectedRoute>
       <LocationsContent />
     </ProtectedRoute>
   );

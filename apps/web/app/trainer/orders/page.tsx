@@ -590,7 +590,7 @@ function TrainerOrdersContent() {
 
 export default function TrainerOrdersPage() {
     return (
-        <ProtectedRoute allowedRoles={['trainer', 'manager']}>
+        <ProtectedRoute>
             <TrainerOrdersContent />
         </ProtectedRoute>
     );

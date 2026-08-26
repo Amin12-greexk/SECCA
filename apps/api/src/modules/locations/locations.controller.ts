@@ -17,7 +17,7 @@ import { LocationsService } from './locations.service';
 
 @ApiTags('locations')
 @ApiBearerAuth()
-@Roles('manager', 'baku', 'mitra', 'koreksi', 'trainer')
+@Roles('manager', 'baku', 'mitra', 'koreksi', 'trainer', 'admin')
 @Controller('locations')
 export class LocationsController {
   constructor(private readonly locationsService: LocationsService) {}
@@ -51,13 +51,13 @@ export class LocationsController {
   }
 
   @Put(':id')
-  @Roles('manager', 'baku')
+  @Roles('manager', 'baku', 'admin')
   update(@Param('id') id: string, @Body() dto: UpdateLocationDto) {
     return this.locationsService.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles('manager')
+  @Roles('manager', 'admin')
   delete(@Param('id') id: string) {
     return this.locationsService.delete(id);
   }

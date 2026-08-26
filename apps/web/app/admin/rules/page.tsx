@@ -1132,7 +1132,7 @@ function AdminRulesContent() {
 
 export default function AdminRulesPage() {
     return (
-        <ProtectedRoute allowedRoles={['manager']}>
+        <ProtectedRoute>
             <AdminRulesContent />
         </ProtectedRoute>
     );

@@ -48,6 +48,11 @@ const API_ACCESS_RULES: ApiAccessRule[] = [
     methods: ['PATCH'],
   },
   {
+    pattern: /^\/api\/audit-dashboard\/reset$/i,
+    anyOf: [{ moduleKey: 'dashboard', minLevel: 2 }],
+    methods: ['POST'],
+  },
+  {
     pattern: /^\/api\/users(?:\/|$)/i,
     anyOf: [{ moduleKey: 'admin', minLevel: 2 }],
   },
@@ -107,8 +112,24 @@ const API_ACCESS_RULES: ApiAccessRule[] = [
     anyOf: [{ moduleKey: 'admin', minLevel: 1 }],
   },
   {
+    // Dipakai halaman /stock/rak (stock) dan /admin/locations "Manajemen Rak" (admin).
     pattern: /^\/api\/locations(?:\/|$)/i,
-    anyOf: [{ moduleKey: 'stock', minLevel: 2 }],
+    anyOf: [
+      { moduleKey: 'stock', minLevel: 2 },
+      { moduleKey: 'admin', minLevel: 1 },
+    ],
+  },
+  {
+    // Halaman /admin/rooms "Ruang Produksi"; dropdown ruang produksi di /admin/users.
+    pattern: /^\/api\/production-rooms(?:\/|$)/i,
+    anyOf: [
+      { moduleKey: 'admin', minLevel: 1 },
+      { moduleKey: 'stock', minLevel: 3 },
+    ],
+  },
+  {
+    pattern: /^\/api\/reports(?:\/|$)/i,
+    anyOf: [{ moduleKey: 'reports', minLevel: 1 }],
   },
   {
     pattern: /^\/api\/lots(?:\/|$)/i,
