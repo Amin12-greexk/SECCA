@@ -13,7 +13,7 @@ import {
     type PerformaPeriod,
     type PerformaRow,
 } from '@/lib/api';
-import PeriodPicker from '../components/PeriodPicker';
+import StickyPeriodPicker from '../components/StickyPeriodPicker';
 import { formatPeriodLabel } from '../components/periodLabel';
 import HarianPayrollPanel from '../components/HarianPayrollPanel';
 import MitraPayrollModal from '../components/MitraPayrollModal';
@@ -101,7 +101,7 @@ export default function PayrollPage() {
                         </div>
 
                         <div className="flex flex-wrap items-end gap-3">
-                            <PeriodPicker
+                            <StickyPeriodPicker
                                 periods={periods}
                                 value={periodId}
                                 onChange={handlePeriodChange}

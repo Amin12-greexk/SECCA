@@ -7,6 +7,7 @@ import {
     fmtId,
     tooltipStyle,
     valueAxis,
+    zoomConfig,
 } from '@/components/charts/chart-theme';
 
 /**
@@ -50,7 +51,8 @@ export function personTrendOption(
     });
 
     return {
-        grid: { top: 46, right: 52, bottom: 46, left: 48 },
+        grid: { top: 46, right: 52, bottom: 28, left: 48 },
+        dataZoom: zoomConfig(trend.labels.length),
         legend: {
             top: 0,
             left: 'center',
@@ -76,7 +78,7 @@ export function personTrendOption(
             axisLabel: {
                 ...categoryAxis.axisLabel,
                 interval: trend.labels.length > 8 ? ('auto' as const) : 0,
-                rotate: trend.labels.length > 4 ? 26 : 0,
+                rotate: 0,
                 hideOverlap: true,
             },
         },

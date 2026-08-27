@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import * as echarts from 'echarts/core';
 import { BarChart, LineChart } from 'echarts/charts';
 import {
@@ -31,13 +31,32 @@ export default function EChart({
     option,
     height = 320,
     onEvents,
+    group,
 }: {
     option: EChartsOption;
     height?: number;
     /** mis. { click: (params) => ... } — dipakai ranking untuk pilih anak. */
     onEvents?: Record<string, (params: unknown) => void>;
+    /**
+     * Chart dengan `group` sama akan ikut ter-zoom/geser bersamaan. Dipakai
+     * untuk chart yang bertumpuk dengan sumbu periode yang sama persis —
+     * tanpa ini, zoom di satu chart membuat tetangganya menampilkan rentang
+     * berbeda padahal area plotnya sengaja disejajarkan.
+     */
+    group?: string;
 }) {
     const style = useMemo(() => ({ height, width: '100%' }), [height]);
+
+    const handleReady = useCallback(
+        (instance: { group?: string }) => {
+            if (!group) return;
+            instance.group = group;
+            // Aman dipanggil berulang: connect memakai nama grup, dan instance
+            // yang sudah di-dispose otomatis keluar dari grup.
+            echarts.connect(group);
+        },
+        [group],
+    );
 
     // Animasi masuk cepat untuk polesan, tapi hormati prefers-reduced-motion.
     const reducedMotion =
@@ -64,6 +83,7 @@ export default function EChart({
             notMerge
             style={style}
             onEvents={onEvents}
+            onChartReady={handleReady}
             opts={{ renderer: 'canvas' }}
         />
     );

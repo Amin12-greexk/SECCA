@@ -15,6 +15,7 @@ import {
     stripPeriode,
     tooltipStyle,
     valueAxis,
+    zoomConfig,
 } from '@/components/charts/chart-theme';
 import type { PerformaPeriodStat } from '@/lib/api';
 import { CAPACITY_TARGETS, capacityTargetMarkLine } from './capacityTarget';
@@ -132,6 +133,7 @@ function baseOption(params: {
 
     return {
         grid: { top: legend ? 46 : 30, right: 18, bottom: 46, left: 48 },
+        dataZoom: zoomConfig(labels.length),
         legend: legend
             ? {
                   top: 0,
@@ -227,7 +229,9 @@ function ChartCard(props: {
             </div>
 
             <div className="mt-2">
-                <LazyEChart option={props.option} height={props.height} />
+                {/* Ketiga kartu tren memakai sumbu periode yang sama, jadi
+                    zoom di satu kartu ikut menggeser dua lainnya. */}
+                <LazyEChart option={props.option} height={props.height} group="periode-trend" />
             </div>
         </div>
     );

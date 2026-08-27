@@ -5,6 +5,7 @@ import {
     fmtId,
     tooltipStyle,
     valueAxis,
+    zoomConfig,
 } from '@/components/charts/chart-theme';
 import { CAPACITY_BAND_RANGES, classifyCapacity } from './capacityBand';
 import {
@@ -49,7 +50,9 @@ export function capacityTrendOption(
     return {
         // top dilebihkan supaya pin progres (yang nongol di atas titik datanya)
         // tidak kepotong; bottom juga sedikit lebih longgar untuk label sumbu-X.
-        grid: { top: 44, right: 16, bottom: 50, left: 48 },
+        // bottom dulu 50 untuk menampung label miring; label kini mendatar.
+        grid: { top: 44, right: 16, bottom: 30, left: 48 },
+        dataZoom: zoomConfig(labels.length),
         tooltip: {
             trigger: 'axis',
             axisPointer: {
@@ -78,11 +81,18 @@ export function capacityTrendOption(
                               ? 'tercapai'
                               : 'belum tercapai';
                     const evalLabel = checkpoint.isApprox
-                        ? `Evaluasi ≈mgg ${checkpoint.actualWeeks} (checkpoint dini, target aslinya mgg ${checkpoint.weeks})`
+                        ? `Evaluasi ≈mgg ${checkpoint.actualWeeks} (perkiraan, target aslinya mgg ${checkpoint.weeks})`
                         : `Evaluasi mgg ${checkpoint.weeks}`;
                     lines.push(
                         `<span style="color:${checkpoint.color}">◆ ${evalLabel} — target ${fmtId(checkpoint.target, 0)} g/hk: <b>${verdict}</b></span>`,
                     );
+                    // Sudah pernah tembus target lalu turun: beda kasus dari yang
+                    // memang belum pernah sampai, jadi disebut terpisah.
+                    if (checkpoint.declineFromPeak) {
+                        lines.push(
+                            `<span style="color:#b45309">↓ Turun <b>${fmtId(checkpoint.declineFromPeak.pct, 0)}%</b> dari puncak ${fmtId(checkpoint.declineFromPeak.value, 1)} g/hk (${checkpoint.declineFromPeak.periodLabel})</span>`,
+                        );
+                    }
                 }
                 if (progress && progress.periodLabel === label) {
                     const progressColor = progress.achievedEarly ? '#059669' : '#f59e0b';
@@ -104,7 +114,7 @@ export function capacityTrendOption(
             axisLabel: {
                 ...categoryAxis.axisLabel,
                 interval: labels.length > 8 ? ('auto' as const) : 0,
-                rotate: labels.length > 4 ? 26 : 0,
+                rotate: 0,
                 hideOverlap: true,
             },
         },

@@ -1,0 +1,81 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import type { PerformaPeriod } from '@/lib/api';
+import PeriodPicker from './PeriodPicker';
+
+type Props = {
+    periods: PerformaPeriod[];
+    value: string;
+    onChange: (periodId: string) => void;
+    disabled?: boolean;
+};
+
+/**
+ * Pemilih periode di header, plus salinan mengambang yang muncul sendiri
+ * begitu yang asli tergulir keluar layar.
+ *
+ * Halaman ini panjang — grafik kapasitas, tren BJD/rendemen, HK, ranking, tren
+ * antar periode — jadi untuk ganti periode dari bagian bawah harus menggulir
+ * jauh ke atas, ganti, lalu turun lagi ke tempat semula. Salinan mengambang
+ * ini memutus siklus itu.
+ *
+ * Keduanya memakai `value` dan `onChange` yang sama, jadi tidak ada state
+ * kedua yang bisa melenceng — yang mana pun digeser, satu sumber yang berubah.
+ */
+export default function StickyPeriodPicker({ periods, value, onChange, disabled }: Props) {
+    const anchorRef = useRef<HTMLDivElement>(null);
+    const [outOfView, setOutOfView] = useState(false);
+
+    useEffect(() => {
+        const el = anchorRef.current;
+        if (!el) return;
+
+        const observer = new IntersectionObserver(
+            ([entry]) => setOutOfView(!entry.isIntersecting),
+            // rootMargin atas -72px: saat login ada header aplikasi setinggi itu
+            // yang menutupi bagian atas viewport, jadi pemilih dianggap "hilang"
+            // tepat ketika benar-benar tertutup header, bukan sebelumnya.
+            { threshold: 0, rootMargin: '-72px 0px 0px 0px' },
+        );
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
+
+    // Portal hanya dibuat setelah observer menyala (pasti sudah di klien), jadi
+    // tidak perlu penjaga "mounted" yang bikin setState di dalam effect.
+    const showFloating = outOfView && periods.length > 0;
+
+    return (
+        <>
+            <div ref={anchorRef}>
+                <PeriodPicker
+                    periods={periods}
+                    value={value}
+                    onChange={onChange}
+                    disabled={disabled}
+                />
+            </div>
+
+            {showFloating
+                ? createPortal(
+                      <div
+                          // z-40: di bawah dialog (z-60) supaya modal detail
+                          // pembayaran tetap menutupinya, bukan tertindih.
+                          className="fixed bottom-4 left-1/2 z-40 w-[min(20rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-gray-200 bg-white/95 px-2 py-1.5 shadow-lg ring-1 ring-black/5 backdrop-blur-sm"
+                      >
+                          <PeriodPicker
+                              periods={periods}
+                              value={value}
+                              onChange={onChange}
+                              disabled={disabled}
+                              floating
+                          />
+                      </div>,
+                      document.body,
+                  )
+                : null}
+        </>
+    );
+}

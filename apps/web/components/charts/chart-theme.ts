@@ -107,6 +107,40 @@ export const splitLine = {
     lineStyle: { color: CHART_INK.grid, width: 1 },
 };
 
+/* ── Zoom ─────────────────────────────────────────────────────── */
+
+/** Di bawah jumlah titik ini seluruh data sudah muat nyaman, tidak ada yang
+ * perlu di-zoom — dataZoom dilewati supaya chart pendek tidak jadi bisa
+ * digeser-geser tanpa alasan. */
+export const ZOOM_MIN_POINTS = 6;
+
+/**
+ * dataZoom standar untuk chart deret periode. Sengaja `inside` saja, TANPA
+ * slider: chart di dashboard ini ditumpuk banyak, dan slider di tiap chart
+ * mengembalikan kepadatan visual yang baru saja dikurangi. Zoom lewat
+ * Ctrl/⌘+roda, cubit dua jari di layar sentuh, atau seret untuk menggeser.
+ *
+ * `zoomOnMouseWheel: 'ctrl'` bukan `true`: kalau roda polos dibajak untuk
+ * zoom, menggulir halaman melewati chart akan tersangkut dan diam-diam
+ * mengubah rentang data. Roda polos harus tetap menggulir halaman.
+ *
+ * `zoomLock: false` + `moveOnMouseMove` membuat setelah di-zoom bisa diseret
+ * ke periode lain tanpa perlu keluar-masuk.
+ */
+export function zoomConfig(pointCount: number) {
+    if (pointCount < ZOOM_MIN_POINTS) return undefined;
+
+    return [
+        {
+            type: 'inside' as const,
+            zoomOnMouseWheel: 'ctrl' as const,
+            moveOnMouseWheel: false as const,
+            moveOnMouseMove: true as const,
+            throttle: 50,
+        },
+    ];
+}
+
 /** Sumbu kategori: garis tipis, tanpa tick menonjol. */
 export const categoryAxis = {
     axisLine: { lineStyle: { color: CHART_INK.axis } },

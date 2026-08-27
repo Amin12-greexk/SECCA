@@ -34,6 +34,18 @@ export type CapacityTargetCheckpoint = {
      * ditampilkan supaya tidak "hilang", tapi labelnya harus bilang ini
      * evaluasi mendekati/dini, bukan pas di minggu itu. */
     isApprox: boolean;
+    /**
+     * Terisi kalau anak ini SUDAH pernah melewati target sebelum minggu
+     * evaluasinya, lalu turun saat dievaluasi — lihat findDeclineFromPeak.
+     * null = tidak pernah melewati target sebelumnya, atau tidak turun.
+     */
+    declineFromPeak: {
+        /** Kapasitas puncak sebelum evaluasi (g/hk). */
+        value: number;
+        periodLabel: string;
+        /** Persen turun dari puncak itu ke nilai saat evaluasi. */
+        pct: number;
+    } | null;
 };
 
 /**
@@ -58,6 +70,46 @@ export type CapacityTargetCheckpoint = {
  * Kalau sama sekali tidak ada data yang bisa dipakai (mis. anak sudah Mandiri
  * sejak sebelum data mulai direkam), checkpoint-nya dilewati — tidak dipaksakan.
  */
+/** Turun di bawah ini dianggap datar, bukan penurunan — supaya chip tidak
+ * dipenuhi badge "↓1%" yang tidak berarti apa-apa. */
+const MIN_DECLINE_PCT = 2;
+
+/**
+ * Anak yang SUDAH pernah melewati target sebelum minggu evaluasinya, lalu
+ * turun saat dievaluasi.
+ *
+ * Ini beda kualitasnya dari anak yang memang belum pernah sampai: kemampuannya
+ * sudah terbukti, yang jatuh adalah konsistensinya — jadi tindak lanjutnya pun
+ * beda. Tanpa keterangan ini keduanya sama-sama muncul sebagai "✗ belum".
+ *
+ * Pembandingnya PUNCAK tertinggi sebelum evaluasi (bukan yang terakhir), supaya
+ * persentasenya menjawab "seberapa jauh turun dari kemampuan terbaiknya".
+ */
+function findDeclineFromPeak(
+    points: Array<{ label: string; gramPerHk: number | null }>,
+    hitIndex: number,
+    targetValue: number,
+) {
+    const actual = points[hitIndex]?.gramPerHk;
+    if (actual == null || hitIndex <= 0) return null;
+
+    let peak: { label: string; gramPerHk: number } | null = null;
+    for (let i = 0; i < hitIndex; i++) {
+        const p = points[i];
+        if (p.gramPerHk == null || p.gramPerHk < targetValue) continue;
+        if (!peak || p.gramPerHk > peak.gramPerHk) {
+            peak = { label: p.label, gramPerHk: p.gramPerHk };
+        }
+    }
+
+    if (!peak || peak.gramPerHk <= actual) return null;
+
+    const pct = ((peak.gramPerHk - actual) / peak.gramPerHk) * 100;
+    if (pct < MIN_DECLINE_PCT) return null;
+
+    return { value: peak.gramPerHk, periodLabel: peak.label, pct };
+}
+
 export function capacityTargetCheckpoints(
     points: Array<{
         label: string;
@@ -121,9 +173,50 @@ export function capacityTargetCheckpoints(
             achieved: actual == null ? null : actual >= target.value,
             actualWeeks,
             isApprox,
+            declineFromPeak: findDeclineFromPeak(points, points.indexOf(hit), target.value),
         });
     }
     return result;
+}
+
+/**
+ * Kenapa checkpoint minggu 12/20 tidak muncul untuk anak ini.
+ *
+ * Tanpa keterangan, belah ketupat yang absen terbaca seolah sistemnya lupa
+ * menghitung — padahal penyebabnya ada di data dan berbeda-beda. Kembalikan
+ * null kalau semua checkpoint memang ada.
+ */
+export function explainMissingCheckpoints(
+    points: Array<{
+        row: { rawUserLevel?: string | null; levelNumber?: number | null } | null;
+    }>,
+    checkpoints: CapacityTargetCheckpoint[],
+): string | null {
+    const missing = CAPACITY_TARGETS.filter(
+        (target) => !checkpoints.some((c) => c.weeks === target.weeks),
+    );
+    if (missing.length === 0) return null;
+
+    const label = missing.map((t) => `mgg ${t.weeks}`).join(' & ');
+    const known = points
+        .map((p) => tenureWeeks(p.row?.rawUserLevel, p.row?.levelNumber))
+        .filter((w): w is number => w !== null);
+
+    // Semua kalimat menyebut "periode yang dibandingkan" karena checkpoint
+    // dihitung dari jendela yang sedang dipilih di selector Bandingkan, bukan
+    // dari seluruh riwayat — mempersempit jendela bisa membuat checkpoint
+    // hilang, dan kalimatnya tidak boleh terbaca sebagai klaim atas riwayat
+    // penuh anak tersebut.
+    if (known.length === 0) {
+        const veteran = points.some((p) =>
+            isVeteranTenure(p.row?.rawUserLevel, p.row?.levelNumber),
+        );
+        return veteran
+            ? `Checkpoint ${label} tidak tersedia — anak ini sudah Mitra Mandiri (≥21 minggu) sejak periode pertama yang dibandingkan, jadi tidak ada titik yang bisa dipakai sebagai evaluasi.`
+            : `Checkpoint ${label} tidak tersedia — level pada periode yang dibandingkan tidak mencantumkan minggu kerja (BULANAN, kosong, atau 0). Coba lebarkan "Bandingkan" ke semua periode.`;
+    }
+
+    return `Checkpoint ${label} belum ada — lama kerja tertinggi pada periode yang dibandingkan baru ${Math.max(...known)} minggu.`;
 }
 
 /** Warna status tetap (bukan warna target) — dipakai konsisten di badge & marker chart,

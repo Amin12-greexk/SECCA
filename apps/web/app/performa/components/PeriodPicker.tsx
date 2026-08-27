@@ -11,6 +11,9 @@ type Props = {
     value: string;
     onChange: (periodId: string) => void;
     disabled?: boolean;
+    /** Dipakai oleh salinan mengambang: chrome-nya (bayangan, latar solid)
+     * disediakan pembungkus, jadi kotaknya sendiri dibuat polos. */
+    floating?: boolean;
 };
 
 /**
@@ -22,7 +25,13 @@ type Props = {
  * pas: lebarnya tetap, posisi relatif terhadap keseluruhan data langsung
  * terlihat, dan geser satu langkah jauh lebih cepat daripada buka dropdown.
  */
-export default function PeriodPicker({ periods, value, onChange, disabled }: Props) {
+export default function PeriodPicker({
+    periods,
+    value,
+    onChange,
+    disabled,
+    floating = false,
+}: Props) {
     const committedIndex = Math.max(
         0,
         periods.findIndex((period) => period.id === value),
@@ -71,7 +80,13 @@ export default function PeriodPicker({ periods, value, onChange, disabled }: Pro
     const fullLabel = current ? formatPeriodLabel(current) : '';
 
     return (
-        <div className="w-full rounded-lg border border-gray-200 bg-gray-50/70 px-2 py-1.5 sm:w-[15.5rem]">
+        <div
+            className={
+                floating
+                    ? 'w-full px-1 py-0.5'
+                    : 'w-full rounded-lg border border-gray-200 bg-gray-50/70 px-2 py-1.5 sm:w-[15.5rem]'
+            }
+        >
             <div className="flex items-center gap-1">
                 <button
                     type="button"

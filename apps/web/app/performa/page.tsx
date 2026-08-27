@@ -31,7 +31,7 @@ import {
     type PerformaHarianSummaryResponse,
 } from '@/lib/api';
 import DeltaBadge from './components/DeltaBadge';
-import PeriodPicker from './components/PeriodPicker';
+import StickyPeriodPicker from './components/StickyPeriodPicker';
 import { formatPeriodLabel } from './components/periodLabel';
 import MitraRanking from './components/MitraRanking';
 import PeriodTrends from './components/PeriodTrends';
@@ -462,7 +462,7 @@ export default function PerformaPage() {
                         </div>
 
                         <div className="flex flex-wrap items-end gap-3">
-                            <PeriodPicker
+                            <StickyPeriodPicker
                                 periods={periods}
                                 value={periodId}
                                 onChange={handlePeriodChange}

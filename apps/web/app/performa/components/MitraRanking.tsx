@@ -16,15 +16,17 @@ import {
     Wallet,
 } from 'lucide-react';
 import MitraPayrollModal from './MitraPayrollModal';
+import MitraActionChooser from './MitraActionChooser';
+import { formatPeriodLabel, formatPeriodShort } from './periodLabel';
 import LazyEChart from '@/components/charts/LazyEChart';
 import {
     categoryAxis,
     fmtBpsId,
     fmtId,
-    stripPeriode,
     tooltipStyle,
     valueAxis,
     verticalGradient,
+    zoomConfig,
 } from '@/components/charts/chart-theme';
 import { useToast } from '@/lib/toast';
 import {
@@ -42,6 +44,7 @@ import {
     CAPACITY_TARGETS,
     capacityTargetCheckpoints,
     capacityTargetProgress,
+    explainMissingCheckpoints,
     PROGRESS_AHEAD_COLOR,
     PROGRESS_WARNING_COLOR,
     type CapacityTargetCheckpoint,
@@ -52,7 +55,11 @@ import {
  * supaya grafik anak terpilih jadi satu tempat (tidak ada 2 panel terpisah untuk data yang sama). */
 function hkBarOption(labels: string[], points: Array<number | null>, color: string): EChartsOption {
     return {
-        grid: { top: 10, right: 10, bottom: 44, left: 46 },
+        // right disamakan dengan personTrendChart (52) supaya area plot grafik
+        // HK sejajar dengan grafik BJD & Rendemen tepat di atasnya — periode
+        // yang sama jadi berada di posisi X yang sama.
+        grid: { top: 10, right: 52, bottom: 26, left: 48 },
+        dataZoom: zoomConfig(labels.length),
         tooltip: {
             trigger: 'axis',
             axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(17,24,39,0.04)' } },
@@ -67,7 +74,11 @@ function hkBarOption(labels: string[], points: Array<number | null>, color: stri
             axisLabel: {
                 ...categoryAxis.axisLabel,
                 interval: labels.length > 8 ? ('auto' as const) : 0,
-                rotate: labels.length > 4 ? 26 : 0,
+                // Label sudah ringkas ("7–13 Mei"), jadi bisa mendatar. Bareng
+                // hideOverlap, ECharts menampilkan sebanyak yang muat dan
+                // menyembunyikan sisanya — jauh lebih tenang dibaca daripada 15
+                // teks miring bertumpuk di tiga grafik sekaligus.
+                rotate: 0,
                 hideOverlap: true,
             },
         },
@@ -113,6 +124,11 @@ const RANK_CLASS: Record<number, string> = {
     1: 'text-gray-500 font-bold',
     2: 'text-orange-400 font-bold',
 };
+
+/** Tiga chart anak terpilih (kapasitas, BJD & rendemen, HK) memakai sumbu
+ * periode yang sama persis dan area plotnya sengaja disejajarkan, jadi zoom
+ * di salah satunya harus ikut menggeser yang lain. */
+const MITRA_TREND_GROUP = 'mitra-trend';
 
 /** Garis BJD di chart tren memakai hijau standar BJD (bukan warna identitas per anak). */
 const BJD_LINE_COLOR = '#008300';
@@ -344,18 +360,23 @@ function CapacityCheckpointVerdicts({
             {checkpoints.map((c) => (
                 <span
                     key={c.weeks}
-                    className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] ${
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs ${
                         c.achieved
                             ? 'border-green-200 bg-green-50 text-green-800'
                             : c.achieved === false
                               ? 'border-red-200 bg-red-50 text-red-800'
                               : 'border-gray-200 bg-white text-gray-500'
                     }`}
-                    title={
+                    title={[
                         c.isApprox
                             ? `Periode ${c.periodLabel} — data pas minggu ke-${c.weeks} tidak ada (loncat/naik status lebih cepat), dipakai minggu ke-${c.actualWeeks} sebagai gantinya`
-                            : `Periode ${c.periodLabel} — saat anak ini genap ${c.weeks} minggu kerja`
-                    }
+                            : `Periode ${c.periodLabel} — saat anak ini genap ${c.weeks} minggu kerja`,
+                        c.declineFromPeak
+                            ? `Pernah tembus target: puncak ${fmtId(c.declineFromPeak.value, 1)} g/hk di periode ${c.declineFromPeak.periodLabel}, lalu turun ${fmtId(c.declineFromPeak.pct, 0)}% saat evaluasi ini.`
+                            : null,
+                    ]
+                        .filter(Boolean)
+                        .join('\n\n')}
                 >
                     <span
                         className="h-2 w-2 rotate-45 border-2"
@@ -368,8 +389,8 @@ function CapacityCheckpointVerdicts({
                         {c.isApprox ? `≈Mgg ${c.actualWeeks}` : `Mgg ${c.weeks}`}
                     </b>
                     {c.isApprox ? (
-                        <span className="rounded bg-gray-100 px-1 text-[9px] font-semibold text-gray-500">
-                            checkpoint dini
+                        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
+                            perkiraan
                         </span>
                     ) : null}
                     <span className="text-gray-400">·</span>
@@ -377,7 +398,20 @@ function CapacityCheckpointVerdicts({
                     <span className="font-semibold">
                         {c.achieved ? '✓ tercapai' : c.achieved === false ? '✗ belum' : ''}
                     </span>
-                    <span className="text-gray-400">({c.periodLabel})</span>
+                    {/* Badge hanya untuk checkpoint yang GAGAL: di situlah
+                        keterangan ini mengubah tafsiran — "belum sampai" vs
+                        "sudah pernah sampai lalu turun". Kalau targetnya tetap
+                        tercapai, tanda ✓ sudah cukup dan badge cuma bising
+                        (pada data sekarang: 70 checkpoint turun dari puncak,
+                        34 di antaranya tetap tercapai). Penurunannya tetap
+                        disebut di tooltip untuk kedua kasus. */}
+                    {c.declineFromPeak && c.achieved === false ? (
+                        <span className="rounded bg-amber-100/80 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                            ↓{fmtId(c.declineFromPeak.pct, 0)}% dari puncak
+                        </span>
+                    ) : null}
+                    {/* Label periodenya sudah ada di tooltip chip ini — ditulis lagi
+                        di badan chip cuma membuat barisnya panjang tanpa menambah info. */}
                 </span>
             ))}
         </div>
@@ -390,37 +424,91 @@ function CapacityCheckpointVerdicts({
  * Cuma satu baris (target terdekat berikutnya saja) supaya tidak menumpuk dengan
  * badge checkpoint di atasnya.
  */
-function CapacityProgressNotice({ progress }: { progress: CapacityTargetProgress | null }) {
-    if (!progress) return null;
-    const ahead = progress.achievedEarly;
-    const color = ahead ? PROGRESS_AHEAD_COLOR : PROGRESS_WARNING_COLOR;
-    const gap = Math.abs(progress.actual - progress.target);
+/**
+ * Semua keterangan di atas grafik dijadikan SATU kotak berbaris.
+ *
+ * Dulu tiga kotak bertumpuk dengan warna dan bingkai sendiri-sendiri
+ * (data kosong / progres target / checkpoint absen), teksnya 11px, dan dua di
+ * antaranya mengulang isi yang sama. Sekarang: satu bingkai, baris dipisah
+ * garis tipis, kalimat penting dipecah jadi judul + rincian, dan ukuran huruf
+ * dinaikkan supaya benar-benar terbaca.
+ */
+function CapacityNotes({
+    progress,
+    missingCheckpointNote,
+    missingLabels,
+    totalPeriods,
+}: {
+    progress: CapacityTargetProgress | null;
+    missingCheckpointNote: string | null;
+    missingLabels: string[];
+    totalPeriods: number;
+}) {
+    // Kalau kotak progres ada, dia sudah menyebut minggu sekarang DAN target
+    // mana yang sedang dituju — catatan "checkpoint belum ada" cuma mengulang.
+    const checkpointNote = progress ? null : missingCheckpointNote;
+    const hasMissing = missingLabels.length > 0;
+    if (!progress && !checkpointNote && !hasMissing) return null;
+
+    const ahead = progress?.achievedEarly ?? false;
+    const gap = progress ? Math.abs(progress.actual - progress.target) : 0;
 
     return (
-        <div
-            className={`mb-2 flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] ${
-                ahead ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'
-            }`}
-            title={`Berdasarkan data terbaru — periode ${progress.periodLabel}`}
-        >
-            <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" style={{ color }} />
-            {ahead ? (
-                <span>
-                    Sekarang <b>minggu ke-{progress.tenureNow}</b> kerja, kapasitas{' '}
-                    <b>{fmtId(progress.actual, 1)} g/hk</b> — sudah{' '}
-                    <b className="text-emerald-700">lampaui {fmtId(gap, 1)} g/hk</b> di atas target{' '}
-                    {fmtId(progress.target, 0)} g/hk yang baru jatuh tempo minggu ke-{progress.weeks} (lebih cepat{' '}
-                    {progress.weeksRemaining} minggu dari jadwal).
-                </span>
-            ) : (
-                <span>
-                    Sekarang <b>minggu ke-{progress.tenureNow}</b> kerja, kapasitas{' '}
-                    <b>{fmtId(progress.actual, 1)} g/hk</b> — masih{' '}
-                    <b className="text-amber-700">kurang {fmtId(gap, 1)} g/hk</b> dari target{' '}
-                    {fmtId(progress.target, 0)} g/hk yang harus tercapai di minggu ke-{progress.weeks}, sisa{' '}
-                    <b>{progress.weeksRemaining} minggu lagi</b>.
-                </span>
-            )}
+        <div className="mb-3 divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200 bg-white">
+            {progress ? (
+                <div
+                    className={`flex items-start gap-2.5 px-3 py-2.5 ${
+                        ahead ? 'bg-emerald-50/60' : 'bg-amber-50/60'
+                    }`}
+                    title={`Berdasarkan data terbaru — periode ${progress.periodLabel}`}
+                >
+                    <AlertTriangle
+                        className="mt-0.5 h-4 w-4 shrink-0"
+                        style={{ color: ahead ? PROGRESS_AHEAD_COLOR : PROGRESS_WARNING_COLOR }}
+                    />
+                    <div className="min-w-0">
+                        <p
+                            className={`text-[13px] font-semibold ${
+                                ahead ? 'text-emerald-800' : 'text-amber-900'
+                            }`}
+                        >
+                            {ahead
+                                ? `Sudah lampaui target minggu ke-${progress.weeks}`
+                                : `Kurang ${fmtId(gap, 1)} g/hk dari target minggu ke-${progress.weeks}`}
+                        </p>
+                        <p className="mt-0.5 text-xs text-gray-600">
+                            Sekarang minggu ke-<b>{progress.tenureNow}</b>, kapasitas{' '}
+                            <b>{fmtId(progress.actual, 1)} g/hk</b> dari target{' '}
+                            <b>{fmtId(progress.target, 0)} g/hk</b>
+                            {ahead
+                                ? ` — lebih cepat ${progress.weeksRemaining} minggu dari jadwal.`
+                                : `. Sisa ${progress.weeksRemaining} minggu lagi.`}
+                        </p>
+                    </div>
+                </div>
+            ) : null}
+
+            {checkpointNote ? (
+                <p className="px-3 py-2.5 text-xs leading-relaxed text-gray-600">
+                    {checkpointNote}
+                </p>
+            ) : null}
+
+            {hasMissing ? (
+                <p
+                    className="px-3 py-2.5 text-xs text-gray-500"
+                    // Daftar lengkapnya dulu ditulis semua di badan kotak dan bisa
+                    // memakan 3 baris penuh; dipindah ke tooltip, cukup hitungannya
+                    // yang tampil.
+                    title={missingLabels.join(', ')}
+                >
+                    Tidak ada data di{' '}
+                    <b className="text-gray-700">
+                        {missingLabels.length} dari {totalPeriods} periode
+                    </b>{' '}
+                    — arahkan kursor untuk daftarnya.
+                </p>
+            ) : null}
         </div>
     );
 }
@@ -445,12 +533,16 @@ function CapacityTrendChart({
     if (columns.length === 0) return null;
 
     const points = columns.map((c) => ({
-        label: stripPeriode(c.period.label),
+        // Kedua sisi pencocokan checkpoint (label sumbu & checkpoint.periodLabel)
+        // sama-sama berasal dari array ini, jadi mengganti bentuk labelnya di
+        // sini aman — asal tidak ada yang memakai bentuk lain.
+        label: formatPeriodShort(c.period),
         gramPerHk: perDayOf(c.row, 'totalBjd'),
     }));
     const pointsWithRow = columns.map((c, i) => ({ ...points[i], row: c.row }));
     const checkpoints = capacityTargetCheckpoints(pointsWithRow);
     const progress = capacityTargetProgress(pointsWithRow);
+    const missingCheckpointNote = explainMissingCheckpoints(pointsWithRow, checkpoints);
 
     return (
         <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
@@ -462,16 +554,20 @@ function CapacityTrendChart({
                 <CapacityLegend />
             </div>
 
-            {missingLabels.length > 0 ? (
-                <p className="mb-2 rounded-md border border-amber-100 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700">
-                    Anak ini tidak punya data di: {missingLabels.join(', ')}.
-                </p>
-            ) : null}
-
             <CapacityCheckpointVerdicts checkpoints={checkpoints} />
-            <CapacityProgressNotice progress={progress} />
 
-            <LazyEChart option={capacityTrendOption(points, checkpoints, progress)} height={320} />
+            <CapacityNotes
+                progress={progress}
+                missingCheckpointNote={missingCheckpointNote}
+                missingLabels={missingLabels}
+                totalPeriods={columns.length}
+            />
+
+            <LazyEChart
+                option={capacityTrendOption(points, checkpoints, progress)}
+                height={320}
+                group={MITRA_TREND_GROUP}
+            />
         </div>
     );
 }
@@ -507,6 +603,9 @@ export default function MitraRanking({
     const [bandFilter, setBandFilter] = useState<CapacityBand['key'] | null>(null);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [activePayrollModalRow, setActivePayrollModalRow] = useState<PerformaRow | null>(null);
+    /** Anak yang barusan diklik di grid, menunggu dipilih mau lihat apa. */
+    const [chooserRow, setChooserRow] = useState<PerformaRow | null>(null);
+    const chartPanelRef = useRef<HTMLDivElement>(null);
     /** Jumlah HK untuk estimasi barang jadi; default 5 hari kerja. */
     const [estDays, setEstDays] = useState(5);
     /** Jumlah periode yang dibandingkan sekaligus; 0 = semua periode. */
@@ -646,7 +745,12 @@ export default function MitraRanking({
         [windowPeriods, periodId, selected, rowsByPeriod, selectedId],
     );
     const missingWindowLabels = useMemo(
-        () => windowColumns.filter((c) => !c.isCurrent && !c.row).map((c) => stripPeriode(c.period.label)),
+        () =>
+            windowColumns
+                .filter((c) => !c.isCurrent && !c.row)
+                // Bentuk panjang: ini teks paragraf untuk dibaca, beda dengan
+                // label sumbu grafik yang pakai bentuk ringkas.
+                .map((c) => formatPeriodLabel(c.period)),
         [windowColumns],
     );
 
@@ -680,6 +784,24 @@ export default function MitraRanking({
         onSelect(personId);
     };
 
+    /**
+     * Panel grafik ada jauh di bawah grid, jadi memilih "Grafik Tren" harus
+     * ikut membawa layar ke sana — kalau tidak, dari sudut pandang pengguna
+     * kliknya seolah tidak melakukan apa-apa.
+     *
+     * Digulir setelah jeda singkat karena Radix mengunci scroll body selama
+     * dialog terbuka; scrollIntoView yang dipanggil di tick yang sama tidak
+     * berpengaruh. 200ms menyamai durasi animasi tutup di ui/dialog.
+     */
+    const revealChartPanel = () => {
+        window.setTimeout(() => {
+            const el = chartPanelRef.current;
+            if (!el) return;
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            el.focus({ preventScroll: true });
+        }, 200);
+    };
+
     // Diturunkan langsung dari windowColumns (bukan fetch getPerformaTrends terpisah)
     // supaya chart "Barang Jadi & Rendemen" dan "HK per Periode" di bawah SELALU pakai
     // jendela periode yang sama persis dengan chart "Tren Kapasitas" di atasnya — dulu
@@ -690,7 +812,7 @@ export default function MitraRanking({
     const trend = useMemo<PersonTrend | null>(() => {
         if (!selectedId || windowColumns.length === 0) return null;
         return {
-            labels: windowColumns.map((c) => stripPeriode(c.period.label)),
+            labels: windowColumns.map((c) => formatPeriodShort(c.period)),
             bjd: windowColumns.map((c) => c.row?.totalBjd ?? null),
             rendemen: windowColumns.map((c) =>
                 c.row?.rendemenPctBps == null ? null : Math.round(c.row.rendemenPctBps) / 100,
@@ -983,11 +1105,8 @@ export default function MitraRanking({
                                         <button
                                             key={item.row.id}
                                             type="button"
-                                            onClick={() => {
-                                                pickPerson(item.row.personId);
-                                                setActivePayrollModalRow(item.row);
-                                            }}
-                                            title={`${item.row.name}${isBulanan ? ' (Anak Bulanan - 60rb/HK)' : ''} - Klik untuk lihat detail pembayaran & gaji`}
+                                            onClick={() => setChooserRow(item.row)}
+                                            title={`${item.row.name}${isBulanan ? ' (Anak Bulanan - 60rb/HK)' : ''} - Klik untuk pilih grafik tren atau detail pembayaran`}
                                             className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-all cursor-pointer ${
                                                 isSelected
                                                     ? 'border-green-300 bg-green-50/70 shadow-xs'
@@ -1044,7 +1163,11 @@ export default function MitraRanking({
                 )}
 
                 {/* Grafik BJD anak terpilih — sekarang lebar penuh */}
-                <div className="min-w-0 rounded-lg border border-gray-100 p-4">
+                <div
+                    ref={chartPanelRef}
+                    tabIndex={-1}
+                    className="min-w-0 rounded-lg border border-gray-100 p-4 outline-none"
+                >
                     {selected ? (
                         <>
                             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -1134,6 +1257,7 @@ export default function MitraRanking({
                                             <LazyEChart
                                                 option={personTrendOption(trend, BJD_LINE_COLOR)}
                                                 height={300}
+                                                group={MITRA_TREND_GROUP}
                                             />
                                         </div>
                                     )}
@@ -1160,6 +1284,7 @@ export default function MitraRanking({
                                     <LazyEChart
                                         option={hkBarOption(trend.labels, trend.hk, selectedColor)}
                                         height={120}
+                                        group={MITRA_TREND_GROUP}
                                     />
                                 </div>
                             ) : null}
@@ -1207,6 +1332,23 @@ export default function MitraRanking({
                 </div>
             </div>
 
+            {/* Ditanya lebih dulu saat kartu di grid diklik: grafik atau pembayaran. */}
+            <MitraActionChooser
+                row={chooserRow}
+                periodLabel={periodLabel}
+                onClose={() => setChooserRow(null)}
+                onViewChart={(row) => {
+                    pickPerson(row.personId);
+                    setChooserRow(null);
+                    revealChartPanel();
+                }}
+                onViewPayroll={(row) => {
+                    pickPerson(row.personId);
+                    setChooserRow(null);
+                    setActivePayrollModalRow(row);
+                }}
+            />
+
             {/* Modal Detail Pembayaran & Payroll Mitra */}
             <MitraPayrollModal
                 isOpen={Boolean(activePayrollModalRow)}
@@ -1214,7 +1356,6 @@ export default function MitraRanking({
                 row={activePayrollModalRow}
                 periodLabel={periodLabel}
                 warningInfo={activePayrollModalRow ? warningMap[activePayrollModalRow.personId] : undefined}
-                onViewTrend={(personId) => pickPerson(personId)}
             />
         </div>
     );

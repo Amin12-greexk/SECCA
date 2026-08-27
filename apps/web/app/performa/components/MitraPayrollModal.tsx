@@ -3,7 +3,6 @@
 import {
     AlertTriangle,
     Calendar,
-    CheckCircle2,
     DollarSign,
     Layers,
     RefreshCw,
@@ -45,7 +44,6 @@ interface MitraPayrollModalProps {
     row: PerformaRow | null;
     periodLabel?: string;
     warningInfo?: WarningInfo;
-    onViewTrend?: (personId: string) => void;
 }
 
 export default function MitraPayrollModal({
@@ -54,7 +52,6 @@ export default function MitraPayrollModal({
     row,
     periodLabel,
     warningInfo,
-    onViewTrend,
 }: MitraPayrollModalProps) {
     if (!row) return null;
 
@@ -505,24 +502,10 @@ export default function MitraPayrollModal({
                     ) : null}
                 </div>
 
-                {/* Footer Modal */}
-                <div className="bg-slate-100 px-6 py-3.5 border-t border-slate-200 flex items-center justify-between">
-                    {onViewTrend ? (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                onViewTrend(row.personId);
-                                onClose();
-                            }}
-                            className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700 hover:text-blue-900 hover:underline cursor-pointer"
-                        >
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            Lihat Grafik Tren Anak Ini
-                        </button>
-                    ) : (
-                        <div />
-                    )}
-
+                {/* Footer Modal. Tautan "Lihat Grafik Tren" dihapus: pilihan grafik
+                    vs pembayaran sekarang ditanyakan di depan lewat MitraActionChooser
+                    saat kartu di grid diklik. */}
+                <div className="bg-slate-100 px-6 py-3.5 border-t border-slate-200 flex items-center justify-end">
                     <DialogClose
                         onClick={onClose}
                         className="rounded-lg border border-slate-300 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"

@@ -122,3 +122,30 @@ export function formatPeriodLabel(period: PeriodLike | null | undefined): string
     }
     return `${start.day} – ${end.day} ${startMonth} ${start.year}`;
 }
+
+/**
+ * Bentuk ringkas untuk sumbu grafik: "7–13 Mei", "28 Mei–3 Jun".
+ *
+ * Tahun dibuang karena urutan periode sudah memberi konteksnya, dan bulan
+ * disingkat 3 huruf. Label mentah ("07-13 MEI 26") hampir dua kali lebih
+ * panjang sehingga 15 periode di tiga grafik bertumpuk membuat sumbu penuh
+ * teks miring.
+ *
+ * AMAN dipakai di sumbu chart: capacityTrendChart mencocokkan checkpoint lewat
+ * label, tapi kedua sisi pencocokan berasal dari array `points` yang sama —
+ * selama semuanya lewat fungsi ini, kuncinya tetap sepadan.
+ */
+export function formatPeriodShort(period: PeriodLike | null | undefined): string {
+    if (!period) return '';
+
+    const start = toUtcParts(period.startDate);
+    const end = toUtcParts(period.endDate);
+    if (!start || !end) return tidyRawLabel(period.label);
+
+    const shortMonth = (index: number) => MONTHS_ID[index].slice(0, 3);
+
+    if (start.month !== end.month) {
+        return `${start.day} ${shortMonth(start.month)}–${end.day} ${shortMonth(end.month)}`;
+    }
+    return `${start.day}–${end.day} ${shortMonth(start.month)}`;
+}
