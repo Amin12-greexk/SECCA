@@ -1,10 +1,23 @@
 /**
  * Terjemahan level mitra menjadi lama kerja.
  *
- * Aturan bisnis: "Mitra Perintis N" berarti sudah N minggu bekerja (1–20);
- * setelah lewat 20 minggu naik jadi "Mitra Mandiri"; "BULANAN" adalah
- * pekerja bulanan yang tidak ikut sistem borong.
+ * Tabel level resmi: 0 Training (0 mgg), 1 "Mitra Perintis" (1 mgg),
+ * 2 "Mitra Perintis2" (2 mgg), ... 20 "Mitra Perintis20" (20 mgg),
+ * 21 "Mitra Mandiri". "BULANAN" pekerja bulanan, di luar sistem borong.
+ *
+ * Perhatikan level 1 ditulis TANPA angka. Lihat `bareIsWeekOne`.
+ *
+ * "Mitra Mandiri" sengaja tidak diberi angka minggu meski tabel menulis 21:
+ * itu status menyerap — mitra tetap "Mandiri" selama berbulan-bulan (31 dari
+ * 74 mitra bertahan 10+ periode, banyak yang 15/15), jadi 21 adalah batas
+ * BAWAH, bukan lama kerja berjalan. Memakainya sebagai angka pasti akan
+ * menaruh checkpoint minggu 12/20 di periode yang salah.
  */
+
+/** "Mitra Perintis" tanpa angka = level 1 = 1 minggu. */
+function bareIsWeekOne(raw: string) {
+    return /perintis/i.test(raw) && !/\d/.test(raw);
+}
 
 export type Tenure = {
     /** Label pendek untuk daftar padat: "5 mgg", ">20 mgg", "Bulanan". */
@@ -27,8 +40,13 @@ export function describeTenure(
         return { short: '>20 mgg', label: '>20 minggu kerja' };
     }
     if (/perintis|minggu/i.test(raw)) {
-        if (levelNumber != null && levelNumber > 0) {
-            return { short: `${levelNumber} mgg`, label: `±${levelNumber} minggu kerja` };
+        const weeks = levelNumber != null && levelNumber > 0
+            ? levelNumber
+            : bareIsWeekOne(raw)
+              ? 1
+              : null;
+        if (weeks != null) {
+            return { short: `${weeks} mgg`, label: `±${weeks} minggu kerja` };
         }
         return { short: 'Perintis', label: 'Perintis (minggu belum tercatat)' };
     }
@@ -46,8 +64,12 @@ export function tenureWeeks(
 ): number | null {
     const raw = rawUserLevel?.trim();
     if (!raw) return null;
-    if (/perintis|minggu/i.test(raw) && levelNumber != null && levelNumber > 0) {
-        return levelNumber;
+    if (/perintis|minggu/i.test(raw)) {
+        if (levelNumber != null && levelNumber > 0) return levelNumber;
+        // Data yang sudah tersimpan sebelum parser diperbaiki menyimpan null
+        // untuk "Mitra Perintis" polos; dipulihkan di sini supaya tidak perlu
+        // impor ulang seluruh workbook.
+        if (bareIsWeekOne(raw)) return 1;
     }
     return null;
 }

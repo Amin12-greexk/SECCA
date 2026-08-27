@@ -133,6 +133,24 @@ describe('normalizeUserLevel', () => {
     });
   });
 
+  // Tabel level resmi menulis level 1 TANPA angka ("Mitra Perintis"), lalu
+  // "Mitra Perintis2" dst. Dulu dibaca null sehingga lama kerjanya hilang.
+  it('treats bare Mitra Perintis as week 1', () => {
+    expect(normalizeUserLevel('Mitra Perintis')).toEqual({
+      rawUserLevel: 'Mitra Perintis',
+      normalizedLevel: 'Perintis',
+      levelNumber: 1,
+    });
+    expect(normalizeUserLevel('  perintis  ')).toEqual({
+      rawUserLevel: 'perintis',
+      normalizedLevel: 'Perintis',
+      levelNumber: 1,
+    });
+    // Yang berangka tetap dibaca apa adanya, bukan dipaksa jadi 1.
+    expect(normalizeUserLevel('Mitra Perintis2').levelNumber).toBe(2);
+    expect(normalizeUserLevel('Mitra Perintis20').levelNumber).toBe(20);
+  });
+
   it('maps Mitra Mandiri with a null level number', () => {
     expect(normalizeUserLevel('Mitra Mandiri')).toEqual({
       rawUserLevel: 'Mitra Mandiri',

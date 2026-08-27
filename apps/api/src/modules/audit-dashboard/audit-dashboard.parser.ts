@@ -570,7 +570,14 @@ export function normalizeUserLevel(value: unknown): NormalizedLevel {
     return {
       rawUserLevel: raw,
       normalizedLevel: 'Perintis',
-      levelNumber: match ? Number(match[0]) : null,
+      // "Mitra Perintis" TANPA angka = level 1 = 1 minggu, sesuai tabel level
+      // resmi (0 Training, 1 Mitra Perintis, 2 Mitra Perintis2, ... 21 Mitra
+      // Mandiri). Dulu dianggap null sehingga 193 baris kehilangan lama
+      // kerjanya dan badge-nya berbunyi "minggu belum tercatat"; data
+      // membenarkan tafsir ini — 178 dari 193 baris tersebut adalah baris
+      // PERTAMA mitra ybs, dan 119 di antaranya langsung disusul
+      // "Mitra Perintis2" di periode berikutnya.
+      levelNumber: match ? Number(match[0]) : 1,
     };
   }
 
