@@ -173,6 +173,61 @@ export function aggregateMetrics(metrics: AggregatableMetric[]) {
   };
 }
 
+/**
+ * Kolom bernilai uang + pengenal pribadi yang hanya boleh keluar untuk
+ * pemanggil yang login. Ditulis sebagai daftar eksplisit (bukan pilih yang
+ * boleh) supaya ketahuan kalau ada kolom upah baru yang belum diputuskan:
+ * kolom baru ikut terkirim, jadi daftar ini WAJIB diperbarui saat toRow
+ * bertambah kolom uang.
+ */
+const PAYROLL_FIELDS = [
+  'pin',
+  'tarifBakuPerGramRp',
+  'upahMentahRp',
+  'upahBarangJadiRp',
+  'upahBorongRp',
+  'pieceworkWageRp',
+  'cabutRumahRatePerUnitRp',
+  'cabutRumahQty',
+  'effectivePieceworkRatePerGramRp',
+  'effectivePieceworkRatePerKgRp',
+  'subsidyRp',
+  'premiumRp',
+  'mealAllowanceRp',
+  'deductionRp',
+  'netWageRp',
+] as const;
+
+/** Kolom uang & PIN di dalam tiap baris LP — rincian per LP membawa salinannya
+ * sendiri, jadi menyaring level baris saja tidak cukup. */
+const PAYROLL_LP_FIELDS = [
+  'pin',
+  'workerPins',
+  'tarifBakuPerGramRp',
+  'upahMentahRp',
+  'upahBarangJadiRp',
+  'upahBorongRp',
+] as const;
+
+function omit<T extends Record<string, unknown>>(
+  source: T,
+  keys: readonly string[],
+) {
+  const clone: Record<string, unknown> = { ...source };
+  for (const key of keys) delete clone[key];
+  return clone;
+}
+
+function stripPayrollFields(row: Record<string, unknown>) {
+  const clean = omit(row, PAYROLL_FIELDS);
+  if (Array.isArray(clean.lpRows)) {
+    clean.lpRows = clean.lpRows.map((lp) =>
+      omit(lp as Record<string, unknown>, PAYROLL_LP_FIELDS),
+    );
+  }
+  return clean;
+}
+
 @Injectable()
 export class AuditDashboardService {
   constructor(private readonly prisma: PrismaService) {}
@@ -539,7 +594,13 @@ export class AuditDashboardService {
 
   /* ── Summary ────────────────────────────────────────────────── */
 
-  async getSummary(periodId?: string) {
+  /**
+   * @param includePayroll pemanggil sudah login. Kalau false, kolom upah dan
+   * PIN dibuang dari tiap baris — endpoint ini @Public supaya dashboard
+   * kapasitas bisa dibuka tanpa login, dan tanpa penyaringan ini rincian gaji
+   * per orang beserta PIN-nya ikut terkirim ke siapa saja.
+   */
+  async getSummary(periodId?: string, includePayroll = false) {
     const period = periodId
       ? await this.prisma.auditDashboardPeriod.findUnique({
           where: { id: periodId },
@@ -573,7 +634,10 @@ export class AuditDashboardService {
         year: period.year,
       },
       summary: aggregateMetrics(metrics),
-      rows: metrics.map((metric) => this.toRow(metric)),
+      rows: metrics.map((metric) => {
+        const row = this.toRow(metric);
+        return includePayroll ? row : stripPayrollFields(row);
+      }),
     };
   }
 

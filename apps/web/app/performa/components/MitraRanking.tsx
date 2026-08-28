@@ -581,6 +581,7 @@ export default function MitraRanking({
     externalSelectedId,
     persons,
     canManage,
+    canSeePayroll,
     onColorSaved,
 }: {
     rows: PerformaRow[];
@@ -594,6 +595,11 @@ export default function MitraRanking({
     externalSelectedId?: string | null;
     persons: PerformaPerson[];
     canManage: boolean;
+    /** Angka rupiah & PIN hanya untuk yang login. Kalau false, kolom upah di
+     * tabel, aksi "Detail Pembayaran", dan modalnya disembunyikan — API juga
+     * memang tidak mengirim kolomnya untuk pemanggil anonim, jadi tanpa gate
+     * ini isinya cuma akan tampil sebagai "–" di mana-mana. */
+    canSeePayroll: boolean;
     onColorSaved?: (person: PerformaPerson) => void;
 }) {
     const toast = useToast();
@@ -985,17 +991,21 @@ export default function MitraRanking({
                                 <tr className="border-b border-gray-200 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">
                                     <th className="px-3 py-2.5">#</th>
                                     <th className="px-3 py-2.5">Nama &amp; Status</th>
-                                    <th className="px-3 py-2.5">PIN</th>
+                                    {canSeePayroll ? <th className="px-3 py-2.5">PIN</th> : null}
                                     <th className="px-3 py-2.5">Level</th>
                                     <th className="px-3 py-2.5 text-right">HK</th>
                                     <th className="px-3 py-2.5 text-right">Jumlah LP</th>
                                     <th className="px-3 py-2.5 text-right">Total Baku</th>
                                     <th className="px-3 py-2.5 text-right">Total BJD</th>
                                     <th className="px-3 py-2.5 text-right">Rendemen</th>
-                                    <th className="px-3 py-2.5 text-right">Upah</th>
-                                    <th className="px-3 py-2.5 text-right">Tarif / Gram</th>
-                                    <th className="px-3 py-2.5 text-right">Tarif / Kg</th>
-                                    <th className="px-3 py-2.5 text-center">Aksi</th>
+                                    {canSeePayroll ? (
+                                        <>
+                                            <th className="px-3 py-2.5 text-right">Upah</th>
+                                            <th className="px-3 py-2.5 text-right">Tarif / Gram</th>
+                                            <th className="px-3 py-2.5 text-right">Tarif / Kg</th>
+                                            <th className="px-3 py-2.5 text-center">Aksi</th>
+                                        </>
+                                    ) : null}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -1030,7 +1040,9 @@ export default function MitraRanking({
                                                     ) : null}
                                                 </div>
                                             </td>
-                                            <td className="px-3 py-2 font-mono text-gray-500">{row.pin ?? '–'}</td>
+                                            {canSeePayroll ? (
+                                                <td className="px-3 py-2 font-mono text-gray-500">{row.pin ?? '–'}</td>
+                                            ) : null}
                                             <td className="px-3 py-2 text-gray-600">
                                                 {isBulanan ? 'Bulanan (60rb/HK)' : (row.rawUserLevel ?? '–')}
                                             </td>
@@ -1051,32 +1063,36 @@ export default function MitraRanking({
                                             <td className="px-3 py-2 text-right text-blue-700 font-semibold">
                                                 {fmtBpsId(row.rendemenPctBps)}
                                             </td>
-                                            <td className="px-3 py-2 text-right font-bold text-emerald-800">
-                                                {isBulanan ? fmtRp(row.netWageRp) : fmtRp(row.pieceworkWageRp ?? row.netWageRp)}
-                                            </td>
-                                            <td className="px-3 py-2 text-right text-gray-600">
-                                                {isBulanan || row.effectivePieceworkRatePerGramRp == null
-                                                    ? '—'
-                                                    : `${fmtRp(row.effectivePieceworkRatePerGramRp)}/g`}
-                                            </td>
-                                            <td className="px-3 py-2 text-right text-gray-600">
-                                                {isBulanan || row.effectivePieceworkRatePerKgRp == null
-                                                    ? '—'
-                                                    : `${fmtRp(row.effectivePieceworkRatePerKgRp)}/kg`}
-                                            </td>
-                                            <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        pickPerson(row.personId);
-                                                        setActivePayrollModalRow(row);
-                                                    }}
-                                                    className="inline-flex items-center gap-1 rounded bg-green-50 px-2 py-1 text-[10px] font-semibold text-green-700 hover:bg-green-100 cursor-pointer"
-                                                >
-                                                    <Wallet className="h-3 w-3" />
-                                                    Detail
-                                                </button>
-                                            </td>
+                                            {canSeePayroll ? (
+                                                <>
+                                                    <td className="px-3 py-2 text-right font-bold text-emerald-800">
+                                                        {isBulanan ? fmtRp(row.netWageRp) : fmtRp(row.pieceworkWageRp ?? row.netWageRp)}
+                                                    </td>
+                                                    <td className="px-3 py-2 text-right text-gray-600">
+                                                        {isBulanan || row.effectivePieceworkRatePerGramRp == null
+                                                            ? '—'
+                                                            : `${fmtRp(row.effectivePieceworkRatePerGramRp)}/g`}
+                                                    </td>
+                                                    <td className="px-3 py-2 text-right text-gray-600">
+                                                        {isBulanan || row.effectivePieceworkRatePerKgRp == null
+                                                            ? '—'
+                                                            : `${fmtRp(row.effectivePieceworkRatePerKgRp)}/kg`}
+                                                    </td>
+                                                    <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                pickPerson(row.personId);
+                                                                setActivePayrollModalRow(row);
+                                                            }}
+                                                            className="inline-flex items-center gap-1 rounded bg-green-50 px-2 py-1 text-[10px] font-semibold text-green-700 hover:bg-green-100 cursor-pointer"
+                                                        >
+                                                            <Wallet className="h-3 w-3" />
+                                                            Detail
+                                                        </button>
+                                                    </td>
+                                                </>
+                                            ) : null}
                                         </tr>
                                     );
                                 })}
@@ -1105,8 +1121,22 @@ export default function MitraRanking({
                                         <button
                                             key={item.row.id}
                                             type="button"
-                                            onClick={() => setChooserRow(item.row)}
-                                            title={`${item.row.name}${isBulanan ? ' (Anak Bulanan - 60rb/HK)' : ''} - Klik untuk pilih grafik tren atau detail pembayaran`}
+                                            // Tanpa akses payroll cuma ada satu tujuan
+                                            // (grafik), jadi menanyakan pilihan malah
+                                            // jadi langkah kosong — langsung buka saja.
+                                            onClick={() => {
+                                                if (canSeePayroll) {
+                                                    setChooserRow(item.row);
+                                                    return;
+                                                }
+                                                pickPerson(item.row.personId);
+                                                revealChartPanel();
+                                            }}
+                                            title={`${item.row.name}${isBulanan ? ' (Anak Bulanan - 60rb/HK)' : ''} - ${
+                                                canSeePayroll
+                                                    ? 'Klik untuk pilih grafik tren atau detail pembayaran'
+                                                    : 'Klik untuk lihat grafik tren'
+                                            }`}
                                             className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-all cursor-pointer ${
                                                 isSelected
                                                     ? 'border-green-300 bg-green-50/70 shadow-xs'
@@ -1212,14 +1242,16 @@ export default function MitraRanking({
                                         ) : null}
                                     </div>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setActivePayrollModalRow(selected)}
-                                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 transition-colors hover:bg-green-100 cursor-pointer"
-                                >
-                                    <Wallet className="h-3.5 w-3.5" />
-                                    Detail Pembayaran
-                                </button>
+                                {canSeePayroll ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setActivePayrollModalRow(selected)}
+                                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 transition-colors hover:bg-green-100 cursor-pointer"
+                                    >
+                                        <Wallet className="h-3.5 w-3.5" />
+                                        Detail Pembayaran
+                                    </button>
+                                ) : null}
                             </div>
 
                             {/* Jumlah periode yang dibandingkan sekaligus */}
@@ -1351,7 +1383,7 @@ export default function MitraRanking({
 
             {/* Modal Detail Pembayaran & Payroll Mitra */}
             <MitraPayrollModal
-                isOpen={Boolean(activePayrollModalRow)}
+                isOpen={canSeePayroll && Boolean(activePayrollModalRow)}
                 onClose={() => setActivePayrollModalRow(null)}
                 row={activePayrollModalRow}
                 periodLabel={periodLabel}

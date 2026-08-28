@@ -13,6 +13,7 @@ import {
     type PerformaPeriod,
     type PerformaRow,
 } from '@/lib/api';
+import ProtectedRoute from '@/components/ProtectedRoute';
 import StickyPeriodPicker from '../components/StickyPeriodPicker';
 import { formatPeriodLabel } from '../components/periodLabel';
 import HarianPayrollPanel from '../components/HarianPayrollPanel';
@@ -25,7 +26,7 @@ import PayrollExpensePanel from '../components/PayrollExpensePanel';
  * gaji (mitra borong/bulanan + anak harian) yang panjang tetap punya tempat
  * lega tanpa membuat dashboard produksi penuh sesak.
  */
-export default function PayrollPage() {
+function PayrollContent() {
     const [periods, setPeriods] = useState<PerformaPeriod[]>([]);
     const [periodId, setPeriodId] = useState('');
     const [expenseSummary, setExpenseSummary] = useState<PerformaExpenseSummaryResponse | null>(null);
@@ -152,5 +153,18 @@ export default function PayrollPage() {
                 periodLabel={periodLabel}
             />
         </div>
+    );
+}
+
+/**
+ * Seluruh isi halaman ini rincian pembayaran, jadi WAJIB login — beda dari
+ * /performa yang sengaja publik untuk grafik kapasitas. Endpoint-nya juga
+ * sudah menolak pemanggil anonim, ini penjagaan sisi tampilannya.
+ */
+export default function PayrollPage() {
+    return (
+        <ProtectedRoute>
+            <PayrollContent />
+        </ProtectedRoute>
     );
 }

@@ -17,9 +17,6 @@ export class JwtAuthGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (isPublic) {
-      return true;
-    }
 
     const request = context.switchToHttp().getRequest();
     const authHeader = request.headers?.authorization as string | undefined;
@@ -27,8 +24,15 @@ export class JwtAuthGuard implements CanActivate {
       ? authHeader.slice(7).trim()
       : undefined;
 
+    // Endpoint @Public tetap dilewatkan TANPA token, tapi kalau tokennya ada
+    // dan sah, `request.user` tetap diisi. Ini yang membuat satu endpoint bisa
+    // publik sekaligus tahu pemanggilnya siapa — dipakai dashboard performa:
+    // grafik kapasitas terbuka untuk umum, sementara kolom upah dan PIN hanya
+    // ikut terkirim kalau ada yang login. Tanpa ini, endpoint publik selalu
+    // anonim sehingga satu-satunya pilihan adalah "semua terbuka" atau
+    // "semua tertutup".
     if (!token) {
-      return false;
+      return Boolean(isPublic);
     }
 
     try {
@@ -49,7 +53,7 @@ export class JwtAuthGuard implements CanActivate {
       });
 
       if (!appUser) {
-        return false;
+        return Boolean(isPublic);
       }
 
       request.user = {
@@ -61,7 +65,8 @@ export class JwtAuthGuard implements CanActivate {
       };
       return true;
     } catch {
-      return false;
+      // Token kedaluwarsa/rusak: route publik tetap boleh diakses sebagai anonim.
+      return Boolean(isPublic);
     }
   }
 }

@@ -95,22 +95,32 @@ export class AuditDashboardController {
   @Get('summary')
   @Public()
   @ApiOperation({
-    summary: 'Ringkasan satu periode; kosongkan periodId untuk yang terbaru',
+    summary:
+      'Ringkasan satu periode; kosongkan periodId untuk yang terbaru. Publik, tapi kolom upah & PIN hanya ikut terkirim untuk pemanggil yang login.',
   })
-  getSummary(@Query() query: SummaryQueryDto) {
-    return this.auditDashboardService.getSummary(query.periodId);
+  getSummary(
+    @Query() query: SummaryQueryDto,
+    @Req() request: { user?: { sub?: string } },
+  ) {
+    return this.auditDashboardService.getSummary(
+      query.periodId,
+      Boolean(request.user?.sub),
+    );
   }
 
+  // Dua endpoint di bawah isinya MURNI payroll (upah borong/bulanan, subsidi,
+  // potongan, gaji anak harian), jadi tidak lagi @Public — cukup login, tanpa
+  // syarat role tertentu.
   @Get('expense-summary')
-  @Public()
-  @ApiOperation({ summary: 'Ringkasan payroll & biaya per periode' })
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Ringkasan payroll & biaya per periode (perlu login)' })
   getExpenseSummary(@Query() query: SummaryQueryDto) {
     return this.auditDashboardService.getExpenseSummary(query.periodId);
   }
 
   @Get('harian-summary')
-  @Public()
-  @ApiOperation({ summary: 'Ringkasan payroll Anak Harian per periode' })
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Ringkasan payroll Anak Harian per periode (perlu login)' })
   getHarianSummary(@Query() query: SummaryQueryDto) {
     return this.auditDashboardService.getHarianSummary(query.periodId);
   }

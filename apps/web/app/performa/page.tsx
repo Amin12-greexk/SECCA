@@ -270,6 +270,34 @@ export default function PerformaPage() {
     const panelRef = useRef<HTMLDivElement>(null);
 
     const canManage = isAuthenticated && hasModuleAccess('dashboard', 2);
+    /**
+     * Semua angka rupiah — total upah, rincian pembayaran per mitra, dan
+     * halaman payroll — hanya untuk yang login. Pengunjung publik cuma melihat
+     * kapasitas dan grafiknya.
+     *
+     * Ini gate TAMPILAN saja; sumber kebenarannya di API, yang membuang kolom
+     * upah & PIN dari /audit-dashboard/summary untuk pemanggil anonim dan
+     * menolak endpoint expense/harian tanpa login.
+     */
+    const canSeePayroll = isAuthenticated;
+
+    /** Endpoint payroll sekarang menolak pemanggil anonim (403), jadi jangan
+     * ditembak sama sekali kalau belum login — bukan sekadar ditelan .catch,
+     * supaya tidak ada request gagal yang mengotori log tiap ganti periode. */
+    const fetchExpense = useCallback(
+        (id?: string) =>
+            canSeePayroll
+                ? getPerformaExpenseSummary(id).catch(() => null)
+                : Promise.resolve(null),
+        [canSeePayroll],
+    );
+    const fetchHarian = useCallback(
+        (id?: string) =>
+            canSeePayroll
+                ? getPerformaHarianSummary(id).catch(() => null)
+                : Promise.resolve(null),
+        [canSeePayroll],
+    );
 
     const loadBase = useCallback(async () => {
         const [periodList, personList, statsResponse] = await Promise.all([
@@ -292,8 +320,8 @@ export default function PerformaPage() {
             const targetId = periodId || periodList[periodList.length - 1]?.id || '';
             const [data, expenseData, harianData] = await Promise.all([
                 getPerformaSummary(targetId || undefined),
-                getPerformaExpenseSummary(targetId || undefined).catch(() => null),
-                getPerformaHarianSummary(targetId || undefined).catch(() => null),
+                fetchExpense(targetId || undefined),
+                fetchHarian(targetId || undefined),
             ]);
             setSummary(data);
             setExpenseSummary(expenseData);
@@ -314,8 +342,10 @@ export default function PerformaPage() {
             setLoading(false);
         }
         // periodId sengaja tidak jadi dependency: perpindahan periode ditangani handlePeriodChange.
+        // fetchExpense/fetchHarian IKUT jadi dependency supaya data payroll
+        // langsung dimuat begitu status login berubah, tanpa perlu refresh manual.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [loadBase]);
+    }, [loadBase, fetchExpense, fetchHarian]);
 
     useEffect(() => {
         loadAll();
@@ -328,8 +358,8 @@ export default function PerformaPage() {
         try {
             const [data, expenseData, harianData] = await Promise.all([
                 getPerformaSummary(nextId || undefined),
-                getPerformaExpenseSummary(nextId || undefined).catch(() => null),
-                getPerformaHarianSummary(nextId || undefined).catch(() => null),
+                fetchExpense(nextId || undefined),
+                fetchHarian(nextId || undefined),
             ]);
             setSummary(data);
             setExpenseSummary(expenseData);
@@ -380,8 +410,8 @@ export default function PerformaPage() {
             const latest = periodList[periodList.length - 1]?.id;
             const [data, expenseData, harianData] = await Promise.all([
                 getPerformaSummary(latest),
-                getPerformaExpenseSummary(latest).catch(() => null),
-                getPerformaHarianSummary(latest).catch(() => null),
+                fetchExpense(latest),
+                fetchHarian(latest),
             ]);
             setSummary(data);
             setExpenseSummary(expenseData);
@@ -566,18 +596,20 @@ export default function PerformaPage() {
                             delta={currentStat?.deltaHk ?? null}
                             accent="#eda100"
                         />
-                        <StatTile
-                            label="Total Upah"
-                            value={new Intl.NumberFormat('id-ID', {
-                                style: 'currency',
-                                currency: 'IDR',
-                                maximumFractionDigits: 0,
-                                notation: 'compact',
-                            }).format(totalUpahGabungan)}
-                            hint="Klik untuk upah per kg"
-                            accent="#1baf7a"
-                            onClick={() => setShowUpahModal(true)}
-                        />
+                        {canSeePayroll ? (
+                            <StatTile
+                                label="Total Upah"
+                                value={new Intl.NumberFormat('id-ID', {
+                                    style: 'currency',
+                                    currency: 'IDR',
+                                    maximumFractionDigits: 0,
+                                    notation: 'compact',
+                                }).format(totalUpahGabungan)}
+                                hint="Klik untuk upah per kg"
+                                accent="#1baf7a"
+                                onClick={() => setShowUpahModal(true)}
+                            />
+                        ) : null}
                     </div>
                 ) : null}
 
@@ -594,6 +626,7 @@ export default function PerformaPage() {
                             externalSelectedId={selectedPersonId}
                             persons={persons}
                             canManage={canManage}
+                            canSeePayroll={canSeePayroll}
                         />
                         <div className="mt-2 text-sm text-gray-600 bg-white border border-gray-200 px-4 py-2 rounded-lg shadow-sm inline-flex items-center gap-2">
                             <CalendarRange className="h-4 w-4 text-indigo-500" />
@@ -603,8 +636,10 @@ export default function PerformaPage() {
                 ) : null}
 
                 {/* Payroll & Biaya Perusahaan (mitra borong/bulanan + anak harian) dipindah ke
-                    halaman sendiri supaya dashboard ini tetap ringkas — cukup link ke sana. */}
-                {expenseSummary || harianSummary ? (
+                    halaman sendiri supaya dashboard ini tetap ringkas — cukup link ke sana.
+                    Disembunyikan untuk pengunjung publik: halaman tujuannya perlu login,
+                    jadi menampilkan tautannya cuma jadi jalan buntu. */}
+                {canSeePayroll && (expenseSummary || harianSummary) ? (
                     <Link
                         href="/performa/payroll"
                         className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm transition-colors hover:bg-gray-50"
@@ -638,7 +673,7 @@ export default function PerformaPage() {
             />
 
             <TotalUpahModal
-                isOpen={showUpahModal}
+                isOpen={canSeePayroll && showUpahModal}
                 onClose={() => setShowUpahModal(false)}
                 expenseSummary={expenseSummary?.summary ?? null}
                 harianSummary={harianSummary?.summary ?? null}
