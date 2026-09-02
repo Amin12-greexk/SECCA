@@ -261,7 +261,7 @@ function LaporanBulananContent() {
                         <div>
                             <h1 className="flex items-center gap-2 text-lg font-bold text-gray-900">
                                 <ClipboardList className="h-5 w-5 text-green-600" />
-                                Laporan Bulanan (Audit)
+                                Laporan Bulanan 
                             </h1>
                             <p className="mt-0.5 text-xs text-gray-500">
                                 {selected ? selected.label : 'Total perusahaan per bulan'}
@@ -341,7 +341,7 @@ function LaporanBulananContent() {
                 {months.length > 0 ? (
                     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                         <h2 className="text-sm font-semibold text-gray-800">Tren Bulanan</h2>
-                        <p className="mt-0.5 text-xs text-gray-400">Total BJD & Rendemen per bulan</p>
+                        <p className="mt-0.5 text-xs text-gray-400">Total BJD per bulan</p>
                         <div className="mt-3">
                             <MonthlyTrendChart months={months} />
                         </div>
