@@ -373,6 +373,20 @@ const menuItems: MenuItem[] = [
             },
         ],
     },
+    // Laporan Bulanan (audit) - warna indigo, khusus role admin (bukan
+    // module-based seperti item lain, sengaja dicek langsung dari user.role
+    // karena tidak ada entry-nya di MENU_ACCESS_REQUIREMENTS).
+    {
+        name: 'Laporan Bulanan',
+        href: '/laporan-bulanan',
+        colorClass: 'bg-indigo-100 text-indigo-700 border-indigo-200/70',
+        icon: (
+            <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                <path d="M9 17v-2m3 2v-4m3 4v-6M6 21h12a2 2 0 002-2V5a2 2 0 00-2-2H6a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+        ),
+        roles: ['admin'],
+    },
 ];
 
 function Tooltip({ children, label, show }: { children: React.ReactNode; label: string; show: boolean }) {

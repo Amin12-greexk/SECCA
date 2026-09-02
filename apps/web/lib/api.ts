@@ -4279,6 +4279,158 @@ export async function resetPerformaData(): Promise<{
   }
 }
 
+/* ─── Dashboard Audit Bulanan (total perusahaan per bulan, khusus admin) ── */
+
+export interface AuditMonthlyPeriod {
+  id: string;
+  year: number;
+  month: number;
+  label: string;
+  totalBakuBasah: number;
+  totalBjd: number;
+  weightedRendemenPctBps: number | null;
+  totalRows: number;
+  totalPersons: number;
+  /** Baris berbobot yang NAMA-nya tidak terbaca (mis. VLOOKUP #N/A) — sudah
+   * ikut totalBakuBasah/totalBjd di atas tapi tidak ada di rincian per mitra. */
+  unattributedRows: number;
+  unattributedBjd: number;
+  sourceFileName: string;
+  updatedAt: string;
+  deltaBakuBasah: number | null;
+  deltaBjd: number | null;
+  deltaRendemenPctBps: number | null;
+}
+
+export interface AuditMonthlyImportResponse {
+  fileName: string;
+  totalSheets: number;
+  months: Array<{
+    id: string;
+    year: number;
+    month: number;
+    label: string;
+    totalRows: number;
+    personCount: number;
+    unattributedRows: number;
+    unattributedBjd: number;
+  }>;
+  skippedSheets: string[];
+}
+
+export interface AuditMonthlyPersonMetric {
+  id: string;
+  rawName: string;
+  totalBakuBasah: number;
+  totalBjd: number;
+  weightedRendemenPctBps: number | null;
+}
+
+export interface AuditMonthlyPersonMetricsResponse {
+  period: {
+    id: string;
+    year: number;
+    month: number;
+    label: string;
+    unattributedRows: number;
+    unattributedBjd: number;
+  } | null;
+  persons: AuditMonthlyPersonMetric[];
+}
+
+export async function getAuditMonthlyMonths(): Promise<AuditMonthlyPeriod[]> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/audit-monthly/months`, {
+      headers: getAuthHeaders({ json: false }),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        await readApiError(response, "Gagal memuat data laporan bulanan."),
+      );
+    }
+
+    const json = await response.json();
+    return unwrap<AuditMonthlyPeriod[]>(json);
+  } catch (error) {
+    console.error("Error fetching audit monthly months:", error);
+    throw error;
+  }
+}
+
+export async function getAuditMonthlyPersonMetrics(
+  periodId?: string,
+): Promise<AuditMonthlyPersonMetricsResponse> {
+  try {
+    const url = `${API_BASE_URL}/api/audit-monthly/persons${buildQueryString({ periodId })}`;
+    const response = await fetch(url, {
+      headers: getAuthHeaders({ json: false }),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        await readApiError(response, "Gagal memuat performa individu."),
+      );
+    }
+
+    const json = await response.json();
+    return unwrap<AuditMonthlyPersonMetricsResponse>(json);
+  } catch (error) {
+    console.error("Error fetching audit monthly person metrics:", error);
+    throw error;
+  }
+}
+
+export async function importAuditMonthlyWorkbook(
+  file: File,
+): Promise<AuditMonthlyImportResponse> {
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    // Content-Type sengaja tidak di-set: browser yang mengisi boundary multipart.
+    const response = await fetch(`${API_BASE_URL}/api/audit-monthly/import`, {
+      method: "POST",
+      headers: getAuthHeaders({ json: false }),
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(await readApiError(response, "Gagal mengunggah file."));
+    }
+
+    const json = await response.json();
+    return unwrap<AuditMonthlyImportResponse>(json);
+  } catch (error) {
+    console.error("Error importing audit monthly workbook:", error);
+    throw error;
+  }
+}
+
+export async function resetAuditMonthlyData(): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/audit-monthly/reset`, {
+      method: "POST",
+      headers: getAuthHeaders({ json: false }),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        await readApiError(response, "Gagal mereset data laporan bulanan."),
+      );
+    }
+
+    const json = await response.json();
+    return unwrap<{ success: boolean; message: string }>(json);
+  } catch (error) {
+    console.error("Error resetting audit monthly data:", error);
+    throw error;
+  }
+}
+
 export type EvaluationGroupBy = "mitra" | "grade" | "day" | "week" | "month";
 
 export interface EvaluationMetricRow {

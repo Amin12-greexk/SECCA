@@ -179,7 +179,9 @@ const COLUMN_PATTERNS: Partial<Record<ColumnKey, RegExp[]>> = {
   hk: [/^hk\s*\/\s*\d+$/],
 };
 
-const MONTHS: Record<string, number> = {
+/** Diekspor supaya audit-monthly.parser.ts (dashboard audit bulanan) memakai
+ * kamus nama bulan yang sama, tidak duplikasi. */
+export const MONTHS: Record<string, number> = {
   januari: 1,
   jan: 1,
   februari: 2,

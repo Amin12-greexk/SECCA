@@ -34,7 +34,7 @@ export class TrendsQueryDto {
     message: `Maksimal ${MAX_TREND_SERIES} mitra untuk sekali banding.`,
   })
   @IsUUID('4', { each: true })
-  personIds: string[];
+  personIds: string[] | undefined;
 
   @ApiPropertyOptional({ enum: TREND_METRICS, default: 'rendemen' })
   @IsIn(TREND_METRICS)
