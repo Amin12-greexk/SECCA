@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CalendarRange, ClipboardList, Loader2, RefreshCw, Upload } from 'lucide-react';
+import { CalendarRange, ClipboardList, Loader2, Maximize2, Minimize2, RefreshCw, Upload } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useToast } from '@/lib/toast';
+import { useSidebar } from '@/lib/context/SidebarContext';
 import {
     getAuditMonthlyMonths,
     getAuditMonthlyPersonMetrics,
@@ -169,6 +170,7 @@ function StatTile({
  */
 function LaporanBulananContent() {
     const toast = useToast();
+    const { isAppFullscreen, setAppFullscreen } = useSidebar();
     const [months, setMonths] = useState<AuditMonthlyPeriod[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -176,6 +178,40 @@ function LaporanBulananContent() {
     const [periodId, setPeriodId] = useState('');
     const [personData, setPersonData] = useState<AuditMonthlyPersonMetricsResponse | null>(null);
     const [personLoading, setPersonLoading] = useState(false);
+
+    // Klik tombol -> matikan/nyalakan Header+Sidebar (via context) SEKALIGUS
+    // minta browser masuk/keluar fullscreen sungguhan, dipanggil langsung di
+    // dalam event handler (bukan efek terpisah) supaya browser masih menganggap
+    // ini gesture user yang sah untuk requestFullscreen(). Gagal diam-diam kalau
+    // browser menolak/tidak dukung — sidebar tetap hilang walau fullscreen asli
+    // gagal, jadi fitur utamanya tidak bergantung pada API itu berhasil.
+    const handleToggleFullscreen = () => {
+        const next = !isAppFullscreen;
+        setAppFullscreen(next);
+        if (typeof document === 'undefined') return;
+        if (next) {
+            document.documentElement.requestFullscreen?.().catch(() => {});
+        } else if (document.fullscreenElement) {
+            document.exitFullscreen?.().catch(() => {});
+        }
+    };
+
+    // Keluar fullscreen lewat Escape/tombol OS (bukan klik tombol kita) tetap
+    // harus memunculkan lagi Header+Sidebar, bukan nyangkut hilang.
+    useEffect(() => {
+        const handleChange = () => {
+            if (!document.fullscreenElement) setAppFullscreen(false);
+        };
+        document.addEventListener('fullscreenchange', handleChange);
+        return () => document.removeEventListener('fullscreenchange', handleChange);
+    }, [setAppFullscreen]);
+
+    // Pindah halaman saat masih fullscreen -> pastikan Header+Sidebar balik
+    // normal untuk halaman lain, bukan ikut hilang di seluruh aplikasi.
+    useEffect(() => {
+        return () => setAppFullscreen(false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -254,7 +290,9 @@ function LaporanBulananContent() {
 
     return (
         <div className="p-4 sm:p-8">
-            <div className="mx-auto max-w-6xl space-y-5">
+            {/* max-w dilepas saat fullscreen supaya kontennya benar-benar
+                memenuhi layar, bukan cuma sidebar-nya yang hilang. */}
+            <div className={`mx-auto space-y-5 ${isAppFullscreen ? 'max-w-none' : 'max-w-6xl'}`}>
                 {/* Header */}
                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                     <div className="flex flex-col gap-3 px-5 pt-5 pb-4 sm:flex-row sm:items-center sm:justify-between">
@@ -284,6 +322,19 @@ function LaporanBulananContent() {
                             >
                                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                                 {loading ? 'Memuat...' : 'Refresh'}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={handleToggleFullscreen}
+                                title={isAppFullscreen ? 'Keluar layar penuh' : 'Layar penuh'}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 shadow-sm transition-colors hover:bg-gray-50"
+                            >
+                                {isAppFullscreen ? (
+                                    <Minimize2 className="h-4 w-4" />
+                                ) : (
+                                    <Maximize2 className="h-4 w-4" />
+                                )}
                             </button>
                         </div>
                     </div>

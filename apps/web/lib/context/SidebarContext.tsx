@@ -9,6 +9,12 @@ interface SidebarContextType {
     toggleSidebar: () => void;
     toggleMobileMenu: () => void;
     closeMobileMenu: () => void;
+    /** Halaman (bukan cuma sidebar) minta tampil penuh layar — Header & Sidebar
+     * disembunyikan total oleh RootLayout selama ini true. Dipakai oleh
+     * halaman dashboard yang butuh ruang penuh (mis. /laporan-bulanan). */
+    isAppFullscreen: boolean;
+    setAppFullscreen: (value: boolean) => void;
+    toggleAppFullscreen: () => void;
 }
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
@@ -25,6 +31,7 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     });
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [isAppFullscreen, setAppFullscreen] = useState(false);
 
     // Initialize from localStorage and handle responsive
     useEffect(() => {
@@ -59,6 +66,10 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
         setIsMobileOpen(false);
     };
 
+    const toggleAppFullscreen = () => {
+        setAppFullscreen((prev) => !prev);
+    };
+
     return (
         <SidebarContext.Provider
             value={{
@@ -68,6 +79,9 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
                 toggleSidebar,
                 toggleMobileMenu,
                 closeMobileMenu,
+                isAppFullscreen,
+                setAppFullscreen,
+                toggleAppFullscreen,
             }}
         >
             {children}

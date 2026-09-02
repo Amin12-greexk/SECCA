@@ -96,7 +96,11 @@ function Header() {
 }
 
 function MainContent({ children }: { children: React.ReactNode }) {
-  const { isCollapsed, isMobile } = useSidebar();
+  const { isCollapsed, isMobile, isAppFullscreen } = useSidebar();
+
+  if (isAppFullscreen) {
+    return <main className="min-h-screen bg-emerald-50/50">{children}</main>;
+  }
 
   return (
     <main
@@ -109,6 +113,21 @@ function MainContent({ children }: { children: React.ReactNode }) {
     >
       {children}
     </main>
+  );
+}
+
+/** Header & Sidebar dirender di sini (bukan langsung di LayoutContent) karena
+ * keduanya perlu tahu isAppFullscreen, yang hidup di dalam SidebarProvider —
+ * LayoutContent sendiri ada DI LUAR provider itu. */
+function AppShell({ children }: { children: React.ReactNode }) {
+  const { isAppFullscreen } = useSidebar();
+
+  return (
+    <>
+      {!isAppFullscreen && <Header />}
+      {!isAppFullscreen && <Sidebar />}
+      <MainContent>{children}</MainContent>
+    </>
   );
 }
 
@@ -130,9 +149,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <Header />
-      <Sidebar />
-      <MainContent>{children}</MainContent>
+      <AppShell>{children}</AppShell>
     </SidebarProvider>
   );
 }
