@@ -3,6 +3,7 @@ import {
   ExcelParseError,
   calculateEffectiveRates,
   extractBoxId,
+  isProductionLpFormat,
   extractSequenceNumber,
   normalizePersonName,
   normalizeUserLevel,
@@ -1116,8 +1117,14 @@ describe('TransactionType and Reprocess Parsing (Section 13)', () => {
 
     const result = await parseWorkbook(buffer, 'monitoring.xlsx');
     const period = result.periods[0];
-    expect(period.unknownRows!.length).toBe(1);
-    expect(period.unknownRows![0].transactionType).toBe('UNKNOWN');
+    // "LP-MYSTERY" bukan angka >=5 digit maupun kode TEI, jadi sejak aturan
+    // format NO. LP diberlakukan baris ini dihitung reprocess: BJD-nya tidak
+    // lagi hilang diam-diam, tapi tetap diberi warning supaya penulisan
+    // nomornya dibetulkan. UNKNOWN kini hanya untuk NO. LP format produksi
+    // yang berat basahnya kosong.
+    expect(period.unknownRows!.length).toBe(0);
+    expect(period.reprocessRows!.length).toBe(1);
+    expect(period.reprocessRows![0].transactionType).toBe('REPROCESS');
     expect(period.warnings.some((w) => w.message.includes('LP-MYSTERY'))).toBe(true);
   });
 });
@@ -1221,5 +1228,103 @@ describe('Modal Validation Tests (Section 10)', () => {
     expect(workerB!.totalBjd).toBe(70);
     expect(workerB!.totalBakuBasah).not.toBe(50);
     expect(workerB!.totalBjd).not.toBe(35);
+  });
+});
+
+describe('isProductionLpFormat & NO. LP tak dikenal (box barang jadi)', () => {
+  const DETAIL_HEADERS = [
+    'NO. LP',
+    'PIN',
+    'Nama',
+    'User Level',
+    'Grade Baku',
+    'Total Baku Basah',
+    'Total BJD',
+    'Rend',
+    'SP',
+    'SH',
+    'Source Box ID',
+    'Sequence Number',
+  ];
+
+  it('mengenali dua format NO. LP produksi yang sah', () => {
+    expect(isProductionLpFormat('253230')).toBe(true);
+    expect(isProductionLpFormat('TEI-3264-26')).toBe(true);
+  });
+
+  it('memaafkan salah ketik pemisah pada kode TEI', () => {
+    expect(isProductionLpFormat('TEI1944-26')).toBe(true);
+    expect(isProductionLpFormat('TEI-3149026')).toBe(true);
+    expect(isProductionLpFormat('TI-2118-26')).toBe(true);
+  });
+
+  it('menolak nomor box barang jadi yang pendek', () => {
+    for (const id of ['006', '050', '028', '8', '764/5', '']) {
+      expect(isProductionLpFormat(id)).toBe(false);
+    }
+  });
+
+  it('baris ber-BJD dengan NO. LP box & tanpa berat basah dihitung REPROCESS, bukan dibuang', async () => {
+    const buffer = await buildWorkbook([
+      {
+        name: 'DATA PERIODE 23 - 29 JULI 26',
+        headers: DETAIL_HEADERS,
+        rows: [
+          [
+            '006',
+            '193986',
+            'A',
+            'Mitra Mandiri',
+            null,
+            null,
+            61.9,
+            null,
+            null,
+            null,
+            null,
+            null,
+          ],
+        ],
+      },
+    ]);
+
+    const result = await parseWorkbook(buffer, 'monitoring.xlsx');
+    const period = result.periods[0];
+
+    expect(period.unknownRows).toHaveLength(0);
+    expect(period.reprocessRows).toHaveLength(1);
+    expect(period.reprocessRows![0].totalBjd).toBe(61.9);
+    expect(period.reprocessRows![0].reprocessId).toBe('006');
+  });
+
+  it('NO. LP produksi tanpa berat basah tetap UNKNOWN (tidak ikut dianggap reprocess)', async () => {
+    const buffer = await buildWorkbook([
+      {
+        name: 'DATA PERIODE 23 - 29 JULI 26',
+        headers: DETAIL_HEADERS,
+        rows: [
+          [
+            '253230',
+            '193986',
+            'A',
+            'Mitra Mandiri',
+            null,
+            null,
+            61.9,
+            null,
+            null,
+            null,
+            null,
+            null,
+          ],
+        ],
+      },
+    ]);
+
+    const result = await parseWorkbook(buffer, 'monitoring.xlsx');
+    const period = result.periods[0];
+
+    expect(period.reprocessRows).toHaveLength(0);
+    expect(period.unknownRows).toHaveLength(1);
   });
 });

@@ -363,6 +363,32 @@ type CellSnapshot = {
   formulaErrorString?: string;
 };
 
+/* ── Format NO. LP ────────────────────────────────────────────── */
+
+/**
+ * Apakah teks ini NO. LP produksi yang sah?
+ *
+ * Cuma ada dua bentuk resmi di data lapangan:
+ *   1. Angka polos panjang  -> 253230, 235453   (8.713 baris)
+ *   2. Kode TEI             -> TEI-3264-26      (1.862 baris)
+ *
+ * Salah ketik pemisah pada kode TEI (TEI1944-26, TEI-3149026, TI-2118-26)
+ * tetap dihitung sah: tanda hubungnya dibuang dulu sebelum dicocokkan,
+ * supaya typo tidak membuat baris produksi ikut dianggap reprocess.
+ *
+ * Selain dua itu — mis. `006`, `050`, `8` — bukan LP produksi. Nomor
+ * pendek begitu adalah nomor box barang jadi, dan baris seperti itu memang
+ * tidak punya berat basah karena bahannya sudah jadi sejak awal.
+ */
+export function isProductionLpFormat(value: string): boolean {
+  const raw = value.trim();
+  if (raw === '') return false;
+  // NO. LP produksi selalu >= 5 digit; nomor box cuma 1-3 digit.
+  if (/^\d{5,}$/.test(raw)) return true;
+  const compact = raw.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  return /^TE?I\d{4,}$/.test(compact);
+}
+
 /* ── Ekstraksi Box ID & Sequence ──────────────────────────────── */
 
 /**
@@ -1074,6 +1100,21 @@ function parseRawRowsFromGrid(
       if (hasLpOrId && hasReprocessIndicators) {
         transactionType = 'REPROCESS';
         reprocessId = lpNumber;
+      } else if (hasLpOrId && !isProductionLpFormat(lpNumber)) {
+        // Berat basah kosong + ID yang bukan format NO. LP produksi = barang
+        // jadi / reprocess yang nomor urutnya tidak ikut ditulis (mis. "006"
+        // saja, bukan "006/2"). Dulu baris begini jatuh ke UNKNOWN dan BJD-nya
+        // HILANG diam-diam dari total periode (843,1 g di 06-12 AGST, 49,3 g
+        // di 13-19 AGST). Barangnya nyata ada, yang kurang cuma penulisan
+        // nomornya, jadi dihitung sebagai reprocess dan tetap diberi warning.
+        transactionType = 'REPROCESS';
+        reprocessId = lpNumber;
+        warnings.push({
+          rowNumber: excelRowNumber,
+          rawName: fullRawName,
+          column: 'noLp',
+          message: `Baris ${excelRowNumber}: NO. LP (${lpNumber}) bukan format produksi dan berat basah kosong - dihitung sebagai reprocess. Tulis nomor urutnya (mis. "${lpNumber}/1") supaya box-nya terlacak.`,
+        });
       } else if (hasLpOrId) {
         transactionType = 'UNKNOWN';
         warnings.push({

@@ -34,6 +34,7 @@ import DeltaBadge from './components/DeltaBadge';
 import StickyPeriodPicker from './components/StickyPeriodPicker';
 import { formatPeriodLabel } from './components/periodLabel';
 import MitraRanking from './components/MitraRanking';
+import MonthlyCapacityRecap from './components/MonthlyCapacityRecap';
 import PeriodTrends from './components/PeriodTrends';
 import TotalBjdModal from './components/TotalBjdModal';
 import TotalUpahModal from './components/TotalUpahModal';
@@ -633,6 +634,12 @@ export default function PerformaPage() {
                             Total Hari Kerja Periode Ini: <span className="font-bold text-gray-900">{stats?.totalHk ?? 0} HK</span>
                         </div>
                     </div>
+                ) : null}
+
+                {/* Rekap bulanan target kapasitas (kuning/hijau) — blok 4 periode berturut-turut,
+                    lihat capacityMonthlyRecap.ts untuk alasan kenapa bukan bulan kalender asli. */}
+                {periods.length > 0 ? (
+                    <MonthlyCapacityRecap periods={periods} onSelect={selectPerson} />
                 ) : null}
 
                 {/* Payroll & Biaya Perusahaan (mitra borong/bulanan + anak harian) dipindah ke
