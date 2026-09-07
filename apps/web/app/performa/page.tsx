@@ -15,12 +15,9 @@ import {
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useToast } from '@/lib/toast';
 import {
-    getPerformaExpenseSummary,
-    getPerformaHarianSummary,
     getPerformaPeriodStats,
     getPerformaPeriods,
     getPerformaPersons,
-    getPerformaSummary,
     importPerformaWorkbook,
     resetPerformaData,
     type PerformaPerson,
@@ -33,6 +30,13 @@ import {
 } from '@/lib/api';
 import DeltaBadge from './components/DeltaBadge';
 import StickyPeriodPicker from './components/StickyPeriodPicker';
+import {
+    fetchPeriodExpense,
+    fetchPeriodHarian,
+    fetchPeriodSummary,
+    hasPeriodBundle,
+    invalidatePeriodSummaries,
+} from './components/summaryCache';
 import { formatPeriodLabel } from './components/periodLabel';
 import MitraRanking from './components/MitraRanking';
 import PeriodTrends from './components/PeriodTrends';
@@ -246,7 +250,7 @@ function UploadCard({
  * upload, reset, dan panel Turnover & Shift — bukan di akses halamannya.
  */
 export default function PerformaPage() {
-    const { isAuthenticated, hasModuleAccess } = useAuth();
+    const { isAuthenticated, hasModuleAccess, loading: authLoading } = useAuth();
     const toast = useToast();
 
     const [periods, setPeriods] = useState<PerformaPeriod[]>([]);
@@ -282,22 +286,21 @@ export default function PerformaPage() {
      */
     const canSeePayroll = isAuthenticated;
 
+    /** Kunci cache ringkasan periode: respons untuk anonim sudah dibuang kolom
+     * upah/PIN-nya, jadi tidak boleh dipakai ulang setelah login. */
+    const summaryScope = canSeePayroll ? 'auth' : 'anon';
+
     /** Endpoint payroll sekarang menolak pemanggil anonim (403), jadi jangan
      * ditembak sama sekali kalau belum login — bukan sekadar ditelan .catch,
-     * supaya tidak ada request gagal yang mengotori log tiap ganti periode. */
+     * supaya tidak ada request gagal yang mengotori log tiap ganti periode.
+     * Penjagaannya sekarang ada di dalam cache (scope 'anon' langsung null). */
     const fetchExpense = useCallback(
-        (id?: string) =>
-            canSeePayroll
-                ? getPerformaExpenseSummary(id).catch(() => null)
-                : Promise.resolve(null),
-        [canSeePayroll],
+        (id: string) => fetchPeriodExpense(id, summaryScope),
+        [summaryScope],
     );
     const fetchHarian = useCallback(
-        (id?: string) =>
-            canSeePayroll
-                ? getPerformaHarianSummary(id).catch(() => null)
-                : Promise.resolve(null),
-        [canSeePayroll],
+        (id: string) => fetchPeriodHarian(id, summaryScope),
+        [summaryScope],
     );
 
     const loadBase = useCallback(async () => {
@@ -312,71 +315,99 @@ export default function PerformaPage() {
         return periodList;
     }, []);
 
+    /**
+     * Penanda urutan permintaan periode. Slider tidak lagi dikunci selama
+     * memuat (lihat StickyPeriodPicker di bawah), jadi beberapa perpindahan
+     * bisa terbang bersamaan dan yang datang duluan belum tentu yang terakhir
+     * dipilih. Hanya respons dengan token terbaru yang boleh menulis state —
+     * tanpa ini, hasil periode lama bisa menimpa periode yang sedang dilihat.
+     */
+    const requestSeq = useRef(0);
+
     const loadAll = useCallback(async () => {
+        const seq = ++requestSeq.current;
         setLoading(true);
         setError(null);
         try {
             const periodList = await loadBase();
             // Periode terbaru = sortOrder terbesar (backend memakai default yang sama).
             const targetId = periodId || periodList[periodList.length - 1]?.id || '';
-            const [data, expenseData, harianData] = await Promise.all([
-                getPerformaSummary(targetId || undefined),
-                fetchExpense(targetId || undefined),
-                fetchHarian(targetId || undefined),
+            // Periode pembanding sudah bisa ditentukan dari daftar periode, jadi
+            // ikut ditembak barengan. Sebelumnya ia di-await SETELAH batch di
+            // atas selesai, yang membuat tiap pemuatan butuh dua putaran jaringan.
+            const targetIndex = periodList.findIndex((p) => p.id === targetId);
+            const prevId = targetIndex > 0 ? periodList[targetIndex - 1].id : null;
+
+            const [data, expenseData, harianData, prevData] = await Promise.all([
+                fetchPeriodSummary(targetId, summaryScope),
+                fetchExpense(targetId),
+                fetchHarian(targetId),
+                prevId ? fetchPeriodSummary(prevId, summaryScope) : Promise.resolve(null),
             ]);
+            if (seq !== requestSeq.current) return;
             setSummary(data);
             setExpenseSummary(expenseData);
             setHarianSummary(harianData);
-
-            const currentIndex = periodList.findIndex(p => p.id === (data.period?.id ?? targetId));
-            const prevId = currentIndex > 0 ? periodList[currentIndex - 1].id : null;
-            if (prevId) {
-                setPrevSummary(await getPerformaSummary(prevId));
-            } else {
-                setPrevSummary(null);
-            }
+            setPrevSummary(prevData);
 
             if (!periodId && data.period) setPeriodId(data.period.id);
         } catch (err) {
+            if (seq !== requestSeq.current) return;
             setError(err instanceof Error ? err.message : 'Gagal memuat data.');
         } finally {
-            setLoading(false);
+            if (seq === requestSeq.current) setLoading(false);
         }
         // periodId sengaja tidak jadi dependency: perpindahan periode ditangani handlePeriodChange.
         // fetchExpense/fetchHarian IKUT jadi dependency supaya data payroll
         // langsung dimuat begitu status login berubah, tanpa perlu refresh manual.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [loadBase, fetchExpense, fetchHarian]);
+    }, [loadBase, fetchExpense, fetchHarian, summaryScope]);
 
+    /**
+     * Ditahan sampai status login selesai dibaca. `isAuthenticated` mulai dari
+     * false lalu berubah true setelah profil terverifikasi; tanpa penjagaan ini
+     * `loadAll` berganti identitas di tengah jalan dan SELURUH data halaman
+     * (termasuk period-stats yang menarik semua metrik semua periode) dimuat
+     * dua kali tiap kali halaman dibuka oleh pengguna yang sudah login.
+     */
     useEffect(() => {
+        if (authLoading) return;
         loadAll();
-    }, [loadAll]);
+    }, [loadAll, authLoading]);
 
     const handlePeriodChange = async (nextId: string) => {
+        const seq = ++requestSeq.current;
         setPeriodId(nextId);
-        setLoading(true);
         setError(null);
+
+        const currentIndex = periods.findIndex((p) => p.id === nextId);
+        const prevId = currentIndex > 0 ? periods[currentIndex - 1].id : null;
+
+        // Periode yang sudah pernah dibuka tersaji dari cache tanpa jaringan —
+        // jangan nyalakan indikator muat untuk itu, supaya menggeser bolak-balik
+        // tidak berkedip-kedip.
+        const cached =
+            hasPeriodBundle(nextId, summaryScope) &&
+            (!prevId || hasPeriodBundle(prevId, summaryScope));
+        if (!cached) setLoading(true);
+
         try {
-            const [data, expenseData, harianData] = await Promise.all([
-                getPerformaSummary(nextId || undefined),
-                fetchExpense(nextId || undefined),
-                fetchHarian(nextId || undefined),
+            const [data, expenseData, harianData, prevData] = await Promise.all([
+                fetchPeriodSummary(nextId, summaryScope),
+                fetchExpense(nextId),
+                fetchHarian(nextId),
+                prevId ? fetchPeriodSummary(prevId, summaryScope) : Promise.resolve(null),
             ]);
+            if (seq !== requestSeq.current) return;
             setSummary(data);
             setExpenseSummary(expenseData);
             setHarianSummary(harianData);
-
-            const currentIndex = periods.findIndex(p => p.id === (data.period?.id ?? nextId));
-            const prevId = currentIndex > 0 ? periods[currentIndex - 1].id : null;
-            if (prevId) {
-                setPrevSummary(await getPerformaSummary(prevId));
-            } else {
-                setPrevSummary(null);
-            }
+            setPrevSummary(prevData);
         } catch (err) {
+            if (seq !== requestSeq.current) return;
             setError(err instanceof Error ? err.message : 'Gagal memuat ringkasan periode.');
         } finally {
-            setLoading(false);
+            if (seq === requestSeq.current) setLoading(false);
         }
     };
 
@@ -400,7 +431,17 @@ export default function PerformaPage() {
         );
     };
 
+    /** Refresh manual harus benar-benar menembak server, bukan menyajikan
+     * cache periode yang sudah tersimpan. */
+    const handleRefresh = useCallback(() => {
+        invalidatePeriodSummaries();
+        loadAll();
+    }, [loadAll]);
+
     const handleUploaded = async () => {
+        const seq = ++requestSeq.current;
+        // Isi periode berubah total; entri cache lama sudah tidak sahih.
+        invalidatePeriodSummaries();
         setPeriodId('');
         // Data baru/di-reset -> anak yang lagi terpilih bisa sudah tidak ada lagi,
         // lepas dulu biar auto-pilih di bawah pilih ulang dari data terbaru.
@@ -408,28 +449,27 @@ export default function PerformaPage() {
         setLoading(true);
         try {
             const periodList = await loadBase();
-            const latest = periodList[periodList.length - 1]?.id;
-            const [data, expenseData, harianData] = await Promise.all([
-                getPerformaSummary(latest),
+            const latest = periodList[periodList.length - 1]?.id ?? '';
+            const prevId = periodList.length > 1 ? periodList[periodList.length - 2].id : null;
+
+            const [data, expenseData, harianData, prevData] = await Promise.all([
+                fetchPeriodSummary(latest, summaryScope),
                 fetchExpense(latest),
                 fetchHarian(latest),
+                prevId ? fetchPeriodSummary(prevId, summaryScope) : Promise.resolve(null),
             ]);
+            if (seq !== requestSeq.current) return;
             setSummary(data);
             setExpenseSummary(expenseData);
             setHarianSummary(harianData);
-
-            const prevId = periodList.length > 1 ? periodList[periodList.length - 2].id : null;
-            if (prevId) {
-                setPrevSummary(await getPerformaSummary(prevId));
-            } else {
-                setPrevSummary(null);
-            }
+            setPrevSummary(prevData);
 
             if (data.period) setPeriodId(data.period.id);
         } catch (err) {
+            if (seq !== requestSeq.current) return;
             toast.error(err instanceof Error ? err.message : 'Gagal memuat data terbaru.');
         } finally {
-            setLoading(false);
+            if (seq === requestSeq.current) setLoading(false);
         }
     };
 
@@ -510,16 +550,22 @@ export default function PerformaPage() {
                         </div>
 
                         <div className="flex flex-wrap items-end gap-3">
+                            {/* Sengaja TIDAK dikunci saat `loading`. Mengunci slider
+                                selama data periode dimuat membuat tiap langkah harus
+                                menunggu jaringan sebelum langkah berikutnya bisa
+                                dilakukan — itu sumber rasa "lemot" yang paling terasa.
+                                Respons yang datang tidak berurutan sudah dijaga oleh
+                                `requestSeq` di handlePeriodChange. */}
                             <StickyPeriodPicker
                                 periods={periods}
                                 value={periodId}
                                 onChange={handlePeriodChange}
-                                disabled={loading}
+                                disabled={periods.length === 0}
                             />
 
                             <button
                                 type="button"
-                                onClick={loadAll}
+                                onClick={handleRefresh}
                                 disabled={loading}
                                 className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-green-700 disabled:opacity-50"
                             >
