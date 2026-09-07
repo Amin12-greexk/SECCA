@@ -1,23 +1,31 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Search, Target, TrendingUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Target } from 'lucide-react';
 import { useToast } from '@/lib/toast';
 import { getPerformaSummary, type PerformaPeriod, type PerformaRow } from '@/lib/api';
-import LazyEChart from '@/components/charts/LazyEChart';
 import { fmtId } from '@/components/charts/chart-theme';
 import { formatPeriodLabel } from './periodLabel';
 import { classifyCapacity } from './capacityBand';
-import { monthlyTargetOption, type MonthlyTargetPoint } from './monthlyTargetChart';
 import {
     aggregateBlock,
     blockTargetSummary,
+    blockTierBreakdown,
     buildMonthBlocks,
     isBlockLoaded,
     TARGET_TIERS,
     type MonthBlock,
     type PersonBlockAggregate,
 } from './capacityMonthlyRecap';
+
+type MonthlyMeterPoint = {
+    blockIndex: number;
+    label: string;
+    rangeLabel: string;
+    actualBjd: number;
+    targetBjd: number;
+    achievementPct: number | null;
+};
 
 type StatusFilter = 'all' | 'penuhi' | 'belum';
 
@@ -136,26 +144,31 @@ export default function MonthlyCapacityRecap({
 
     const newlyMeetsCount = rows.filter((r) => r.newlyMeets).length;
 
-    /** Titik grafik untuk SEMUA blok bulan — blok yang datanya belum lengkap
-     * dilewati supaya tidak muncul sebagai bulan yang seolah anjlok. */
-    const chartPoints = useMemo<MonthlyTargetPoint[]>(() => {
+    /** Satu meter per blok bulan — blok yang datanya belum lengkap dilewati
+     * supaya tidak muncul sebagai bulan yang seolah anjlok ke 0. */
+    const monthlyMeters = useMemo<MonthlyMeterPoint[]>(() => {
         return blocks
             .map((block, index) => ({ block, index }))
             .filter(({ block }) => isBlockLoaded(block, rowsByPeriod))
             .map(({ block, index }) => {
                 const summary = blockTargetSummary(block, rowsByPeriod);
                 return {
+                    blockIndex: index,
                     label: `Bulan ${index + 1}`,
                     rangeLabel: blockLabel(block),
                     actualBjd: summary.actualBjd,
                     targetBjd: summary.targetBjd,
-                    totalHk: summary.totalHk,
                     achievementPct: summary.achievementPct,
-                    meetCount: summary.meetCount,
-                    personCount: summary.personCount,
                 };
             });
     }, [blocks, rowsByPeriod]);
+
+    /** Rincian target bulan yang sedang dilihat, per angkatan — jawaban
+     * langsung atas "target segini dari mana asalnya". */
+    const tierBreakdown = useMemo(
+        () => (currentBlock && ready ? blockTierBreakdown(currentBlock, rowsByPeriod) : []),
+        [currentBlock, ready, rowsByPeriod],
+    );
 
     // Kartu ringkasan memakai populasi yang SAMA dengan target (mitra borong
     // ber-HK, tanpa Bulanan/Cabut Rumah) — kalau memakai total kotor halaman
@@ -175,15 +188,7 @@ export default function MonthlyCapacityRecap({
 
     return (
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-green-600" />
-                    <div>
-                        <h2 className="text-sm font-semibold text-gray-800">Rekap Bulanan · Target Kapasitas</h2>
-                        <p className="text-xs text-gray-400">Tiap mitra ditagih sesuai umur kerjanya</p>
-                    </div>
-                </div>
-
+            <div className="mb-4 flex justify-end">
                 <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50/70 px-2 py-1.5">
                     <button
                         type="button"
@@ -210,10 +215,8 @@ export default function MonthlyCapacityRecap({
                 </div>
             </div>
 
-            {/* Grafik target vs realisasi seluruh bulan — konteks pertumbuhan
-                yang tidak terlihat kalau cuma melihat satu bulan terpilih. */}
-            {/* Tangga target — keterangan utamanya ditaruh di sini, di LUAR
-                grafik, supaya badan grafik tetap bersih. */}
+            {/* Tangga target — aturannya, di LUAR meter supaya tiap baris
+                meter di bawah tidak perlu mengulang keterangan yang sama. */}
             <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2">
                 {TARGET_TIERS.map((tier, index) => (
                     <div key={tier.key} className="flex items-center gap-2">
@@ -227,19 +230,80 @@ export default function MonthlyCapacityRecap({
                 ))}
             </div>
 
-            <div className="mb-4 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
-                <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                    <Target className="h-3.5 w-3.5 text-amber-500" />
-                    Target vs realisasi barang jadi per bulan
-                </p>
-                {chartPoints.length === 0 ? (
-                    <div className="h-[300px] animate-pulse rounded-lg bg-gray-100/70" />
+            {/* Meter pencapaian per bulan — klik satu baris untuk pindah ke
+                bulan itu, jadi dobel fungsi dengan panah prev/next di atas. */}
+            <div className="mb-4 flex flex-col gap-2">
+                {monthlyMeters.length === 0 ? (
+                    <div className="h-[88px] animate-pulse rounded-lg bg-gray-100/70" />
                 ) : (
-                    <LazyEChart option={monthlyTargetOption(chartPoints)} height={300} />
+                    monthlyMeters.map((point) => {
+                        const isCurrent = point.blockIndex === blockIndex;
+                        const hit = point.achievementPct != null && point.achievementPct >= 100;
+                        return (
+                            <button
+                                key={point.blockIndex}
+                                type="button"
+                                onClick={() => setBlockIndex(point.blockIndex)}
+                                className={`w-full rounded-lg border p-2.5 text-left transition-colors cursor-pointer ${
+                                    isCurrent
+                                        ? 'border-green-300 bg-green-50/60'
+                                        : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+                                }`}
+                            >
+                                <div className="mb-1.5 flex items-center justify-between gap-2 text-xs">
+                                    <span className="font-semibold text-gray-800">
+                                        {point.label}
+                                        <span className="ml-1.5 font-normal text-gray-400">{point.rangeLabel}</span>
+                                    </span>
+                                    <span className="shrink-0 font-semibold text-gray-900">
+                                        {fmtId(point.actualBjd / 1000, 1)} / {fmtId(point.targetBjd / 1000, 1)} kg
+                                        <span className={`ml-1.5 ${hit ? 'text-green-600' : 'text-amber-600'}`}>
+                                            {point.achievementPct != null ? `${fmtId(point.achievementPct, 0)}%` : '–'}
+                                        </span>
+                                    </span>
+                                </div>
+                                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                                    <div
+                                        className={`h-full rounded-full ${hit ? 'bg-green-600' : 'bg-amber-500'}`}
+                                        style={{ width: `${Math.min(point.achievementPct ?? 0, 100)}%` }}
+                                    />
+                                </div>
+                            </button>
+                        );
+                    })
                 )}
-                <p className="mt-1 text-[11px] text-gray-400">
-                    Garis kuning = hasil bulan itu kalau semua mitra pas memenuhi targetnya · bar = hasil nyata
+            </div>
+
+            {/* Rincian target bulan terpilih per angkatan — jawaban langsung
+                "target segini dari mana": tiap angkatan HK-nya berapa, target
+                g/hk-nya berapa (sesuai tangga di atas), jumlahnya berapa kg. */}
+            <div className="mb-4 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
+                <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                    <Target className="h-3.5 w-3.5 text-amber-500" />
+                    Kenapa target bulan ini {currentSummary ? fmtId(currentSummary.targetBjd / 1000, 1) : '–'} kg
                 </p>
+                {tierBreakdown.length === 0 ? (
+                    <div className="h-[80px] animate-pulse rounded-lg bg-gray-100/70" />
+                ) : (
+                    <div className="flex flex-col gap-1.5">
+                        {tierBreakdown.map((row) => (
+                            <div key={row.tier.key} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-xs">
+                                <span className="flex items-center gap-1.5 text-gray-600">
+                                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: row.tier.color }} />
+                                    {row.tier.label}
+                                    <span className="text-gray-400">· {row.personCount} mitra</span>
+                                </span>
+                                <span className="font-medium text-gray-800">
+                                    {fmtId(row.totalHk, 0)} HK × {fmtId(row.tier.value, 0)} g/hk = {fmtId(row.targetGram / 1000, 1)} kg
+                                </span>
+                            </div>
+                        ))}
+                        <div className="mt-1 flex items-center justify-between border-t border-gray-200 pt-1.5 text-xs font-semibold text-gray-900">
+                            <span>Total target bulan ini</span>
+                            <span>{currentSummary ? fmtId(currentSummary.targetBjd / 1000, 1) : '–'} kg</span>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">

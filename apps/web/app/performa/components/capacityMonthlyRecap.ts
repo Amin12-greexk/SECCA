@@ -275,4 +275,67 @@ export function blockTargetSummary(
     };
 }
 
+export type TierBreakdown = {
+    tier: TargetTier;
+    /** HK yang dikerjakan DALAM angkatan ini bulan ini. Kalau seorang mitra
+     * naik status di tengah bulan, HK sebelum & sesudah naik masuk baris
+     * angkatan yang berbeda — bukan cacat, itu justru menunjukkan momen dia
+     * naik checkpoint. */
+    totalHk: number;
+    /** Mitra unik yang minimal sekali berada di angkatan ini bulan ini. */
+    personCount: number;
+    /** Kontribusi angkatan ini ke target bulanan (gram) = target g/hk × totalHk. */
+    targetGram: number;
+    actualGram: number;
+};
+
+/**
+ * Rincian "kenapa target bulan ini segini" per angkatan — jawaban langsung
+ * atas pertanyaan yang sama selalu muncul begitu lihat angka target bulat
+ * seperti "102,5 kg": dari mana asalnya.
+ *
+ * Dihitung per BARIS (bukan dari angkatan dominan seperti PersonBlockAggregate),
+ * supaya jumlah targetGram semua tier di sini PERSIS SAMA dengan targetBjd di
+ * blockTargetSummary — keduanya menjumlah tier.value × hk per baris, cuma
+ * blockTargetSummary tidak memecahnya per angkatan.
+ */
+export function blockTierBreakdown(
+    block: MonthBlock,
+    rowsByPeriod: Record<string, PerformaRow[]>,
+): TierBreakdown[] {
+    const byTier = new Map<
+        TargetTier['key'],
+        { totalHk: number; targetGram: number; actualGram: number; people: Set<string> }
+    >();
+    for (const tier of TARGET_TIERS) {
+        byTier.set(tier.key, { totalHk: 0, targetGram: 0, actualGram: 0, people: new Set() });
+    }
+
+    for (const period of block.periods) {
+        const rows = rowsByPeriod[period.id];
+        if (!rows) continue;
+        for (const row of rows) {
+            if (isExcludedFromCapacity(row)) continue;
+            const hk = row.hk ?? 0;
+            if (hk <= 0) continue;
+            const bucket = byTier.get(personPeriodTier(row).key)!;
+            bucket.totalHk += hk;
+            bucket.targetGram += personPeriodTier(row).value * hk;
+            bucket.actualGram += row.totalBjd ?? 0;
+            bucket.people.add(row.personId);
+        }
+    }
+
+    return TARGET_TIERS.map((tier) => {
+        const bucket = byTier.get(tier.key)!;
+        return {
+            tier,
+            totalHk: bucket.totalHk,
+            personCount: bucket.people.size,
+            targetGram: bucket.targetGram,
+            actualGram: bucket.actualGram,
+        };
+    });
+}
+
 export { KUNING_TARGET, HIJAU_TARGET };

@@ -8,6 +8,7 @@ import {
     CalendarRange,
     Loader2,
     RefreshCw,
+    TrendingUp,
     Upload,
     Wallet,
 } from 'lucide-react';
@@ -34,7 +35,6 @@ import DeltaBadge from './components/DeltaBadge';
 import StickyPeriodPicker from './components/StickyPeriodPicker';
 import { formatPeriodLabel } from './components/periodLabel';
 import MitraRanking from './components/MitraRanking';
-import MonthlyCapacityRecap from './components/MonthlyCapacityRecap';
 import PeriodTrends from './components/PeriodTrends';
 import TotalBjdModal from './components/TotalBjdModal';
 import TotalUpahModal from './components/TotalUpahModal';
@@ -460,6 +460,23 @@ export default function PerformaPage() {
         });
     }, []);
 
+    // Datang dari /performa/target-bulanan lewat "?person=<id>" -> langsung
+    // pilih & gulir ke anak itu. Dibaca dari window.location langsung (bukan
+    // useSearchParams) supaya tidak menambah syarat Suspense boundary untuk
+    // satu kebutuhan kecil ini; URL dibersihkan sesudahnya lewat replaceState
+    // murni supaya tidak memicu navigasi/refetch App Router.
+    const appliedPersonParam = useRef(false);
+    useEffect(() => {
+        if (appliedPersonParam.current || rows.length === 0) return;
+        const personId = new URLSearchParams(window.location.search).get('person');
+        if (!personId) return;
+        appliedPersonParam.current = true;
+        if (rows.some((row) => row.personId === personId)) {
+            selectPerson(personId);
+        }
+        window.history.replaceState(null, '', window.location.pathname);
+    }, [rows, selectPerson]);
+
     const stats = summary?.summary ?? null;
     // Delta tile diambil dari period-stats periode yang sedang dilihat.
     const currentStat =
@@ -636,10 +653,24 @@ export default function PerformaPage() {
                     </div>
                 ) : null}
 
-                {/* Rekap bulanan target kapasitas (kuning/hijau) — blok 4 periode berturut-turut,
-                    lihat capacityMonthlyRecap.ts untuk alasan kenapa bukan bulan kalender asli. */}
+                {/* Rekap Bulanan · Target Kapasitas dipindah ke halaman sendiri (tangga
+                    target, meter tiap bulan, rincian per angkatan, daftar mitra — isinya
+                    sendiri sudah panjang) supaya dashboard ini tidak perlu discroll dua
+                    kali lebih jauh. Lihat capacityMonthlyRecap.ts untuk definisi bloknya. */}
                 {periods.length > 0 ? (
-                    <MonthlyCapacityRecap periods={periods} onSelect={selectPerson} />
+                    <Link
+                        href="/performa/target-bulanan"
+                        className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm transition-colors hover:bg-gray-50"
+                    >
+                        <span className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                            <TrendingUp className="h-4 w-4 text-green-600" />
+                            Rekap Bulanan &middot; Target Kapasitas
+                        </span>
+                        <span className="flex items-center gap-1 text-xs font-medium text-green-700">
+                            Lihat rekap lengkap
+                            <ArrowRight className="h-3.5 w-3.5" />
+                        </span>
+                    </Link>
                 ) : null}
 
                 {/* Payroll & Biaya Perusahaan (mitra borong/bulanan + anak harian) dipindah ke
