@@ -1,4 +1,5 @@
 import type { PerformaPeriod, PerformaRow } from '@/lib/api';
+import { CAPACITY_BANDS, classifyCapacity, type CapacityBand } from './capacityBand';
 import { CAPACITY_TARGETS } from './capacityTarget';
 import { tenureWeeks } from './tenure';
 
@@ -406,6 +407,81 @@ export function blockTierBreakdown(
         const bucket = byTier.get(tier.key)!;
         return {
             tier,
+            totalHk: bucket.totalHk,
+            personCount: bucket.people.size,
+            targetGram: bucket.targetGram,
+            actualGram: bucket.actualGram,
+        };
+    });
+}
+
+export type BandBreakdown = {
+    band: CapacityBand;
+    totalHk: number;
+    personCount: number;
+    targetGram: number;
+    actualGram: number;
+};
+
+/**
+ * Rincian target & capaian per BAND KAPASITAS (merah/kuning/hijau/biru) —
+ * potongan kedua dari total target yang sama, di samping per angkatan.
+ *
+ * Bedanya penting: "angkatan" itu tagihan (ditentukan lama kerja), "band"
+ * itu hasil (ditentukan capaian). Jadi band kuning bisa saja target
+ * gabungannya tinggi — kalau isinya banyak mitra Mandiri yang ditagih 45
+ * g/hari kerja tapi capaiannya baru 25-35. Justru selisih itu yang tidak
+ * kelihatan kalau band cuma menampilkan jumlah orang.
+ *
+ * Total targetGram semua band SAMA PERSIS dengan total per angkatan (dan
+ * dengan targetBjd di blockTargetSummary): band ditentukan dari rata-rata
+ * SEBULAN orangnya, tapi gram targetnya tetap dijumlah per baris dengan
+ * angkatan periode itu — dasar hitung yang sama, cuma dikelompokkan beda.
+ */
+export function blockBandBreakdown(
+    block: MonthBlock,
+    rowsByPeriod: Record<string, PerformaRow[]>,
+): BandBreakdown[] {
+    const bands = CAPACITY_BANDS.filter((b) => b.key !== 'purple');
+    const byBand = new Map<
+        CapacityBand['key'],
+        { totalHk: number; targetGram: number; actualGram: number; people: Set<string> }
+    >();
+    for (const band of bands) {
+        byBand.set(band.key, { totalHk: 0, targetGram: 0, actualGram: 0, people: new Set() });
+    }
+
+    // Band dipegang per ORANG (dari rata-rata sebulannya), bukan per baris,
+    // supaya satu mitra tidak tersebar ke beberapa band gara-gara satu minggu
+    // yang kebetulan jelek.
+    const bandOfPerson = new Map<string, CapacityBand['key']>();
+    for (const person of aggregateBlock(block, rowsByPeriod).values()) {
+        if (person.sumHk <= 0) continue;
+        const band = classifyCapacity(person.avgGramPerHk);
+        if (band) bandOfPerson.set(person.personId, band.key);
+    }
+
+    for (const period of block.periods) {
+        const rows = rowsByPeriod[period.id];
+        if (!rows) continue;
+        for (const row of rows) {
+            if (isExcludedFromCapacity(row)) continue;
+            const hk = row.hk ?? 0;
+            if (hk <= 0) continue;
+            const bandKey = bandOfPerson.get(row.personId);
+            if (!bandKey) continue;
+            const bucket = byBand.get(bandKey)!;
+            bucket.totalHk += hk;
+            bucket.targetGram += personPeriodTier(row).value * hk;
+            bucket.actualGram += row.totalBjd ?? 0;
+            bucket.people.add(row.personId);
+        }
+    }
+
+    return bands.map((band) => {
+        const bucket = byBand.get(band.key)!;
+        return {
+            band,
             totalHk: bucket.totalHk,
             personCount: bucket.people.size,
             targetGram: bucket.targetGram,
