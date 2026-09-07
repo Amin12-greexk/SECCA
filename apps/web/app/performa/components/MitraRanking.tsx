@@ -30,11 +30,11 @@ import {
 } from '@/components/charts/chart-theme';
 import { useToast } from '@/lib/toast';
 import {
-    getPerformaSummary,
     type PerformaPeriod,
     type PerformaPerson,
     type PerformaRow,
 } from '@/lib/api';
+import { fetchPeriodSummary, hasPeriodSummary } from './summaryCache';
 import { personTrendOption, type PersonBjdRendemenTrend } from './personTrendChart';
 import { describeTenure, isVeteranTenure } from './tenure';
 import CapacityBadge from './CapacityBadge';
@@ -171,13 +171,23 @@ export type WarningStatus = {
 };
 
 /**
+ * Baris tiap periode yang sudah diindeks per personId.
+ *
+ * Dulu evaluasi warning memindai array baris periode satu per satu untuk tiap
+ * mitra: dengan N mitra dan 4 periode pembanding itu N x 4 x N perbandingan,
+ * dan diulang tiap kali jendela periode selesai dimuat. Diindeks sekali di
+ * muka, pencarian per mitra jadi O(1).
+ */
+type PeriodRowIndex = Map<string, Map<string, PerformaRow>>;
+
+/**
  * Aturan warning baru:
  * 1. Rule 1: 1 bulan (4 periode berturut-turut) di badge/warna merah (<25 g/HK).
  * 2. Rule 2: 2 minggu (2 periode berturut-turut) < 13 g/HK.
  */
 function evaluateMitraWarning(
     personId: string,
-    rowsByPeriod: Record<string, PerformaRow[]>,
+    rowsByPeriod: PeriodRowIndex,
     recentPeriods: PerformaPeriod[],
     currentRow: PerformaRow | null,
 ): WarningStatus {
@@ -187,7 +197,7 @@ function evaluateMitraWarning(
 
     const historyRows = recentPeriods.map((p) => {
         const isCurrentActive = p.id === (currentRow as { periodId?: string }).periodId;
-        const rowFromPeriod = rowsByPeriod[p.id]?.find((r) => r.personId === personId);
+        const rowFromPeriod = rowsByPeriod.get(p.id)?.get(personId);
         return {
             period: p,
             row: rowFromPeriod ?? (isCurrentActive ? currentRow : null),
@@ -642,6 +652,8 @@ export default function MitraRanking({
         setRowsByPeriod({});
     }, [periods]);
 
+    const summaryScope = canSeePayroll ? 'auth' : 'anon';
+
     useEffect(() => {
         const requiredPeriods = Array.from(
             new Set([...windowPeriods.map((p) => p.id), ...recent4Periods.map((p) => p.id)]),
@@ -651,10 +663,16 @@ export default function MitraRanking({
         );
         if (missing.length === 0) return;
         let alive = true;
-        setLoadingWindow(true);
+        // Lewat cache bersama: periode yang barusan ditinggalkan (dan periode
+        // pembanding yang juga diminta halaman induk) sudah tersimpan, jadi
+        // yang benar-benar menembak jaringan tinggal periode yang belum pernah
+        // dibuka. Indikator muat hanya dinyalakan kalau memang ada yang perlu
+        // diambil, supaya geseran ke periode lama tidak berkedip.
+        const needsNetwork = missing.some((id) => !hasPeriodSummary(id, summaryScope));
+        if (needsNetwork) setLoadingWindow(true);
         Promise.all(
             missing.map((id) =>
-                getPerformaSummary(id).then((data) => [id, data.rows] as const),
+                fetchPeriodSummary(id, summaryScope).then((data) => [id, data.rows] as const),
             ),
         )
             .then((entries) => {
@@ -673,14 +691,14 @@ export default function MitraRanking({
                 }
             })
             .finally(() => {
-                if (alive) setLoadingWindow(false);
+                if (alive && needsNetwork) setLoadingWindow(false);
             });
         return () => {
             alive = false;
         };
         // toast stabil dari provider; tidak dijadikan dependency.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [windowPeriods, recent4Periods, periodId]);
+    }, [windowPeriods, recent4Periods, periodId, summaryScope]);
 
     const sorted = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -707,18 +725,29 @@ export default function MitraRanking({
             .sort((a, b) => b.value - a.value);
     }, [rows, metric, search, bandFilter]);
 
+    /** Indeks personId -> baris, dibangun sekali per perubahan rowsByPeriod. */
+    const rowIndexByPeriod = useMemo<PeriodRowIndex>(() => {
+        const index: PeriodRowIndex = new Map();
+        for (const [id, periodRows] of Object.entries(rowsByPeriod)) {
+            const byPerson = new Map<string, PerformaRow>();
+            for (const row of periodRows) byPerson.set(row.personId, row);
+            index.set(id, byPerson);
+        }
+        return index;
+    }, [rowsByPeriod]);
+
     const warningMap = useMemo(() => {
         const map: Record<string, WarningStatus> = {};
         for (const row of rows) {
             map[row.personId] = evaluateMitraWarning(
                 row.personId,
-                rowsByPeriod,
+                rowIndexByPeriod,
                 recent4Periods,
                 row,
             );
         }
         return map;
-    }, [rows, rowsByPeriod, recent4Periods]);
+    }, [rows, rowIndexByPeriod, recent4Periods]);
 
     const warningCount = useMemo(
         () => rows.filter((row) => warningMap[row.personId]?.hasWarning).length,
@@ -746,9 +775,11 @@ export default function MitraRanking({
                 row:
                     period.id === periodId
                         ? selected
-                        : (rowsByPeriod[period.id]?.find((row) => row.personId === selectedId) ?? null),
+                        : selectedId
+                          ? (rowIndexByPeriod.get(period.id)?.get(selectedId) ?? null)
+                          : null,
             })),
-        [windowPeriods, periodId, selected, rowsByPeriod, selectedId],
+        [windowPeriods, periodId, selected, rowIndexByPeriod, selectedId],
     );
     const missingWindowLabels = useMemo(
         () =>
