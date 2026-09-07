@@ -530,40 +530,41 @@ export default function PerformaPage() {
                     </div>
                 </div>
 
-                {canManage ? <UploadCard onUploaded={handleUploaded} onWarnings={setImportWarnings} /> : null}
+                {/* Rekap Bulanan · Target Kapasitas & Payroll — link ke halaman sendiri,
+                    ditaruh di atas (bukan bawah dashboard) supaya tidak kalah tenggelam
+                    oleh panel Kapasitas Mitra yang panjang di bawahnya. */}
+                {periods.length > 0 ? (
+                    <Link
+                        href="/performa/target-bulanan"
+                        className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm transition-colors hover:bg-gray-50"
+                    >
+                        <span className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                            <TrendingUp className="h-4 w-4 text-green-600" />
+                            Rekap Bulanan &middot; Target Kapasitas
+                        </span>
+                        <span className="flex items-center gap-1 text-xs font-medium text-green-700">
+                            Lihat rekap lengkap
+                            <ArrowRight className="h-3.5 w-3.5" />
+                        </span>
+                    </Link>
+                ) : null}
 
-                {importWarnings && importWarnings.length > 0 ? (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                        <div className="flex items-center justify-between">
-                            <div className="font-semibold flex items-center gap-1.5">
-                                ⚠️ Perhatian: {importWarnings.length} formula Excel belum ter-recalculate di file sumber
-                            </div>
-                            <button 
-                                onClick={() => setImportWarnings(null)}
-                                className="text-xs text-amber-600 hover:text-amber-900 font-medium underline"
-                            >
-                                Tutup
-                            </button>
-                        </div>
-                        <p className="mt-1 text-xs text-amber-700">
-                            Beberapa sel pada kolom payroll (mis. Subsidi, Premi, Potongan, Gaji/Upah Bersih) tidak memiliki cached value (mungkin mereferensi file/workbook luar yang tidak terhubung).
-                        </p>
-                        <ul className="mt-2 list-disc pl-5 space-y-0.5 text-xs text-amber-700">
-                            {importWarnings.slice(0, 5).map((warn, i) => (
-                                <li key={i}>
-                                    Baris {warn.rowNumber} ({warn.rawName}) • Kolom: {warn.column === 'netWage' ? 'Upah Bersih' : warn.column === 'pieceworkWage' ? 'Upah Borong' : warn.column === 'subsidy' ? 'Subsidi' : warn.column === 'premium' ? 'Premi' : warn.column === 'mealAllowance' ? 'Uang Makan' : warn.column === 'deduction' ? 'Potongan' : warn.column}
-                                </li>
-                            ))}
-                            {importWarnings.length > 5 ? (
-                                <li className="list-none font-medium mt-1">
-                                    + {importWarnings.length - 5} sel lainnya...
-                                </li>
-                            ) : null}
-                        </ul>
-                        <div className="mt-2 text-xs font-semibold">
-                            SOP: Buka file di Excel → tekan <kbd className="bg-amber-100 px-1 py-0.5 rounded border border-amber-300">Ctrl+Alt+F9</kbd> untuk full recalculate → simpan ulang file, lalu upload kembali file tersebut.
-                        </div>
-                    </div>
+                {/* Disembunyikan untuk pengunjung publik: halaman tujuannya perlu login,
+                    jadi menampilkan tautannya cuma jadi jalan buntu. */}
+                {canSeePayroll && (expenseSummary || harianSummary) ? (
+                    <Link
+                        href="/performa/payroll"
+                        className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm transition-colors hover:bg-gray-50"
+                    >
+                        <span className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                            <Wallet className="h-4 w-4 text-green-600" />
+                            Payroll &amp; Biaya Borong/Bulanan
+                        </span>
+                        <span className="flex items-center gap-1 text-xs font-medium text-green-700">
+                            Lihat rincian lengkap
+                            <ArrowRight className="h-3.5 w-3.5" />
+                        </span>
+                    </Link>
                 ) : null}
 
                 {error ? (
@@ -577,7 +578,7 @@ export default function PerformaPage() {
                         <CalendarRange className="mx-auto h-8 w-8 text-gray-300" />
                         <p className="mt-3 text-sm font-medium text-gray-700">Belum ada data periode</p>
                         <p className="mt-1 text-xs text-gray-400">
-                            {canManage ? 'Upload file Excel untuk mulai.' : 'Data belum diunggah.'}
+                            {canManage ? 'Upload file Excel di bagian bawah halaman untuk mulai.' : 'Data belum diunggah.'}
                         </p>
                     </div>
                 ) : null}
@@ -653,46 +654,6 @@ export default function PerformaPage() {
                     </div>
                 ) : null}
 
-                {/* Rekap Bulanan · Target Kapasitas dipindah ke halaman sendiri (tangga
-                    target, meter tiap bulan, rincian per angkatan, daftar mitra — isinya
-                    sendiri sudah panjang) supaya dashboard ini tidak perlu discroll dua
-                    kali lebih jauh. Lihat capacityMonthlyRecap.ts untuk definisi bloknya. */}
-                {periods.length > 0 ? (
-                    <Link
-                        href="/performa/target-bulanan"
-                        className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm transition-colors hover:bg-gray-50"
-                    >
-                        <span className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-                            <TrendingUp className="h-4 w-4 text-green-600" />
-                            Rekap Bulanan &middot; Target Kapasitas
-                        </span>
-                        <span className="flex items-center gap-1 text-xs font-medium text-green-700">
-                            Lihat rekap lengkap
-                            <ArrowRight className="h-3.5 w-3.5" />
-                        </span>
-                    </Link>
-                ) : null}
-
-                {/* Payroll & Biaya Perusahaan (mitra borong/bulanan + anak harian) dipindah ke
-                    halaman sendiri supaya dashboard ini tetap ringkas — cukup link ke sana.
-                    Disembunyikan untuk pengunjung publik: halaman tujuannya perlu login,
-                    jadi menampilkan tautannya cuma jadi jalan buntu. */}
-                {canSeePayroll && (expenseSummary || harianSummary) ? (
-                    <Link
-                        href="/performa/payroll"
-                        className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm transition-colors hover:bg-gray-50"
-                    >
-                        <span className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-                            <Wallet className="h-4 w-4 text-green-600" />
-                            Payroll &amp; Biaya Borong/Bulanan
-                        </span>
-                        <span className="flex items-center gap-1 text-xs font-medium text-green-700">
-                            Lihat rincian lengkap
-                            <ArrowRight className="h-3.5 w-3.5" />
-                        </span>
-                    </Link>
-                ) : null}
-
                 {/* Turnover & Shifts (Khusus Manager) */}
                 {canManage && prevSummary && (
                     <TurnoverAndShifts currentSummary={summary} prevSummary={prevSummary} />
@@ -700,6 +661,44 @@ export default function PerformaPage() {
 
                 {/* 02 — Tren antar periode (perusahaan) */}
                 {periodStats.length > 0 ? <PeriodTrends stats={periodStats} /> : null}
+
+                {/* Upload Data ditaruh paling bawah — bukan langkah yang dilihat tiap
+                    kunjungan, jadi tidak perlu menyita posisi teratas dashboard. */}
+                {canManage ? <UploadCard onUploaded={handleUploaded} onWarnings={setImportWarnings} /> : null}
+
+                {importWarnings && importWarnings.length > 0 ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                        <div className="flex items-center justify-between">
+                            <div className="font-semibold flex items-center gap-1.5">
+                                ⚠️ Perhatian: {importWarnings.length} formula Excel belum ter-recalculate di file sumber
+                            </div>
+                            <button
+                                onClick={() => setImportWarnings(null)}
+                                className="text-xs text-amber-600 hover:text-amber-900 font-medium underline"
+                            >
+                                Tutup
+                            </button>
+                        </div>
+                        <p className="mt-1 text-xs text-amber-700">
+                            Beberapa sel pada kolom payroll (mis. Subsidi, Premi, Potongan, Gaji/Upah Bersih) tidak memiliki cached value (mungkin mereferensi file/workbook luar yang tidak terhubung).
+                        </p>
+                        <ul className="mt-2 list-disc pl-5 space-y-0.5 text-xs text-amber-700">
+                            {importWarnings.slice(0, 5).map((warn, i) => (
+                                <li key={i}>
+                                    Baris {warn.rowNumber} ({warn.rawName}) • Kolom: {warn.column === 'netWage' ? 'Upah Bersih' : warn.column === 'pieceworkWage' ? 'Upah Borong' : warn.column === 'subsidy' ? 'Subsidi' : warn.column === 'premium' ? 'Premi' : warn.column === 'mealAllowance' ? 'Uang Makan' : warn.column === 'deduction' ? 'Potongan' : warn.column}
+                                </li>
+                            ))}
+                            {importWarnings.length > 5 ? (
+                                <li className="list-none font-medium mt-1">
+                                    + {importWarnings.length - 5} sel lainnya...
+                                </li>
+                            ) : null}
+                        </ul>
+                        <div className="mt-2 text-xs font-semibold">
+                            SOP: Buka file di Excel → tekan <kbd className="bg-amber-100 px-1 py-0.5 rounded border border-amber-300">Ctrl+Alt+F9</kbd> untuk full recalculate → simpan ulang file, lalu upload kembali file tersebut.
+                        </div>
+                    </div>
+                ) : null}
             </div>
 
             <TotalBjdModal
