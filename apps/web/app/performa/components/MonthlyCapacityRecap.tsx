@@ -1,18 +1,18 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Search, Target } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Search, Target } from 'lucide-react';
 import { useToast } from '@/lib/toast';
 import { getPerformaSummary, type PerformaPeriod, type PerformaRow } from '@/lib/api';
 import { fmtId } from '@/components/charts/chart-theme';
 import { formatPeriodLabel } from './periodLabel';
-import { classifyCapacity } from './capacityBand';
 import {
     aggregateBlock,
     blockTargetSummary,
     blockTierBreakdown,
     buildMonthBlocks,
     isBlockLoaded,
+    MONTH_BLOCK_WEEKS,
     TARGET_TIERS,
     type MonthBlock,
     type PersonBlockAggregate,
@@ -27,7 +27,36 @@ type MonthlyMeterPoint = {
     achievementPct: number | null;
 };
 
-type StatusFilter = 'all' | 'penuhi' | 'belum';
+type StatusFilter = 'all' | 'naik' | 'belum' | 'aman';
+
+/** Warna per status kesiapan. Dipisah ke konstanta supaya baris JSX-nya tidak
+ * penuh percabangan kelas Tailwind. */
+const READINESS_STYLE: Record<
+    PersonBlockAggregate['readiness'],
+    { border: string; bg: string; dot: string; bar: string; text: string }
+> = {
+    aman: {
+        border: 'border-emerald-200',
+        bg: 'bg-emerald-50/40',
+        dot: 'bg-emerald-500',
+        bar: 'bg-emerald-500',
+        text: 'text-emerald-700',
+    },
+    'target-naik': {
+        border: 'border-amber-300',
+        bg: 'bg-amber-50/50',
+        dot: 'bg-amber-500',
+        bar: 'bg-amber-500',
+        text: 'text-amber-700',
+    },
+    belum: {
+        border: 'border-gray-200',
+        bg: 'bg-white',
+        dot: 'bg-red-500',
+        bar: 'bg-red-500',
+        text: 'text-gray-500',
+    },
+};
 
 /** Label rentang tanggal satu blok: gabungan startDate periode pertama +
  * endDate periode terakhir, lewat formatPeriodLabel yang sama dipakai di
@@ -71,7 +100,10 @@ export default function MonthlyCapacityRecap({
     const [rowsByPeriod, setRowsByPeriod] = useState<Record<string, PerformaRow[]>>({});
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+    // Default "naik": kelompok yang paling gampang terlewat, karena mitranya
+    // terlihat aman bulan ini padahal target mereka naik bulan depan.
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('naik');
+    const [expandedId, setExpandedId] = useState<string | null>(null);
 
     // Data baru/reset -> jumlah blok berubah; balik ke blok terakhir yang valid.
     useEffect(() => {
@@ -128,7 +160,14 @@ export default function MonthlyCapacityRecap({
                 const prev = previousAgg?.get(agg.personId) ?? null;
                 return { ...agg, newlyMeets: agg.meetsTarget && prev != null && !prev.meetsTarget };
             })
-            .sort((a, b) => (b.avgGramPerHk ?? -1) - (a.avgGramPerHk ?? -1));
+            // Yang paling jauh dari target bulan depan naik ke atas: di daftar
+            // sepanjang ini, yang butuh ditindak duluan harus ketemu duluan.
+            // Dalam kelompok "aman" selisihnya sama-sama 0, jadi jatuh ke
+            // urutan kapasitas tertinggi.
+            .sort((a, b) => {
+                const gap = (r: PersonBlockAggregate) => Math.max(0, r.nextTarget - (r.avgGramPerHk ?? 0));
+                return gap(b) - gap(a) || (b.avgGramPerHk ?? -1) - (a.avgGramPerHk ?? -1);
+            });
     }, [currentAgg, previousAgg]);
 
     const filteredRows = useMemo(() => {
@@ -136,11 +175,21 @@ export default function MonthlyCapacityRecap({
         return rows
             .filter((r) => (query ? r.name.toLowerCase().includes(query) : true))
             .filter((r) => {
-                if (statusFilter === 'penuhi') return r.meetsTarget;
-                if (statusFilter === 'belum') return !r.meetsTarget;
+                if (statusFilter === 'naik') return r.readiness === 'target-naik';
+                if (statusFilter === 'belum') return r.readiness === 'belum';
+                if (statusFilter === 'aman') return r.readiness === 'aman';
                 return true;
             });
     }, [rows, search, statusFilter]);
+
+    const readinessCount = useMemo(
+        () => ({
+            aman: rows.filter((r) => r.readiness === 'aman').length,
+            'target-naik': rows.filter((r) => r.readiness === 'target-naik').length,
+            belum: rows.filter((r) => r.readiness === 'belum').length,
+        }),
+        [rows],
+    );
 
     const newlyMeetsCount = rows.filter((r) => r.newlyMeets).length;
 
@@ -390,13 +439,17 @@ export default function MonthlyCapacityRecap({
                 </div>
             </div>
 
+            {/* Kelompok kesiapan + pencarian. "Target naik" ditaruh paling kiri
+                dan jadi pilihan awal karena kelompok itu yang paling gampang
+                terlewat: sekarang hijau, bulan depan jatuh. */}
             <div className="mb-3 flex flex-wrap items-center gap-2">
-                <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+                <div className="inline-flex flex-wrap rounded-lg border border-gray-200 bg-gray-50 p-0.5">
                     {(
                         [
-                            { value: 'all', label: 'Semua' },
-                            { value: 'penuhi', label: 'Penuhi Target' },
-                            { value: 'belum', label: 'Belum Penuhi' },
+                            { value: 'naik', label: 'Target naik', count: readinessCount['target-naik'] },
+                            { value: 'belum', label: 'Belum penuhi', count: readinessCount.belum },
+                            { value: 'aman', label: 'Aman', count: readinessCount.aman },
+                            { value: 'all', label: 'Semua', count: rows.length },
                         ] as const
                     ).map((item) => (
                         <button
@@ -410,6 +463,7 @@ export default function MonthlyCapacityRecap({
                             }`}
                         >
                             {item.label}
+                            <span className="ml-1 text-gray-400">{item.count}</span>
                         </button>
                     ))}
                 </div>
@@ -430,55 +484,146 @@ export default function MonthlyCapacityRecap({
                     Memuat rekap bulan ini...
                 </div>
             ) : filteredRows.length === 0 ? (
-                <div className="flex h-[160px] items-center justify-center text-sm text-gray-400">
-                    {search || statusFilter !== 'all' ? 'Tidak ada anak cocok filter ini.' : 'Belum ada data di bulan ini.'}
+                <div className="flex h-[160px] items-center justify-center px-4 text-center text-sm text-gray-400">
+                    {statusFilter === 'naik' && !search
+                        ? 'Tidak ada mitra yang targetnya naik bulan depan — semua sudah sesuai angkatannya.'
+                        : search || statusFilter !== 'all'
+                          ? 'Tidak ada anak cocok filter ini.'
+                          : 'Belum ada data di bulan ini.'}
                 </div>
             ) : (
-                <div className="max-h-[360px] overflow-y-auto rounded-lg border border-gray-100 p-2">
-                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                        {filteredRows.map((row) => {
-                            const band = classifyCapacity(row.avgGramPerHk);
-                            return (
+                <div className="max-h-[460px] space-y-1.5 overflow-y-auto rounded-lg border border-gray-100 p-2">
+                    {filteredRows.map((row) => {
+                        const style = READINESS_STYLE[row.readiness];
+                        const isOpen = expandedId === row.personId;
+                        const avg = row.avgGramPerHk ?? 0;
+                        // Semua angka rencana memakai target BULAN DEPAN — itu
+                        // pertanyaan yang sedang dijawab ("biar aman bulan depan
+                        // berapa"). Untuk mitra yang angkatannya tidak berubah,
+                        // angkanya sama saja dengan target sekarang, jadi tidak
+                        // ada yang tertukar.
+                        const gapPerHk = Math.max(0, row.nextTarget - avg);
+                        const pct = row.nextTarget > 0 ? Math.min(100, (avg / row.nextTarget) * 100) : 0;
+                        const targetNaik = row.nextTarget > row.ownTarget;
+
+                        return (
+                            <div key={row.personId} className={`rounded-lg border ${style.border} ${style.bg}`}>
                                 <button
-                                    key={row.personId}
                                     type="button"
-                                    onClick={() => onSelect?.(row.personId)}
-                                    title={`${row.name} · ${row.tier.label} · ${
-                                        row.avgGramPerHk != null ? fmtId(row.avgGramPerHk, 1) : '–'
-                                    } dari target ${fmtId(row.ownTarget, 0)} g/hk bulan ini`}
-                                    className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors ${
-                                        onSelect ? 'cursor-pointer hover:bg-gray-50 hover:border-gray-200' : 'cursor-default'
-                                    } ${row.meetsTarget ? 'border-emerald-200 bg-emerald-50/40' : 'border-gray-100'}`}
+                                    onClick={() => setExpandedId(isOpen ? null : row.personId)}
+                                    aria-expanded={isOpen}
+                                    className="w-full cursor-pointer px-3 py-2 text-left"
                                 >
-                                    <span
-                                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                                        style={{ backgroundColor: band?.color ?? '#d1d5db' }}
-                                    />
-                                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800">
-                                        {row.name}
-                                    </span>
-                                    {row.newlyMeets ? (
-                                        <span
-                                            className="shrink-0 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700"
-                                            title="Baru memenuhi target bulan ini"
-                                        >
-                                            ↑ baru
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="flex min-w-0 items-center gap-2">
+                                            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${style.dot}`} />
+                                            <span className="truncate text-xs font-medium text-gray-800">{row.name}</span>
+                                            {row.newlyMeets ? (
+                                                <span
+                                                    className="shrink-0 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700"
+                                                    title="Baru memenuhi target bulan ini"
+                                                >
+                                                    ↑ baru
+                                                </span>
+                                            ) : null}
+                                            <span className="shrink-0 text-[11px] text-gray-400">
+                                                {row.tenureWeeks != null
+                                                    ? `Minggu ${row.tenureWeeks}${targetNaik ? ` → ${row.tenureWeeks + 4}` : ''}`
+                                                    : row.tier.label}
+                                            </span>
                                         </span>
-                                    ) : null}
-                                    {/* "hasil / target" — angka targetnya ikut ditampilkan karena
-                                        tiap angkatan beda tagihannya, jadi angka hasil saja tidak
-                                        cukup untuk menilai. */}
-                                    <span className="shrink-0 text-xs font-semibold text-gray-900">
-                                        {row.avgGramPerHk != null ? fmtId(row.avgGramPerHk, 1) : '–'}
-                                        <span className="font-normal text-gray-400">
-                                            {' / '}
-                                            {fmtId(row.ownTarget, 0)}
+                                        <span className="flex shrink-0 items-center gap-1.5 text-xs">
+                                            <span className="font-semibold text-gray-900">
+                                                {row.avgGramPerHk != null ? fmtId(row.avgGramPerHk, 1) : '–'}
+                                                <span className="font-normal text-gray-400">
+                                                    {' / '}
+                                                    {fmtId(row.nextTarget, 0)}
+                                                </span>
+                                            </span>
+                                            <ChevronDown
+                                                className={`h-3.5 w-3.5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                                            />
                                         </span>
-                                    </span>
+                                    </div>
+
+                                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-200/70">
+                                        <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${pct}%` }} />
+                                    </div>
+
+                                    <p className={`mt-1 text-[11px] ${style.text}`}>
+                                        {row.readiness === 'aman'
+                                            ? `Aman — target bulan depan ${fmtId(row.nextTarget, 0)} gram per hari kerja sudah terpenuhi`
+                                            : targetNaik
+                                              ? `Target naik ${fmtId(row.ownTarget, 0)} → ${fmtId(row.nextTarget, 0)} gram bulan depan, kurang ${fmtId(gapPerHk, 1)} gram tiap hari kerja`
+                                              : `Kurang ${fmtId(gapPerHk, 1)} gram tiap hari kerja dari target ${fmtId(row.nextTarget, 0)}`}
+                                    </p>
                                 </button>
-                            );
-                        })}
-                    </div>
+
+                                {isOpen ? (
+                                    <div className="border-t border-gray-200/70 px-3 py-2.5">
+                                        <table className="w-full text-[11px]">
+                                            <thead>
+                                                <tr className="text-gray-400">
+                                                    <th className="text-left font-normal">&nbsp;</th>
+                                                    <th className="text-right font-normal">sekarang</th>
+                                                    <th className="text-right font-normal">harus</th>
+                                                    <th className="text-right font-normal">tambah</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="text-gray-700">
+                                                {(
+                                                    [
+                                                        { label: 'Per hari kerja', hint: '', mult: 1 },
+                                                        { label: 'Per minggu', hint: `${fmtId(row.hkPerWeek, 1)} hari`, mult: row.hkPerWeek },
+                                                        // Diproyeksikan ke bulan PENUH (4 minggu), bukan
+                                                        // total HK blok ini: blok berjalan bisa baru 1-2
+                                                        // minggu, dan memakai HK-nya apa adanya membuat
+                                                        // baris "sebulan" sama persis dengan "per minggu".
+                                                        {
+                                                            label: 'Sebulan',
+                                                            hint: `${fmtId(row.hkPerWeek * MONTH_BLOCK_WEEKS, 0)} hari`,
+                                                            mult: row.hkPerWeek * MONTH_BLOCK_WEEKS,
+                                                        },
+                                                    ] as const
+                                                ).map((baris) => {
+                                                    const fd = baris.mult === 1 ? 1 : 0;
+                                                    return (
+                                                        <tr key={baris.label}>
+                                                            <td className="py-0.5">
+                                                                {baris.label}
+                                                                {baris.hint ? <span className="text-gray-400"> ({baris.hint})</span> : null}
+                                                            </td>
+                                                            <td className="py-0.5 text-right">{fmtId(avg * baris.mult, fd)} g</td>
+                                                            <td className="py-0.5 text-right font-semibold text-gray-900">
+                                                                {fmtId(row.nextTarget * baris.mult, fd)} g
+                                                            </td>
+                                                            <td
+                                                                className={`py-0.5 text-right ${
+                                                                    gapPerHk > 0 ? 'text-amber-700' : 'text-green-600'
+                                                                }`}
+                                                            >
+                                                                {gapPerHk > 0 ? `+${fmtId(gapPerHk * baris.mult, fd)} g` : 'cukup'}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+
+                                        {onSelect ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => onSelect(row.personId)}
+                                                className="mt-2 cursor-pointer text-[11px] font-medium text-green-700 hover:underline"
+                                            >
+                                                Lihat grafik tren {row.name} →
+                                            </button>
+                                        ) : null}
+                                    </div>
+                                ) : null}
+                            </div>
+                        );
+                    })}
                 </div>
             )}
         </div>
