@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, Search, Target } from 'lucide-react';
+import { ArrowRight, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Search, Target } from 'lucide-react';
 import { useToast } from '@/lib/toast';
 import { getPerformaSummary, type PerformaPeriod, type PerformaRow } from '@/lib/api';
 import { fmtId } from '@/components/charts/chart-theme';
@@ -588,22 +588,22 @@ export default function MonthlyCapacityRecap({
                                     <div className="flex items-center justify-between gap-2">
                                         <span className="flex min-w-0 items-center gap-2">
                                             <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${style.dot}`} />
-                                            <span className="truncate text-xs font-medium text-gray-800">{row.name}</span>
+                                            <span className="truncate text-sm font-medium text-gray-800">{row.name}</span>
                                             {row.newlyMeets ? (
                                                 <span
-                                                    className="shrink-0 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700"
+                                                    className="shrink-0 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700"
                                                     title="Baru memenuhi target bulan ini"
                                                 >
                                                     ↑ baru
                                                 </span>
                                             ) : null}
-                                            <span className="shrink-0 text-[11px] text-gray-400">
+                                            <span className="shrink-0 text-xs text-gray-500">
                                                 {row.tenureWeeks != null
                                                     ? `Minggu ${row.tenureWeeks}${targetNaik ? ` → ${row.tenureWeeks + 4}` : ''}`
                                                     : row.tier.label}
                                             </span>
                                         </span>
-                                        <span className="flex shrink-0 items-center gap-1.5 text-xs">
+                                        <span className="flex shrink-0 items-center gap-1.5 text-sm">
                                             <span className="font-semibold text-gray-900">
                                                 {row.avgGramPerHk != null ? fmtId(row.avgGramPerHk, 1) : '–'}
                                                 <span className="font-normal text-gray-400">
@@ -612,16 +612,16 @@ export default function MonthlyCapacityRecap({
                                                 </span>
                                             </span>
                                             <ChevronDown
-                                                className={`h-3.5 w-3.5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                                                className={`h-4 w-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
                                             />
                                         </span>
                                     </div>
 
-                                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-200/70">
+                                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200/70">
                                         <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${pct}%` }} />
                                     </div>
 
-                                    <p className={`mt-1 text-[11px] ${style.text}`}>
+                                    <p className={`mt-1.5 text-xs ${style.text}`}>
                                         {row.readiness === 'aman'
                                             ? `Aman — target bulan depan ${fmtId(row.nextTarget, 0)} gram per hari kerja sudah terpenuhi`
                                             : targetNaik
@@ -632,13 +632,14 @@ export default function MonthlyCapacityRecap({
 
                                 {isOpen ? (
                                     <div className="border-t border-gray-200/70 px-3 py-2.5">
-                                        <table className="w-full text-[11px]">
+                                        <table className="w-full text-sm">
                                             <thead>
-                                                <tr className="text-gray-400">
-                                                    <th className="text-left font-normal">&nbsp;</th>
-                                                    <th className="text-right font-normal">sekarang</th>
-                                                    <th className="text-right font-normal">harus</th>
-                                                    <th className="text-right font-normal">tambah</th>
+                                                <tr className="text-xs text-gray-500">
+                                                    <th className="pb-1 text-left font-normal">&nbsp;</th>
+                                                    <th className="pb-1 text-right font-normal">sekarang</th>
+                                                    <th className="pb-1 w-5" aria-hidden="true" />
+                                                    <th className="pb-1 text-right font-normal">harus</th>
+                                                    <th className="pb-1 text-right font-normal">tambah</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="text-gray-700">
@@ -660,20 +661,40 @@ export default function MonthlyCapacityRecap({
                                                     const fd = baris.mult === 1 ? 1 : 0;
                                                     return (
                                                         <tr key={baris.label}>
-                                                            <td className="py-0.5">
+                                                            <td className="py-1">
                                                                 {baris.label}
-                                                                {baris.hint ? <span className="text-gray-400"> ({baris.hint})</span> : null}
+                                                                {baris.hint ? (
+                                                                    <span className="text-xs text-gray-500"> ({baris.hint})</span>
+                                                                ) : null}
                                                             </td>
-                                                            <td className="py-0.5 text-right">{fmtId(avg * baris.mult, fd)} g</td>
-                                                            <td className="py-0.5 text-right font-semibold text-gray-900">
+                                                            <td className="py-1 text-right">{fmtId(avg * baris.mult, fd)} g</td>
+                                                            {/* Panah antar kolom: menegaskan ini perjalanan
+                                                                "dari sekarang ke harus", bukan dua angka
+                                                                yang berdiri sendiri. */}
+                                                            <td className="py-1 text-center">
+                                                                <ArrowRight className="mx-auto h-3.5 w-3.5 text-gray-400" aria-hidden="true" />
+                                                            </td>
+                                                            <td className="py-1 text-right font-semibold text-gray-900">
                                                                 {fmtId(row.nextTarget * baris.mult, fd)} g
                                                             </td>
                                                             <td
-                                                                className={`py-0.5 text-right ${
+                                                                className={`py-1 text-right font-medium ${
                                                                     gapPerHk > 0 ? 'text-amber-700' : 'text-green-600'
                                                                 }`}
                                                             >
-                                                                {gapPerHk > 0 ? `+${fmtId(gapPerHk * baris.mult, fd)} g` : 'cukup'}
+                                                                <span className="inline-flex items-center justify-end gap-0.5">
+                                                                    {gapPerHk > 0 ? (
+                                                                        <>
+                                                                            <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+                                                                            {fmtId(gapPerHk * baris.mult, fd)} g
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                                                                            cukup
+                                                                        </>
+                                                                    )}
+                                                                </span>
                                                             </td>
                                                         </tr>
                                                     );
@@ -685,9 +706,10 @@ export default function MonthlyCapacityRecap({
                                             <button
                                                 type="button"
                                                 onClick={() => onSelect(row.personId)}
-                                                className="mt-2 cursor-pointer text-[11px] font-medium text-green-700 hover:underline"
+                                                className="mt-2.5 inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-green-700 hover:underline"
                                             >
-                                                Lihat grafik tren {row.name} →
+                                                Lihat grafik tren {row.name}
+                                                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                                             </button>
                                         ) : null}
                                     </div>
