@@ -80,7 +80,7 @@ export default function HarianPayrollPanel({
                         label="Lembur (Weekday + Wkend)"
                         value={fmtRp(summary.totalUpahLemburWeekdayRp + summary.totalUpahLemburWeekendRp)}
                         accent="#eda100"
-                        hint={`Weekday ${fmtRp(summary.totalUpahLemburWeekdayRp)} · Sabtu/Minggu ${fmtRp(summary.totalUpahLemburWeekendRp)}`}
+                        hint={`Weekday ${fmtRp(summary.totalUpahLemburWeekdayRp)} · Weekend ${fmtRp(summary.totalUpahLemburWeekendRp)}`}
                     />
                     <ExpenseTile
                         label="Total Upah Bersih"
