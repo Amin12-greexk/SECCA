@@ -19,6 +19,17 @@ interface TotalBjdModalProps {
     rows?: PerformaRow[];
 }
 
+/**
+ * Pilihan pembagi hari kerja. Ada pecahan 0,5 karena Sabtu cuma setengah hari:
+ * minggu normal = 5 hari penuh + Sabtu setengah = 5,5; kalau kena satu hari
+ * libur jadi 4,5. Angka bulat tetap disediakan untuk yang menghitung Sabtu
+ * sebagai hari penuh.
+ */
+const WORK_DAY_OPTIONS = [1, 2, 3, 4, 4.5, 5, 5.5, 6, 7];
+
+/** "4,5" untuk pecahan, "6" untuk bulat — bukan "6,0". */
+const fmtDays = (days: number) => (Number.isInteger(days) ? String(days) : fmtId(days, 1));
+
 /** Detail Total BJD sekantor: pisahkan kapasitas produksi (yang menentukan Rendemen)
  * dari reprocess/barang-jadi (yang cuma ikut ke total, bukan Rendemen), serta rata-rata kapasitas harian. */
 export default function TotalBjdModal({
@@ -92,9 +103,9 @@ export default function TotalBjdModal({
                                         className="cursor-pointer bg-transparent pr-0.5 text-[10px] font-bold uppercase tracking-wider text-white focus:outline-none"
                                         aria-label="Jumlah hari kerja sebagai pembagi"
                                     >
-                                        {[1, 2, 3, 4, 5, 6, 7].map((days) => (
+                                        {WORK_DAY_OPTIONS.map((days) => (
                                             <option key={days} value={days} className="text-slate-900">
-                                                {days} Hari Kerja
+                                                {fmtDays(days)} Hari Kerja
                                             </option>
                                         ))}
                                     </select>
@@ -104,7 +115,7 @@ export default function TotalBjdModal({
                                 {fmtId(avgKapasitasHarian, 1)} g <span className="text-xs font-normal text-teal-200">/ hari</span>
                             </p>
                             <p className="mt-1 text-[11px] text-teal-100/80">
-                                Total BJD ÷ {workDays} hari kerja
+                                Total BJD ÷ {fmtDays(workDays)} hari kerja
                             </p>
                         </div>
                     </div>
