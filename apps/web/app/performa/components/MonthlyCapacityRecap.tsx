@@ -275,30 +275,40 @@ export default function MonthlyCapacityRecap({
             </div>
 
             {/* Rincian target bulan terpilih per angkatan — jawaban langsung
-                "target segini dari mana": tiap angkatan HK-nya berapa, target
-                g/hk-nya berapa (sesuai tangga di atas), jumlahnya berapa kg. */}
+                "target segini dari mana": tiap angkatan hari kerjanya berapa,
+                target gram/hari-kerjanya berapa (sesuai tangga di atas),
+                jumlahnya berapa kg. Istilah ditulis lengkap ("hari kerja",
+                bukan "HK") karena panel ini justru tempat menjelaskan
+                singkatan itu ke pembaca yang belum tentu tahu — beda dengan
+                daftar mitra di bawah yang boleh pakai singkatan karena
+                sudah dijelaskan di sini duluan. */}
             <div className="mb-4 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
                 <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                     <Target className="h-3.5 w-3.5 text-amber-500" />
                     Kenapa target bulan ini {currentSummary ? fmtId(currentSummary.targetBjd / 1000, 1) : '–'} kg
                 </p>
                 <p className="mb-2 text-[11px] text-gray-400">
-                    Rumus: target angkatan (g/hk) × HK aktual angkatan itu bulan ini, dijumlah semua angkatan.
+                    Rumus: target gram per hari kerja tiap angkatan × jumlah hari kerja aktual angkatan itu bulan ini, lalu dijumlah semua angkatan.
                 </p>
                 {tierBreakdown.length === 0 ? (
                     <div className="h-[80px] animate-pulse rounded-lg bg-gray-100/70" />
                 ) : (
-                    <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-col gap-2">
                         {tierBreakdown.map((row) => (
-                            <div key={row.tier.key} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-xs">
-                                <span className="flex items-center gap-1.5 text-gray-600">
-                                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: row.tier.color }} />
-                                    {row.tier.label}
-                                    <span className="text-gray-400">· {row.personCount} mitra</span>
-                                </span>
-                                <span className="font-medium text-gray-800">
-                                    {fmtId(row.totalHk, 0)} HK × {fmtId(row.tier.value, 0)} g/hk = {fmtId(row.targetGram / 1000, 1)} kg
-                                </span>
+                            <div key={row.tier.key} className="flex flex-col gap-0.5">
+                                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-xs">
+                                    <span className="flex items-center gap-1.5 text-gray-700">
+                                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: row.tier.color }} />
+                                        {row.tier.label}
+                                        <span className="text-gray-400">· {row.personCount} mitra</span>
+                                    </span>
+                                    <span className="font-semibold text-gray-900">
+                                        {fmtId(row.targetGram / 1000, 1)} kg
+                                    </span>
+                                </div>
+                                <p className="pl-3.5 text-[11px] text-gray-400">
+                                    {fmtId(row.totalHk, 0)} hari kerja × {fmtId(row.tier.value, 0)} gram per hari kerja
+                                </p>
                             </div>
                         ))}
                         <div className="mt-1 flex items-center justify-between border-t border-gray-200 pt-1.5 text-xs font-semibold text-gray-900">
