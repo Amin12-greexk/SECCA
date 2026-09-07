@@ -9,6 +9,7 @@ import { formatPeriodLabel } from './periodLabel';
 import {
     aggregateBlock,
     blockTargetSummary,
+    blockBandBreakdown,
     blockTierBreakdown,
     buildMonthBlocks,
     isBlockLoaded,
@@ -104,6 +105,7 @@ export default function MonthlyCapacityRecap({
     // terlihat aman bulan ini padahal target mereka naik bulan depan.
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('naik');
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [breakdownBy, setBreakdownBy] = useState<'angkatan' | 'kapasitas'>('angkatan');
 
     // Data baru/reset -> jumlah blok berubah; balik ke blok terakhir yang valid.
     useEffect(() => {
@@ -219,6 +221,12 @@ export default function MonthlyCapacityRecap({
         [currentBlock, ready, rowsByPeriod],
     );
 
+    /** Potongan kedua dari total target yang sama: per band kapasitas. */
+    const bandBreakdown = useMemo(
+        () => (currentBlock && ready ? blockBandBreakdown(currentBlock, rowsByPeriod) : []),
+        [currentBlock, ready, rowsByPeriod],
+    );
+
     // Kartu ringkasan memakai populasi yang SAMA dengan target (mitra borong
     // ber-HK, tanpa Bulanan/Cabut Rumah) — kalau memakai total kotor halaman
     // utama, satu panel akan memuat dua angka "total BJD" yang berbeda.
@@ -331,36 +339,99 @@ export default function MonthlyCapacityRecap({
                 singkatan itu ke pembaca yang belum tentu tahu — beda dengan
                 daftar mitra di bawah yang boleh pakai singkatan karena
                 sudah dijelaskan di sini duluan. */}
-            <div className="mb-4 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
-                <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                    <Target className="h-3.5 w-3.5 text-amber-500" />
+            <div className="mb-4 rounded-lg border border-gray-100 bg-gray-50/60 p-4">
+                <p className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-gray-800">
+                    <Target className="h-4 w-4 shrink-0 text-amber-500" />
                     Kenapa target bulan ini {currentSummary ? fmtId(currentSummary.targetBjd / 1000, 1) : '–'} kg
                 </p>
-                <p className="mb-2 text-[11px] text-gray-400">
-                    Rumus: target gram per hari kerja tiap angkatan × jumlah hari kerja aktual angkatan itu bulan ini, lalu dijumlah semua angkatan.
+                <p className="mb-3 text-xs leading-relaxed text-gray-500">
+                    {breakdownBy === 'angkatan'
+                        ? 'Rumus: target gram per hari kerja tiap angkatan × jumlah hari kerja aktual angkatan itu bulan ini, lalu dijumlah semua angkatan.'
+                        : 'Total target yang sama, dipotong menurut band kapasitas yang dicapai. Angkatan menentukan tagihannya, band menunjukkan hasilnya — selisih keduanya yang perlu dikejar.'}
                 </p>
+
+                {/* Satu total target, dua cara memotongnya. Ditaruh sebagai
+                    tombol pilihan (bukan dua tabel sekaligus) supaya panelnya
+                    tidak jadi dua kali lebih panjang. */}
+                <div className="mb-3 inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
+                    {(
+                        [
+                            { value: 'angkatan', label: 'Per angkatan' },
+                            { value: 'kapasitas', label: 'Per kapasitas' },
+                        ] as const
+                    ).map((item) => (
+                        <button
+                            key={item.value}
+                            type="button"
+                            onClick={() => setBreakdownBy(item.value)}
+                            className={`cursor-pointer rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                                breakdownBy === item.value
+                                    ? 'bg-gray-800 text-white'
+                                    : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            {item.label}
+                        </button>
+                    ))}
+                </div>
+
                 {tierBreakdown.length === 0 ? (
                     <div className="h-[80px] animate-pulse rounded-lg bg-gray-100/70" />
                 ) : (
-                    <div className="flex flex-col gap-2">
-                        {tierBreakdown.map((row) => (
-                            <div key={row.tier.key} className="flex flex-col gap-0.5">
-                                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-xs">
-                                    <span className="flex items-center gap-1.5 text-gray-700">
-                                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: row.tier.color }} />
-                                        {row.tier.label}
-                                        <span className="text-gray-400">· {row.personCount} mitra</span>
-                                    </span>
-                                    <span className="font-semibold text-gray-900">
-                                        {fmtId(row.targetGram / 1000, 1)} kg
-                                    </span>
-                                </div>
-                                <p className="pl-3.5 text-[11px] text-gray-400">
-                                    {fmtId(row.totalHk, 0)} hari kerja × {fmtId(row.tier.value, 0)} gram per hari kerja
-                                </p>
-                            </div>
-                        ))}
-                        <div className="mt-1 flex items-center justify-between border-t border-gray-200 pt-1.5 text-xs font-semibold text-gray-900">
+                    <div className="flex flex-col gap-3">
+                        {breakdownBy === 'angkatan'
+                            ? tierBreakdown.map((row) => (
+                                  <div key={row.tier.key} className="flex flex-col gap-1">
+                                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-sm">
+                                          <span className="flex items-center gap-2 font-medium text-gray-800">
+                                              <span
+                                                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                                  style={{ backgroundColor: row.tier.color }}
+                                              />
+                                              {row.tier.label}
+                                              <span className="font-normal text-gray-500">· {row.personCount} mitra</span>
+                                          </span>
+                                          <span className="font-semibold text-gray-900">
+                                              {fmtId(row.targetGram / 1000, 1)} kg
+                                          </span>
+                                      </div>
+                                      <p className="pl-4 text-xs text-gray-500">
+                                          {fmtId(row.totalHk, 0)} hari kerja × {fmtId(row.tier.value, 0)} gram per hari kerja
+                                      </p>
+                                  </div>
+                              ))
+                            : bandBreakdown.map((row) => {
+                                  const pct =
+                                      row.targetGram > 0 ? (row.actualGram / row.targetGram) * 100 : null;
+                                  return (
+                                      <div key={row.band.key} className="flex flex-col gap-1">
+                                          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-sm">
+                                              <span className="flex items-center gap-2 font-medium text-gray-800">
+                                                  <span
+                                                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                                      style={{ backgroundColor: row.band.color }}
+                                                  />
+                                                  {row.band.label}
+                                                  <span className="font-normal text-gray-500">· {row.personCount} mitra</span>
+                                              </span>
+                                              <span className="font-semibold text-gray-900">
+                                                  {fmtId(row.targetGram / 1000, 1)} kg
+                                              </span>
+                                          </div>
+                                          <p className="pl-4 text-xs text-gray-500">
+                                              Tercapai {fmtId(row.actualGram / 1000, 1)} kg dari target{' '}
+                                              {fmtId(row.targetGram / 1000, 1)} kg
+                                              {pct != null ? (
+                                                  <span className={pct >= 100 ? 'text-green-600' : 'text-amber-700'}>
+                                                      {' '}
+                                                      ({fmtId(pct, 0)}%)
+                                                  </span>
+                                              ) : null}
+                                          </p>
+                                      </div>
+                                  );
+                              })}
+                        <div className="mt-1 flex items-center justify-between border-t border-gray-200 pt-2.5 text-sm font-semibold text-gray-900">
                             <span>Total target bulan ini</span>
                             <span>{currentSummary ? fmtId(currentSummary.targetBjd / 1000, 1) : '–'} kg</span>
                         </div>
