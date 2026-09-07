@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { CalendarDays, RefreshCw, Scale, TrendingUp, X } from 'lucide-react';
 import {
     Dialog,
@@ -26,14 +27,20 @@ export default function TotalBjdModal({
     summary,
     periodLabel,
 }: TotalBjdModalProps) {
+    /** Pembagi rata-rata harian. Default 6 (jadwal normal), tapi bisa diganti:
+     * minggu yang kena libur cuma jalan 5 hari, dan membaginya tetap dengan 6
+     * membuat kapasitas harian terlihat lebih rendah dari yang sebenarnya.
+     * Hook ditaruh sebelum guard `!summary` supaya urutan hook tidak berubah
+     * saat modal dibuka tanpa data. */
+    const [workDays, setWorkDays] = useState(6);
+
     if (!summary) return null;
 
-    const WORK_DAYS = 6;
     const totalProduksi = summary.totalBjd;
     const totalReprocess = summary.totalReprocessBjd ?? 0;
     const totalGabungan = summary.totalBjdWithReprocess ?? totalProduksi;
-    const avgKapasitasHarian = totalGabungan / WORK_DAYS;
-    const avgProduksiHarian = totalProduksi / WORK_DAYS;
+    const avgKapasitasHarian = totalGabungan / workDays;
+    const avgProduksiHarian = totalProduksi / workDays;
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -69,23 +76,35 @@ export default function TotalBjdModal({
                             </p>
                         </div>
 
-                        {/* Card 2: Rata-rata Kapasitas Harian (Dibagi 6 Hari Kerja) */}
+                        {/* Card 2: Rata-rata Kapasitas Harian — pembaginya bisa diganti
+                            karena jumlah hari kerja tidak selalu 6 (minggu berlibur). */}
                         <div className="relative overflow-hidden rounded-xl border border-teal-300 bg-gradient-to-br from-teal-700 to-emerald-800 p-4 text-white shadow-sm">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between gap-2">
                                 <p className="text-[11px] font-medium uppercase tracking-wide text-teal-100 flex items-center gap-1.5">
                                     <TrendingUp className="h-3.5 w-3.5 text-teal-200" />
                                     Rata-rata Kapasitas
                                 </p>
-                                <span className="inline-flex items-center gap-1 rounded-md bg-white/15 px-2 py-0.5 text-[10px] font-bold text-white uppercase tracking-wider">
+                                <label className="inline-flex shrink-0 items-center gap-1 rounded-md bg-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
                                     <CalendarDays className="h-3 w-3" />
-                                    6 Hari Kerja
-                                </span>
+                                    <select
+                                        value={workDays}
+                                        onChange={(event) => setWorkDays(Number(event.target.value))}
+                                        className="cursor-pointer bg-transparent pr-0.5 text-[10px] font-bold uppercase tracking-wider text-white focus:outline-none"
+                                        aria-label="Jumlah hari kerja sebagai pembagi"
+                                    >
+                                        {[1, 2, 3, 4, 5, 6, 7].map((days) => (
+                                            <option key={days} value={days} className="text-slate-900">
+                                                {days} Hari Kerja
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
                             </div>
                             <p className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight">
                                 {fmtId(avgKapasitasHarian, 1)} g <span className="text-xs font-normal text-teal-200">/ hari</span>
                             </p>
                             <p className="mt-1 text-[11px] text-teal-100/80">
-                                Total BJD ÷ 6 hari kerja
+                                Total BJD ÷ {workDays} hari kerja
                             </p>
                         </div>
                     </div>
