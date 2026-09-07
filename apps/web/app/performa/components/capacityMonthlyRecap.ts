@@ -42,7 +42,9 @@ export type TargetTier = {
     key: 'pemula' | 'perintis' | 'mandiri';
     /** Ambang g/hk yang harus dicapai angkatan ini. */
     value: number;
-    /** Label pendek untuk chip keterangan — sengaja sesingkat mungkin. */
+    /** Label angkatan — ditulis lengkap ("Minggu 1–12", bukan "mgg 1-12")
+     * supaya tidak perlu tahu singkatannya dulu untuk paham; dipakai di chip
+     * tangga target, rincian target bulanan, maupun tooltip kartu mitra. */
     label: string;
     color: string;
 };
@@ -52,13 +54,13 @@ export const TARGET_TIERS: TargetTier[] = [
     {
         key: 'pemula',
         value: KUNING_TARGET.value,
-        label: `≤ mgg ${KUNING_TARGET.weeks}`,
+        label: `Minggu 1–${KUNING_TARGET.weeks}`,
         color: KUNING_TARGET.color,
     },
     {
         key: 'perintis',
         value: HIJAU_TARGET.value,
-        label: `mgg ${KUNING_TARGET.weeks + 1}–${HIJAU_TARGET.weeks}`,
+        label: `Minggu ${KUNING_TARGET.weeks + 1}–${HIJAU_TARGET.weeks}`,
         color: HIJAU_TARGET.color,
     },
     { key: 'mandiri', value: MANDIRI_TARGET_VALUE, label: 'Mandiri', color: '#2563eb' },
