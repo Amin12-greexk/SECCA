@@ -73,8 +73,11 @@ export type MonthBlock = {
     periods: PerformaPeriod[];
 };
 
+/** Berapa periode mingguan yang dihitung sebagai "1 bulan". */
+export const MONTH_BLOCK_WEEKS = 4;
+
 /** Bagi periode (urut kronologis) jadi blok-blok 4 periode berturut-turut. */
-export function buildMonthBlocks(periods: PerformaPeriod[], blockSize = 4): MonthBlock[] {
+export function buildMonthBlocks(periods: PerformaPeriod[], blockSize = MONTH_BLOCK_WEEKS): MonthBlock[] {
     const blocks: MonthBlock[] = [];
     for (let i = 0; i < periods.length; i += blockSize) {
         blocks.push({ periods: periods.slice(i, i + blockSize) });
@@ -98,7 +101,46 @@ export type PersonBlockAggregate = {
     ownTarget: number;
     /** Rata-ratanya sudah memenuhi target angkatannya sendiri? */
     meetsTarget: boolean;
+    /** Lama kerja (minggu) di periode TERAKHIR blok ini. null = Mandiri atau
+     * minggunya tidak tercatat. */
+    tenureWeeks: number | null;
+    /** Angkatan yang dia tempati BULAN DEPAN (4 minggu lagi). */
+    nextTier: TargetTier;
+    /** Target g/hk bulan depan — beda dari ownTarget kalau dia melewati
+     * checkpoint dalam 4 minggu ke depan. */
+    nextTarget: number;
+    /** Rata-rata hari kerja per minggu di blok ini — dipakai memecah target
+     * bulanan jadi target mingguan yang realistis buat dia, bukan asumsi
+     * seragam yang menghukum mitra yang memang tidak masuk penuh. */
+    hkPerWeek: number;
+    /**
+     * Kesiapan menghadapi bulan depan:
+     * - `aman`       : memenuhi target sekarang DAN target bulan depan
+     * - `target-naik`: memenuhi sekarang, TAPI belum cukup untuk target baru
+     * - `belum`      : target sekarang saja belum terpenuhi
+     *
+     * `target-naik` sengaja dipisah dari `aman`: tanpa itu mitra yang minggu
+     * depan naik checkpoint terlihat hijau sampai bulan depan tiba-tiba
+     * merah, padahal justru merekalah yang paling perlu didorong sekarang.
+     */
+    readiness: 'aman' | 'target-naik' | 'belum';
 };
+
+/**
+ * Angkatan yang ditempati mitra 4 minggu lagi.
+ *
+ * "Mandiri" tetap Mandiri: statusnya menyerap dan tidak ada checkpoint di
+ * atasnya, jadi targetnya tidak bergerak lagi (lihat tenure.ts).
+ */
+function nextMonthTier(weeks: number | null, isMandiri: boolean): TargetTier {
+    if (isMandiri) return TIER_BY_KEY.get('mandiri')!;
+    // Minggu tidak tercatat -> tidak bisa diramal, pakai angkatan yang sama.
+    if (weeks === null) return TIER_BY_KEY.get('pemula')!;
+    const next = weeks + 4;
+    if (next > HIJAU_TARGET.weeks) return TIER_BY_KEY.get('mandiri')!;
+    if (next > KUNING_TARGET.weeks) return TIER_BY_KEY.get('perintis')!;
+    return TIER_BY_KEY.get('pemula')!;
+}
 
 /** "Cabut Rumah" tidak punya konsep kapasitas sama sekali (lihat page.tsx),
  * dan "Bulanan" digaji harian tetap, bukan dinilai dari gram/HK — keduanya
@@ -118,6 +160,10 @@ export function aggregateBlock(
      * ini (bukan angkatan periode terakhir) supaya label tidak berubah cuma
      * karena satu minggu terakhir kebetulan naik status. */
     const hkByTier = new Map<string, Map<TargetTier['key'], number>>();
+    /** Level di periode TERAKHIR yang dia muncul — sumber ramalan angkatan
+     * bulan depan. Periode diiterasi kronologis, jadi yang belakangan menimpa
+     * yang duluan. */
+    const lastLevel = new Map<string, { raw: string | null; num: number | null }>();
 
     for (const period of block.periods) {
         const rows = rowsByPeriod[period.id];
@@ -151,12 +197,21 @@ export function aggregateBlock(
                     tier,
                     ownTarget: tier.value,
                     meetsTarget: false,
+                    tenureWeeks: null,
+                    nextTier: tier,
+                    nextTarget: tier.value,
+                    hkPerWeek: 0,
+                    readiness: 'belum',
                 });
             }
 
             const tierHk = hkByTier.get(row.personId) ?? new Map<TargetTier['key'], number>();
             tierHk.set(tier.key, (tierHk.get(tier.key) ?? 0) + hk);
             hkByTier.set(row.personId, tierHk);
+            lastLevel.set(row.personId, {
+                raw: row.rawUserLevel ?? null,
+                num: row.levelNumber ?? null,
+            });
         }
     }
 
@@ -180,6 +235,25 @@ export function aggregateBlock(
         agg.ownTarget = agg.tier.value;
 
         agg.meetsTarget = agg.avgGramPerHk != null && agg.avgGramPerHk >= agg.ownTarget;
+
+        const level = lastLevel.get(agg.personId);
+        agg.tenureWeeks = level ? tenureWeeks(level.raw, level.num) : null;
+        agg.nextTier = nextMonthTier(
+            agg.tenureWeeks,
+            /mandiri/i.test(level?.raw ?? ''),
+        );
+        agg.nextTarget = agg.nextTier.value;
+
+        // Pembagi = jumlah periode dalam blok (biasanya 4 minggu), bukan
+        // konstanta: blok terakhir bisa belum genap 4 minggu, dan memakai 4
+        // di situ akan mengecilkan angka mingguannya secara palsu.
+        agg.hkPerWeek = block.periods.length > 0 ? agg.sumHk / block.periods.length : 0;
+
+        agg.readiness = !agg.meetsTarget
+            ? 'belum'
+            : agg.avgGramPerHk != null && agg.avgGramPerHk >= agg.nextTarget
+              ? 'aman'
+              : 'target-naik';
     }
 
     return map;
