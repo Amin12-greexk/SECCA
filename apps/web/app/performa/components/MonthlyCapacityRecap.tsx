@@ -278,9 +278,12 @@ export default function MonthlyCapacityRecap({
                 "target segini dari mana": tiap angkatan HK-nya berapa, target
                 g/hk-nya berapa (sesuai tangga di atas), jumlahnya berapa kg. */}
             <div className="mb-4 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
-                <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                     <Target className="h-3.5 w-3.5 text-amber-500" />
                     Kenapa target bulan ini {currentSummary ? fmtId(currentSummary.targetBjd / 1000, 1) : '–'} kg
+                </p>
+                <p className="mb-2 text-[11px] text-gray-400">
+                    Rumus: target angkatan (g/hk) × HK aktual angkatan itu bulan ini, dijumlah semua angkatan.
                 </p>
                 {tierBreakdown.length === 0 ? (
                     <div className="h-[80px] animate-pulse rounded-lg bg-gray-100/70" />
