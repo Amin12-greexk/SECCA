@@ -25,6 +25,28 @@ describe('aggregateMetrics', () => {
     expect(result.totalBjd).toBe(226);
   });
 
+  it('counts unassigned period-level reprocess in Total BJD but not rendemen', () => {
+    const result = aggregateMetrics(
+      [
+        row({
+          totalBakuBasah: 100,
+          totalBjd: 76,
+          rendemenPctBps: 7600,
+          rawRowJson: { reprocessBjd: 10 },
+        }),
+        row({ totalBakuBasah: 200, totalBjd: 150, rendemenPctBps: 7500 }),
+      ],
+      40,
+    );
+
+    expect(result.totalBjd).toBe(226);
+    expect(result.totalReprocessBjd).toBe(50);
+    expect(result.unassignedReprocessBjd).toBe(40);
+    expect(result.totalBjdWithReprocess).toBe(276);
+    // Rendemen tetap murni produksi: 226 / 300.
+    expect(result.weightedRendemenPctBps).toBe(7533);
+  });
+
   it('weights rendemen by total, not by row average', () => {
     // Rata-rata baris = (7600+7500)/2 = 7550, tapi weighted = 226/300 = 7533.
     const result = aggregateMetrics([

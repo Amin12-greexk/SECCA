@@ -19,14 +19,11 @@ import {
 import type { FastifyRequest } from 'fastify';
 import { Public } from '../../auth/public.decorator';
 import { Roles } from '../../auth/roles.decorator';
-import { badRequest } from '../../common/errors';
+import { readExcelUpload } from '../../common/upload';
 import { AuditDashboardService } from './audit-dashboard.service';
 import { SummaryQueryDto } from './dto/summary-query.dto';
 import { TrendsQueryDto } from './dto/trends-query.dto';
 import { UpdatePersonColorDto } from './dto/update-person-color.dto';
-
-/** Batas ukuran upload; workbook periode realistis jauh di bawah ini. */
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 @ApiTags('Audit Dashboard')
 @Controller('audit-dashboard')
@@ -49,30 +46,13 @@ export class AuditDashboardController {
     },
   })
   async importWorkbook(@Req() request: FastifyRequest) {
-    if (!request.isMultipart()) {
-      badRequest("Request harus multipart/form-data dengan field 'file'.");
-    }
-
-    const file = await request.file({ limits: { fileSize: MAX_UPLOAD_BYTES } });
-    if (!file) {
-      badRequest("File tidak ditemukan. Kirim file Excel di field 'file'.");
-      return;
-    }
-
-    const buffer = await file.toBuffer();
-
-    if (file.file.truncated) {
-      badRequest('Ukuran file melebihi 10 MB.');
-    }
-    if (buffer.length === 0) {
-      badRequest('File kosong. Upload file Excel yang berisi data.');
-    }
+    const { buffer, fileName } = await readExcelUpload(request);
 
     const user = (request as FastifyRequest & { user?: { sub?: string } }).user;
 
     return this.auditDashboardService.importWorkbook({
       buffer,
-      fileName: file.filename,
+      fileName,
       userId: user?.sub ?? null,
     });
   }

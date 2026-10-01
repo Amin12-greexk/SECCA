@@ -8,12 +8,9 @@ import {
 } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { Roles } from '../../auth/roles.decorator';
-import { badRequest } from '../../common/errors';
+import { readExcelUpload } from '../../common/upload';
 import { AuditMonthlyService } from './audit-monthly.service';
 import { PeriodIdQueryDto } from './dto/period-id-query.dto';
-
-/** Batas ukuran upload; workbook bulanan realistis jauh di bawah ini. */
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 /**
  * Dashboard audit bulanan — khusus role ADMIN, tidak ada endpoint @Public di
@@ -39,30 +36,13 @@ export class AuditMonthlyController {
     },
   })
   async importWorkbook(@Req() request: FastifyRequest) {
-    if (!request.isMultipart()) {
-      badRequest("Request harus multipart/form-data dengan field 'file'.");
-    }
-
-    const file = await request.file({ limits: { fileSize: MAX_UPLOAD_BYTES } });
-    if (!file) {
-      badRequest("File tidak ditemukan. Kirim file Excel di field 'file'.");
-      return;
-    }
-
-    const buffer = await file.toBuffer();
-
-    if (file.file.truncated) {
-      badRequest('Ukuran file melebihi 10 MB.');
-    }
-    if (buffer.length === 0) {
-      badRequest('File kosong. Upload file Excel yang berisi data.');
-    }
+    const { buffer, fileName } = await readExcelUpload(request);
 
     const user = (request as FastifyRequest & { user?: { sub?: string } }).user;
 
     return this.auditMonthlyService.importWorkbook({
       buffer,
-      fileName: file.filename,
+      fileName,
       userId: user?.sub ?? null,
     });
   }
