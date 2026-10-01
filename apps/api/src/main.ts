@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import multipart from '@fastify/multipart';
+import { MAX_EXCEL_UPLOAD_BYTES } from './common/upload';
 import {
   FastifyAdapter,
   NestFastifyApplication,
@@ -18,7 +19,7 @@ async function bootstrap() {
 
   // Upload Excel dashboard performa (POST /api/audit-dashboard/import).
   await app.register(multipart, {
-    limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+    limits: { fileSize: MAX_EXCEL_UPLOAD_BYTES, files: 1 },
   });
 
   app.enableCors({
