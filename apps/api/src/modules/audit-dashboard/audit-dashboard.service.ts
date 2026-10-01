@@ -118,16 +118,26 @@ export function getEffectiveSusutHilangBps(
  * Agregat satu periode. Dipakai bareng oleh summary dan period-stats
  * supaya angka di kartu ringkasan dan di chart tidak pernah beda.
  */
-export function aggregateMetrics(metrics: AggregatableMetric[]) {
+/**
+ * @param unassignedReprocessBjd BJD reprocess tingkat periode yang pekerjanya
+ * tidak punya baris di REKAP PAYROLL (lihat AuditDashboardPeriod di schema).
+ * Tanpa ini Total BJD — dan Upah per Kg yang dibagi dengannya — selisih dari
+ * Excel, yang menjumlah SEMUA baris reprocess di sheet DATA PERIODE.
+ */
+export function aggregateMetrics(
+  metrics: AggregatableMetric[],
+  unassignedReprocessBjd = 0,
+) {
   const totalBakuBasah = sumOf(metrics.map((metric) => metric.totalBakuBasah));
   const totalBjd = sumOf(metrics.map((metric) => metric.totalBjd));
   // Untuk kartu "Total BJD" saja (angka barang jadi seutuhnya). Rendemen di bawah
   // TETAP pakai `totalBjd` murni produksi — reprocess sengaja tidak ikut karena tidak
   // punya baku basah baru untuk dibandingkan.
-  const totalReprocessBjd = metrics.reduce(
+  const assignedReprocessBjd = metrics.reduce(
     (sum, m) => sum + extractReprocessBjd(m),
     0,
   );
+  const totalReprocessBjd = assignedReprocessBjd + unassignedReprocessBjd;
   const totalBjdWithReprocess = totalBjd + totalReprocessBjd;
 
   const weightedRendemenPctBps =
@@ -159,6 +169,7 @@ export function aggregateMetrics(metrics: AggregatableMetric[]) {
     totalBakuBasah,
     totalBjd,
     totalReprocessBjd,
+    unassignedReprocessBjd,
     totalBjdWithReprocess,
     weightedRendemenPctBps,
     weightedSusutProsesPctBps,
@@ -383,6 +394,26 @@ export class AuditDashboardService {
             nextSortOrder += 1;
           }
 
+          // Reprocess ditempel ke metric lewat nama pekerja (lihat loop di
+          // bawah). Baris reprocess yang pekerjanya tidak ada di REKAP PAYROLL
+          // periode ini dulu terbuang diam-diam — padahal BJD-nya ikut di
+          // total Barang Jadi Excel. Disimpan di tingkat periode supaya Total
+          // BJD & Upah per Kg tetap sama dengan Excel tanpa memunculkan orang
+          // "hantu" di ranking.
+          const rowNames = new Set(
+            period.rows.map((row) => row.normalizedName),
+          );
+          const unassignedReprocessRows = (period.reprocessRows ?? []).filter(
+            (rp) => !rowNames.has(rp.normalizedName ?? ''),
+          );
+          const unassignedReprocessBjd =
+            unassignedReprocessRows.length > 0
+              ? unassignedReprocessRows.reduce(
+                  (sum, rp) => sum + (rp.totalBjd ?? 0),
+                  0,
+                )
+              : null;
+
           const created = await tx.auditDashboardPeriod.create({
             data: {
               importId: importRecord.id,
@@ -392,6 +423,8 @@ export class AuditDashboardService {
               endDate: period.endDate,
               year: period.year,
               sortOrder,
+              unassignedReprocessBjd,
+              unassignedReprocessCount: unassignedReprocessRows.length,
             },
           });
 
@@ -633,7 +666,7 @@ export class AuditDashboardService {
         endDate: period.endDate,
         year: period.year,
       },
-      summary: aggregateMetrics(metrics),
+      summary: aggregateMetrics(metrics, period.unassignedReprocessBjd ?? 0),
       rows: metrics.map((metric) => {
         const row = this.toRow(metric);
         return includePayroll ? row : stripPayrollFields(row);
@@ -902,7 +935,7 @@ export class AuditDashboardService {
       sortOrder: period.sortOrder,
       startDate: period.startDate,
       endDate: period.endDate,
-      ...aggregateMetrics(period.metrics),
+      ...aggregateMetrics(period.metrics, period.unassignedReprocessBjd ?? 0),
     }));
 
     return {

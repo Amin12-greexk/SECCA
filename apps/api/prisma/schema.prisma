@@ -667,16 +667,21 @@ model AuditDashboardImport {
 }
 
 model AuditDashboardPeriod {
-  id        String    @id @default(uuid())
-  importId  String
-  sheetName String
-  label     String
-  startDate DateTime?
-  endDate   DateTime?
-  year      Int?
-  sortOrder Int       @default(0)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id                       String    @id @default(uuid())
+  importId                 String
+  sheetName                String
+  label                    String
+  startDate                DateTime?
+  endDate                  DateTime?
+  year                     Int?
+  sortOrder                Int       @default(0)
+  /// BJD reprocess (gram) yang pekerjanya tidak punya baris di REKAP PAYROLL
+  /// periode ini, jadi tidak bisa ditempel ke metric siapa pun. Tetap ikut
+  /// Total BJD supaya angkanya sama dengan Excel.
+  unassignedReprocessBjd   Float?
+  unassignedReprocessCount Int       @default(0)
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   import     AuditDashboardImport      @relation(fields: [importId], references: [id], onDelete: Cascade)
   metrics    AuditDashboardMetric[]
