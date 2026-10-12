@@ -318,13 +318,22 @@ export class AuditDashboardService {
           }
         }
 
-        for (const [normalizedName, rawName] of uniqueNames) {
-          const person = await tx.auditDashboardPerson.upsert({
-            where: { normalizedName },
-            create: { name: rawName, normalizedName },
-            update: {},
-          });
-          personIdByName.set(normalizedName, person.id);
+        // Dulu upsert satu per satu = ±250 round-trip berurutan per upload.
+        // createMany + skipDuplicates setara "update: {}" (yang sudah ada
+        // tidak disentuh), lalu id-nya diambil sekali jalan.
+        await tx.auditDashboardPerson.createMany({
+          data: [...uniqueNames].map(([normalizedName, rawName]) => ({
+            name: rawName,
+            normalizedName,
+          })),
+          skipDuplicates: true,
+        });
+        const persons = await tx.auditDashboardPerson.findMany({
+          where: { normalizedName: { in: [...uniqueNames.keys()] } },
+          select: { id: true, normalizedName: true },
+        });
+        for (const person of persons) {
+          personIdByName.set(person.normalizedName, person.id);
         }
 
         // Anak Harian (staf pendukung dibayar harian) — populasi & identitas
@@ -341,13 +350,20 @@ export class AuditDashboardService {
             }
           }
         }
-        for (const [normalizedName, info] of uniqueHarianNames) {
-          const person = await tx.auditDashboardHarianPerson.upsert({
-            where: { normalizedName },
-            create: { name: info.rawName, normalizedName, pin: info.pin },
-            update: {},
-          });
-          harianPersonIdByName.set(normalizedName, person.id);
+        await tx.auditDashboardHarianPerson.createMany({
+          data: [...uniqueHarianNames].map(([normalizedName, info]) => ({
+            name: info.rawName,
+            normalizedName,
+            pin: info.pin,
+          })),
+          skipDuplicates: true,
+        });
+        const harianPersons = await tx.auditDashboardHarianPerson.findMany({
+          where: { normalizedName: { in: [...uniqueHarianNames.keys()] } },
+          select: { id: true, normalizedName: true },
+        });
+        for (const person of harianPersons) {
+          harianPersonIdByName.set(person.normalizedName, person.id);
         }
 
         const maxSortOrder =
