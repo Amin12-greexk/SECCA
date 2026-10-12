@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-    ArrowRight,
     BarChart3,
     CalendarRange,
     Loader2,
     RefreshCw,
+    Timer,
     TrendingUp,
     Upload,
+    Users,
     Wallet,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -43,6 +44,8 @@ import PeriodTrends from './components/PeriodTrends';
 import TotalBjdModal from './components/TotalBjdModal';
 import TotalUpahModal from './components/TotalUpahModal';
 import TurnoverAndShifts from './components/TurnoverAndShifts';
+import BandProgressionPanel from './components/BandProgressionPanel';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 /* ─── Helpers ─────────────────────────────────────────────────── */
 
@@ -58,6 +61,9 @@ const fmtBps = (value: number | null | undefined, fd = 1) =>
 
 const fmtNum = (value: number | null | undefined, fd = 1) =>
     value === null || value === undefined ? '–' : fmt(value, fd);
+
+const DASHBOARD_TABS = ['kapasitas', 'naik-warna', 'tren', 'turnover', 'upload'] as const;
+type DashboardTab = (typeof DASHBOARD_TABS)[number];
 
 /* ─── Stat tile ───────────────────────────────────────────────── */
 
@@ -273,6 +279,23 @@ export default function PerformaPage() {
         message: string;
     }> | null>(null);
     const panelRef = useRef<HTMLDivElement>(null);
+    /** Tab aktif. Dulu semua panel ditumpuk dalam satu halaman sehingga
+     * scroll-nya panjang sekali; sekarang satu topik per tab, dan bisa
+     * ditautkan lewat "?tab=". */
+    const [tab, setTab] = useState<DashboardTab>('kapasitas');
+    const changeTab = useCallback((next: string) => {
+        setTab(next as DashboardTab);
+        const url = new URL(window.location.href);
+        if (next === 'kapasitas') url.searchParams.delete('tab');
+        else url.searchParams.set('tab', next);
+        window.history.replaceState(window.history.state, '', url);
+    }, []);
+    // Dibaca sesudah mount (bukan di initializer useState) supaya render
+    // pertama sama dengan hasil server dan tidak memicu hydration mismatch.
+    useEffect(() => {
+        const fromUrl = new URLSearchParams(window.location.search).get('tab');
+        if (DASHBOARD_TABS.includes(fromUrl as DashboardTab)) setTab(fromUrl as DashboardTab);
+    }, []);
 
     const canManage = isAuthenticated && hasModuleAccess('dashboard', 2);
     /**
@@ -495,10 +518,12 @@ export default function PerformaPage() {
     /** Klik dari ranking/tabel: pilih anak lalu gulir ke panelnya. */
     const selectPerson = useCallback((personId: string) => {
         setSelectedPersonId(personId);
+        // Dipanggil juga dari tab "Lama Naik Warna", padahal detail anak ada di tab Kapasitas.
+        changeTab('kapasitas');
         requestAnimationFrame(() => {
             panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
-    }, []);
+    }, [changeTab]);
 
     // Datang dari /performa/target-bulanan lewat "?person=<id>" -> langsung
     // pilih & gulir ke anak itu. Dibaca dari window.location langsung (bukan
@@ -522,6 +547,12 @@ export default function PerformaPage() {
     const currentStat =
         periodStats.find((stat) => stat.id === summary?.period?.id) ?? null;
     const isEmpty = !loading && !error && periods.length === 0;
+    // Tab dari "?tab=" yang tidak berhak dilihat (mis. upload tanpa login)
+    // jatuh ke Kapasitas, bukan halaman kosong.
+    const activeTab: DashboardTab =
+        (tab === 'upload' && !canManage) || (tab === 'turnover' && !(canManage && prevSummary))
+            ? 'kapasitas'
+            : tab;
 
     // Total Upah gabungan = mitra borong/bulanan + anak harian, supaya kartu
     // ini mencerminkan biaya tenaga kerja perusahaan seutuhnya, bukan cuma mitra.
@@ -574,44 +605,32 @@ export default function PerformaPage() {
                             </button>
                         </div>
                     </div>
+
+                    {/* Tautan ke halaman rekap. Dulu masing-masing jadi kartu selebar
+                        halaman; sekarang cukup satu baris di header. */}
+                    {periods.length > 0 ? (
+                        <div className="flex flex-wrap gap-2 border-t border-gray-100 bg-gray-50/60 px-5 py-2.5">
+                            <Link
+                                href="/performa/target-bulanan"
+                                className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                            >
+                                <TrendingUp className="h-3.5 w-3.5 text-green-600" />
+                                Rekap Bulanan &middot; Target Kapasitas
+                            </Link>
+                            {/* Disembunyikan untuk pengunjung publik: halaman tujuannya perlu login,
+                                jadi menampilkan tautannya cuma jadi jalan buntu. */}
+                            {canSeePayroll && (expenseSummary || harianSummary) ? (
+                                <Link
+                                    href="/performa/payroll"
+                                    className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                                >
+                                    <Wallet className="h-3.5 w-3.5 text-green-600" />
+                                    Payroll &amp; Biaya Borong/Bulanan
+                                </Link>
+                            ) : null}
+                        </div>
+                    ) : null}
                 </div>
-
-                {/* Rekap Bulanan · Target Kapasitas & Payroll — link ke halaman sendiri,
-                    ditaruh di atas (bukan bawah dashboard) supaya tidak kalah tenggelam
-                    oleh panel Kapasitas Mitra yang panjang di bawahnya. */}
-                {periods.length > 0 ? (
-                    <Link
-                        href="/performa/target-bulanan"
-                        className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm transition-colors hover:bg-gray-50"
-                    >
-                        <span className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-                            <TrendingUp className="h-4 w-4 text-green-600" />
-                            Rekap Bulanan &middot; Target Kapasitas
-                        </span>
-                        <span className="flex items-center gap-1 text-xs font-medium text-green-700">
-                            Lihat rekap lengkap
-                            <ArrowRight className="h-3.5 w-3.5" />
-                        </span>
-                    </Link>
-                ) : null}
-
-                {/* Disembunyikan untuk pengunjung publik: halaman tujuannya perlu login,
-                    jadi menampilkan tautannya cuma jadi jalan buntu. */}
-                {canSeePayroll && (expenseSummary || harianSummary) ? (
-                    <Link
-                        href="/performa/payroll"
-                        className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm transition-colors hover:bg-gray-50"
-                    >
-                        <span className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-                            <Wallet className="h-4 w-4 text-green-600" />
-                            Payroll &amp; Biaya Borong/Bulanan
-                        </span>
-                        <span className="flex items-center gap-1 text-xs font-medium text-green-700">
-                            Lihat rincian lengkap
-                            <ArrowRight className="h-3.5 w-3.5" />
-                        </span>
-                    </Link>
-                ) : null}
 
                 {error ? (
                     <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -678,39 +697,95 @@ export default function PerformaPage() {
                     </div>
                 ) : null}
 
-                {/* 01 — Kapasitas per anak + detail lengkap anak terpilih (ranking, grafik, warna identitas
-                    semua digabung jadi satu panel di sini — sebelumnya tersebar di 2 tempat terpisah). */}
-                {rows.length > 0 ? (
-                    <div ref={panelRef} className="scroll-mt-24">
-                        <MitraRanking
-                            rows={rows}
-                            periods={periods}
-                            periodId={periodId}
-                            periodLabel={formatPeriodLabel(summary?.period)}
-                            onSelect={selectPerson}
-                            externalSelectedId={selectedPersonId}
-                            persons={persons}
-                            canManage={canManage}
-                            canSeePayroll={canSeePayroll}
-                        />
-                        <div className="mt-2 text-sm text-gray-600 bg-white border border-gray-200 px-4 py-2 rounded-lg shadow-sm inline-flex items-center gap-2">
-                            <CalendarRange className="h-4 w-4 text-indigo-500" />
-                            Total Hari Kerja Periode Ini: <span className="font-bold text-gray-900">{stats?.totalHk ?? 0} HK</span>
+                {/* Satu topik per tab. Dulu semua panel ditumpuk ke bawah, sehingga
+                    untuk sampai ke tren/upload harus scroll melewati panel Kapasitas
+                    yang panjang. */}
+                {periods.length > 0 ? (
+                    <Tabs value={activeTab} onValueChange={changeTab} className="space-y-4">
+                        <div className="-mx-1 overflow-x-auto px-1">
+                            <TabsList>
+                                <TabsTrigger value="kapasitas">
+                                    <BarChart3 className="h-4 w-4" aria-hidden />
+                                    Kapasitas Mitra
+                                </TabsTrigger>
+                                <TabsTrigger value="naik-warna">
+                                    <Timer className="h-4 w-4" aria-hidden />
+                                    Lama Naik Warna
+                                </TabsTrigger>
+                                <TabsTrigger value="tren">
+                                    <TrendingUp className="h-4 w-4" aria-hidden />
+                                    Tren Perusahaan
+                                </TabsTrigger>
+                                {canManage && prevSummary ? (
+                                    <TabsTrigger value="turnover">
+                                        <Users className="h-4 w-4" aria-hidden />
+                                        Keluar-Masuk
+                                    </TabsTrigger>
+                                ) : null}
+                                {canManage ? (
+                                    <TabsTrigger value="upload">
+                                        <Upload className="h-4 w-4" aria-hidden />
+                                        Upload
+                                    </TabsTrigger>
+                                ) : null}
+                            </TabsList>
                         </div>
-                    </div>
+
+                        {/* Kapasitas per anak + detail lengkap anak terpilih (ranking, grafik, warna identitas). */}
+                        <TabsContent value="kapasitas">
+                            {rows.length > 0 ? (
+                                <div ref={panelRef} className="scroll-mt-24">
+                                    <MitraRanking
+                                        rows={rows}
+                                        periods={periods}
+                                        periodId={periodId}
+                                        periodLabel={formatPeriodLabel(summary?.period)}
+                                        onSelect={selectPerson}
+                                        externalSelectedId={selectedPersonId}
+                                        persons={persons}
+                                        canManage={canManage}
+                                        canSeePayroll={canSeePayroll}
+                                    />
+                                    <div className="mt-2 text-sm text-gray-600 bg-white border border-gray-200 px-4 py-2 rounded-lg shadow-sm inline-flex items-center gap-2">
+                                        <CalendarRange className="h-4 w-4 text-indigo-500" />
+                                        Total Hari Kerja Periode Ini: <span className="font-bold text-gray-900">{stats?.totalHk ?? 0} HK</span>
+                                    </div>
+                                </div>
+                            ) : null}
+                        </TabsContent>
+
+                        {/* Berapa minggu anak merah → kuning → hijau, plus perkiraannya. */}
+                        <TabsContent value="naik-warna">
+                            <BandProgressionPanel
+                                periods={periods}
+                                summaryScope={summaryScope}
+                                onSelect={selectPerson}
+                            />
+                        </TabsContent>
+
+                        <TabsContent value="tren">
+                            {periodStats.length > 0 ? <PeriodTrends stats={periodStats} /> : null}
+                        </TabsContent>
+
+                        {/* Turnover & Shifts (Khusus Manager) */}
+                        {canManage && prevSummary ? (
+                            <TabsContent value="turnover">
+                                <TurnoverAndShifts currentSummary={summary} prevSummary={prevSummary} />
+                            </TabsContent>
+                        ) : null}
+
+                        {canManage ? (
+                            <TabsContent value="upload">
+                                <UploadCard onUploaded={handleUploaded} onWarnings={setImportWarnings} />
+                            </TabsContent>
+                        ) : null}
+                    </Tabs>
                 ) : null}
 
-                {/* Turnover & Shifts (Khusus Manager) */}
-                {canManage && prevSummary && (
-                    <TurnoverAndShifts currentSummary={summary} prevSummary={prevSummary} />
-                )}
-
-                {/* 02 — Tren antar periode (perusahaan) */}
-                {periodStats.length > 0 ? <PeriodTrends stats={periodStats} /> : null}
-
-                {/* Upload Data ditaruh paling bawah — bukan langkah yang dilihat tiap
-                    kunjungan, jadi tidak perlu menyita posisi teratas dashboard. */}
-                {canManage ? <UploadCard onUploaded={handleUploaded} onWarnings={setImportWarnings} /> : null}
+                {/* Belum ada periode sama sekali: tab belum muncul, tapi upload tetap harus bisa. */}
+                {canManage && isEmpty ? (
+                    <UploadCard onUploaded={handleUploaded} onWarnings={setImportWarnings} />
+                ) : null}
 
                 {importWarnings && importWarnings.length > 0 ? (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">

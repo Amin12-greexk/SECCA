@@ -1,4 +1,5 @@
 import { Workbook } from 'exceljs';
+import JSZip from 'jszip';
 
 /**
  * Parser workbook Excel untuk dashboard performa manual.
@@ -1595,6 +1596,53 @@ function assertSupportedFormat(buffer: Buffer, fileName?: string): void {
   }
 }
 
+/** `<row .../>` atau `<row ...>` yang isinya cuma sel kosong ber-style (`<c .../>`). */
+const EMPTY_ROW_PATTERNS = [
+  /<row\b[^>]*\/>/g,
+  /<row\b[^>]*>(?:\s*<c\b[^>]*\/>)*\s*<\/row>/g,
+];
+
+/**
+ * Buang baris tanpa nilai dari XML sheet sebelum dibaca ExcelJS.
+ *
+ * Workbook mingguan di lapangan sering punya format/border yang ditarik
+ * sampai baris terakhir Excel: sheet "REKAP PAYROLL" berisi ±170 baris data
+ * tercatat 1.048.576 baris (±80 MB XML per sheet). ExcelJS memuat semua
+ * baris kosong itu sebagai objek, dan grid di bawah menjalaninya satu per
+ * satu — upload 13 MB makan ±17 detik, hampir semuanya untuk baris kosong.
+ *
+ * Yang dibuang HANYA baris yang semua selnya self-closing (`<c r=".." s=".."/>`
+ * = tanpa nilai, tanpa formula). Atribut `r` di tiap baris/sel yang tersisa
+ * tetap, jadi nomor baris & kolom tidak bergeser. Kalau ada yang gagal,
+ * dipakai buffer aslinya — ini optimasi, bukan syarat.
+ */
+async function stripEmptyRows(buffer: Buffer): Promise<Buffer> {
+  try {
+    const zip = await JSZip.loadAsync(buffer);
+    let changed = false;
+    for (const name of Object.keys(zip.files)) {
+      if (!/^xl\/worksheets\/[^/]+\.xml$/.test(name)) continue;
+      const file = zip.file(name);
+      if (!file) continue;
+      const xml = await file.async('string');
+      const compact = EMPTY_ROW_PATTERNS.reduce(
+        (text, pattern) => text.replace(pattern, ''),
+        xml,
+      );
+      if (compact.length !== xml.length) {
+        zip.file(name, compact);
+        changed = true;
+      }
+    }
+    if (!changed) return buffer;
+    // STORE (tanpa kompresi): buffer ini cuma dibaca ulang di memori, jadi
+    // mengompres lagi hanya membuang waktu.
+    return await zip.generateAsync({ type: 'nodebuffer', compression: 'STORE' });
+  } catch {
+    return buffer;
+  }
+}
+
 export async function parseWorkbook(
   buffer: Buffer,
   fileName?: string,
@@ -1603,7 +1651,8 @@ export async function parseWorkbook(
 
   const workbook = new Workbook();
   try {
-    await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+    const compact = await stripEmptyRows(buffer);
+    await workbook.xlsx.load(compact as unknown as ArrayBuffer);
   } catch {
     throw new ExcelParseError(
       'File Excel gagal dibaca. Pastikan file .xlsx tidak rusak atau terproteksi password.',
