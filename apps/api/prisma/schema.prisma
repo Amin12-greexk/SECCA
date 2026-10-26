@@ -646,12 +646,21 @@ model PayrollEntry {
 /// Dashboard performa berbasis upload Excel manual.
 /// Terpisah penuh dari tabel produksi (RawBatch, ProductionLot, dst) —
 /// nilai Excel adalah source of truth dan tidak pernah dipakai lintas modul.
+/// Format Excel-nya sama persis, tapi file-nya beda: PERFORMA untuk dashboard
+/// /performa, PEMBAYARAN untuk yang dilihat mitra di portal /cek (gaji, riwayat
+/// pembayaran, barang jadi). Keduanya di-upload terpisah & tidak saling timpa.
+enum AuditDashboardDataset {
+  PERFORMA
+  PEMBAYARAN
+}
+
 model AuditDashboardImport {
   id               String                     @id @default(uuid())
   fileName         String
   fileHash         String?
   uploadedByUserId String?
   status           AuditDashboardImportStatus @default(PENDING)
+  dataset          AuditDashboardDataset      @default(PERFORMA)
   totalSheets      Int                        @default(0)
   totalRows        Int                        @default(0)
   errorJson        Json?
@@ -669,6 +678,8 @@ model AuditDashboardImport {
 model AuditDashboardPeriod {
   id                       String    @id @default(uuid())
   importId                 String
+  /// Data mana periode ini milik: dashboard performa atau portal /cek.
+  dataset                  AuditDashboardDataset @default(PERFORMA)
   sheetName                String
   label                    String
   startDate                DateTime?
@@ -688,7 +699,7 @@ model AuditDashboardPeriod {
   harianRows AuditDashboardHarianRow[]
 
   @@index([importId])
-  @@index([sortOrder, createdAt])
+  @@index([dataset, sortOrder, createdAt])
 }
 
 model AuditDashboardPerson {
@@ -736,6 +747,27 @@ model AuditDashboardMetric {
   @@unique([periodId, personId])
   @@index([personId, createdAt])
   @@index([periodId])
+}
+
+/// PIN login portal mitra (/cek): mitra cek performa & gajinya sendiri cukup
+/// dengan PIN, tanpa akun & tanpa nama. Diisi dari file PIN perusahaan yang
+/// di-upload manager (diganti total tiap upload) — bukan dari kolom PIN di
+/// Excel performa, karena di sana satu PIN bisa dipakai beberapa orang.
+/// Dicocokkan ke AuditDashboardPerson lewat normalizedName (+ alias opsional)
+/// saat login, jadi periode yang di-upload belakangan otomatis ikut.
+model MitraPortalPin {
+  id             String   @id @default(uuid())
+  name           String
+  normalizedName String   @unique
+  /// Nama lain di Excel performa (sudah dinormalisasi), mis. nama pendek.
+  aliases        String[] @default([])
+  /// HMAC-SHA256 PIN (hex) dengan rahasia server — PIN tidak disimpan polos,
+  /// tapi tetap bisa dicari langsung karena login hanya memakai PIN. Unik:
+  /// satu PIN = satu orang. Null = baris lama sebelum login PIN-saja, harus
+  /// upload ulang file PIN supaya bisa dipakai masuk.
+  pinKey         String?  @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 /**

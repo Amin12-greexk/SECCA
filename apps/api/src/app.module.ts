@@ -23,6 +23,7 @@ import { MitraOrdersModule } from './modules/mitra-orders/mitra-orders.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { BarangJadiModule } from './modules/barang-jadi/barang-jadi.module';
 import { AuditDashboardModule } from './modules/audit-dashboard/audit-dashboard.module';
+import { MitraPortalModule } from './modules/mitra-portal/mitra-portal.module';
 import { AuditMonthlyModule } from './modules/audit-monthly/audit-monthly.module';
 import { ReportsModule } from './modules/reports/reports.module';
 
@@ -53,6 +54,7 @@ import { ProductionRoomsModule } from './modules/production-rooms/production-roo
     AttendanceModule,
     BarangJadiModule,
     AuditDashboardModule,
+    MitraPortalModule,
     AuditMonthlyModule,
     ReportsModule,
   ],

@@ -4873,3 +4873,191 @@ export async function getTrainerSummary(trainerId?: string): Promise<TrainerSumm
   const json = await response.json();
   return unwrap<TrainerSummaryResponse>(json);
 }
+
+/* ─── Portal Mitra (/cek): mitra cek performa & gaji sendiri pakai PIN ── */
+
+export interface MitraPortalSession {
+  token: string;
+  name: string;
+  expiresAt: string;
+}
+
+export interface MitraPortalWeek {
+  period: PerformaPeriodRef;
+  row: PerformaRow;
+}
+
+export interface MitraPortalHarianWeek {
+  period: PerformaPeriodRef;
+  row: {
+    bagian: string | null;
+    hariKerjaRaw: string | null;
+    hariKerja: number | null;
+    gapokRp: number | null;
+    upahRp: number | null;
+    upahLemburWeekdayRp: number | null;
+    upahLemburWeekendRp: number | null;
+    uangMakanRp: number | null;
+    premiRp: number | null;
+    tunjanganRp: number | null;
+    potonganRp: number | null;
+    totalUpahRp: number | null;
+  };
+}
+
+export interface MitraPortalData {
+  name: string;
+  /** Minggu sebagai mitra borongan/bulanan (performa + gaji). */
+  periods: MitraPortalWeek[];
+  /** Minggu sebagai anak harian (hanya gaji). */
+  harian: MitraPortalHarianWeek[];
+}
+
+export interface MitraPinStatus {
+  total: number;
+  matched: number;
+  /** PIN lama (sebelum login PIN-saja) yang belum bisa dipakai masuk. */
+  needsReupload: number;
+  unmatched: Array<{ name: string; suggestions: string[] }>;
+  /** Nama lengkap yang sudah dihubungkan ke nama lain di Excel performa. */
+  linked: Array<{ name: string; excelNames: string[] }>;
+  /** Nama di Excel performa yang belum dimiliki PIN mana pun (terbaru dulu). */
+  excelNames: string[];
+  updatedAt: string | null;
+  issues?: Array<{ row: string; name: string; reason: string }>;
+}
+
+/** Sengaja TIDAK memakai getAuthHeaders: token portal mitra terpisah dari
+ * token login aplikasi (yang mungkin juga ada di browser yang sama). */
+export async function mitraPortalLogin(
+  pin: string,
+): Promise<MitraPortalSession> {
+  const response = await fetch(`${API_BASE_URL}/api/mitra-portal/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pin }),
+  });
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal masuk. Coba lagi."));
+  }
+  return unwrap<MitraPortalSession>(await response.json());
+}
+
+export class MitraPortalSessionError extends Error {}
+
+export async function getMitraPortalData(
+  token: string,
+): Promise<MitraPortalData> {
+  const response = await fetch(`${API_BASE_URL}/api/mitra-portal/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (response.status === 401) {
+    throw new MitraPortalSessionError(
+      await readApiError(response, "Sesi berakhir. Masuk lagi."),
+    );
+  }
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal memuat data."));
+  }
+  return unwrap<MitraPortalData>(await response.json());
+}
+
+export async function uploadMitraPins(file: File): Promise<MitraPinStatus> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${API_BASE_URL}/api/mitra-portal/pins`, {
+    method: "POST",
+    headers: getAuthHeaders({ json: false }),
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal mengunggah file PIN."));
+  }
+  return unwrap<MitraPinStatus>(await response.json());
+}
+
+/* Data pembayaran mitra: Excel format sama dengan performa, tapi file &
+ * datanya terpisah — hanya dipakai portal /cek, tidak mengubah dashboard. */
+
+export interface MitraPaymentPeriod {
+  id: string;
+  label: string;
+  sheetName: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  year?: number | null;
+  sortOrder: number;
+  totalMetrics: number;
+  totalHarian: number;
+  createdAt: string;
+}
+
+export async function uploadMitraPaymentData(
+  file: File,
+): Promise<PerformaImportResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${API_BASE_URL}/api/mitra-portal/data`, {
+    method: "POST",
+    headers: getAuthHeaders({ json: false }),
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal mengunggah file."));
+  }
+  return unwrap<PerformaImportResponse>(await response.json());
+}
+
+export async function getMitraPaymentPeriods(): Promise<MitraPaymentPeriod[]> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/mitra-portal/data/periods`,
+    { headers: getAuthHeaders() },
+  );
+  if (!response.ok) {
+    throw new Error(
+      await readApiError(response, "Gagal memuat data pembayaran."),
+    );
+  }
+  return unwrap<MitraPaymentPeriod[]>(await response.json());
+}
+
+export async function resetMitraPaymentData(): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  const response = await fetch(`${API_BASE_URL}/api/mitra-portal/data/reset`, {
+    method: "POST",
+    headers: getAuthHeaders({ json: false }),
+  });
+  if (!response.ok) {
+    throw new Error(
+      await readApiError(response, "Gagal mereset data pembayaran."),
+    );
+  }
+  return unwrap<{ success: boolean; message: string }>(await response.json());
+}
+
+export async function linkMitraExcelName(
+  name: string,
+  excelName: string | null,
+): Promise<MitraPinStatus> {
+  const response = await fetch(`${API_BASE_URL}/api/mitra-portal/pins/link`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ name, excelName }),
+  });
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal menghubungkan nama."));
+  }
+  return unwrap<MitraPinStatus>(await response.json());
+}
+
+export async function getMitraPinStatus(): Promise<MitraPinStatus> {
+  const response = await fetch(`${API_BASE_URL}/api/mitra-portal/pins/status`, {
+    headers: getAuthHeaders({ json: false }),
+  });
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal memuat status PIN."));
+  }
+  return unwrap<MitraPinStatus>(await response.json());
+}

@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import { AuditDashboardImportStatus, Prisma } from '@prisma/client';
+import {
+  AuditDashboardDataset,
+  AuditDashboardImportStatus,
+  Prisma,
+} from '@prisma/client';
 import { badRequest, notFound } from '../../common/errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -239,17 +243,42 @@ function stripPayrollFields(row: Record<string, unknown>) {
   return clean;
 }
 
+/**
+ * Dashboard /performa hanya membaca data PERFORMA. Data PEMBAYARAN (file Excel
+ * terpisah dengan format sama) hanya untuk portal mitra /cek — lewat
+ * getPersonHistory / getHarianHistory.
+ */
+const PERFORMA = AuditDashboardDataset.PERFORMA;
+const PEMBAYARAN = AuditDashboardDataset.PEMBAYARAN;
+
 @Injectable()
 export class AuditDashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async resetData() {
+  /**
+   * Hapus semua data satu dataset saja; dataset lainnya tidak tersentuh.
+   * Periode (beserta metric & baris harian) ikut terhapus lewat cascade dari
+   * import. Person yang tidak lagi punya data di dataset mana pun dibuang.
+   */
+  async resetData(dataset: AuditDashboardDataset = PERFORMA) {
     return this.prisma.$transaction(async (tx) => {
-      await tx.auditDashboardMetric.deleteMany();
-      await tx.auditDashboardPeriod.deleteMany();
-      await tx.auditDashboardImport.deleteMany();
-      await tx.auditDashboardPerson.deleteMany();
-      return { success: true, message: 'Data performa berhasil direset.' };
+      await tx.auditDashboardImport.deleteMany({ where: { dataset } });
+      // Periode lama sebelum kolom dataset tidak selalu punya import yang
+      // sama datasetnya, jadi ikut dihapus langsung.
+      await tx.auditDashboardPeriod.deleteMany({ where: { dataset } });
+      await tx.auditDashboardPerson.deleteMany({
+        where: { metrics: { none: {} } },
+      });
+      await tx.auditDashboardHarianPerson.deleteMany({
+        where: { rows: { none: {} } },
+      });
+      return {
+        success: true,
+        message:
+          dataset === PEMBAYARAN
+            ? 'Data pembayaran mitra berhasil direset.'
+            : 'Data performa berhasil direset.',
+      };
     });
   }
 
@@ -259,8 +288,9 @@ export class AuditDashboardService {
     buffer: Buffer;
     fileName: string;
     userId?: string | null;
+    dataset?: AuditDashboardDataset;
   }) {
-    const { buffer, fileName, userId } = params;
+    const { buffer, fileName, userId, dataset = PERFORMA } = params;
 
     if (!/\.(xlsx|xls)$/i.test(fileName)) {
       badRequest(
@@ -280,6 +310,7 @@ export class AuditDashboardService {
           data: {
             fileName,
             fileHash,
+            dataset,
             uploadedByUserId: userId ?? null,
             status: AuditDashboardImportStatus.FAILED,
             errorJson: { message: error.message },
@@ -298,6 +329,7 @@ export class AuditDashboardService {
           data: {
             fileName,
             fileHash,
+            dataset,
             uploadedByUserId: userId ?? null,
             status: AuditDashboardImportStatus.COMPLETED,
             totalSheets: parsed.totalSheets,
@@ -369,6 +401,7 @@ export class AuditDashboardService {
         const maxSortOrder =
           (
             await tx.auditDashboardPeriod.aggregate({
+              where: { dataset },
               _max: { sortOrder: true },
             })
           )._max.sortOrder ?? -1;
@@ -394,8 +427,12 @@ export class AuditDashboardService {
           const existing = await tx.auditDashboardPeriod.findFirst({
             where:
               period.startDate && period.endDate
-                ? { startDate: period.startDate, endDate: period.endDate }
-                : { label: period.label },
+                ? {
+                    dataset,
+                    startDate: period.startDate,
+                    endDate: period.endDate,
+                  }
+                : { dataset, label: period.label },
             orderBy: { createdAt: 'asc' },
           });
 
@@ -433,6 +470,7 @@ export class AuditDashboardService {
           const created = await tx.auditDashboardPeriod.create({
             data: {
               importId: importRecord.id,
+              dataset,
               sheetName: period.sheetName,
               label: period.label,
               startDate: period.startDate,
@@ -620,11 +658,12 @@ export class AuditDashboardService {
 
   /* ── Periods ────────────────────────────────────────────────── */
 
-  async getPeriods() {
+  async getPeriods(dataset: AuditDashboardDataset = PERFORMA) {
     const periods = await this.prisma.auditDashboardPeriod.findMany({
+      where: { dataset },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       include: {
-        _count: { select: { metrics: true } },
+        _count: { select: { metrics: true, harianRows: true } },
       },
     });
 
@@ -637,6 +676,7 @@ export class AuditDashboardService {
       year: period.year,
       sortOrder: period.sortOrder,
       totalMetrics: period._count.metrics,
+      totalHarian: period._count.harianRows,
       createdAt: period.createdAt,
     }));
   }
@@ -651,10 +691,11 @@ export class AuditDashboardService {
    */
   async getSummary(periodId?: string, includePayroll = false) {
     const period = periodId
-      ? await this.prisma.auditDashboardPeriod.findUnique({
-          where: { id: periodId },
+      ? await this.prisma.auditDashboardPeriod.findFirst({
+          where: { id: periodId, dataset: PERFORMA },
         })
       : await this.prisma.auditDashboardPeriod.findFirst({
+          where: { dataset: PERFORMA },
           orderBy: [{ sortOrder: 'desc' }, { createdAt: 'desc' }],
         });
 
@@ -692,10 +733,11 @@ export class AuditDashboardService {
 
   async getExpenseSummary(periodId?: string) {
     const period = periodId
-      ? await this.prisma.auditDashboardPeriod.findUnique({
-          where: { id: periodId },
+      ? await this.prisma.auditDashboardPeriod.findFirst({
+          where: { id: periodId, dataset: PERFORMA },
         })
       : await this.prisma.auditDashboardPeriod.findFirst({
+          where: { dataset: PERFORMA },
           orderBy: [{ sortOrder: 'desc' }, { createdAt: 'desc' }],
         });
 
@@ -856,10 +898,11 @@ export class AuditDashboardService {
    */
   async getHarianSummary(periodId?: string) {
     const period = periodId
-      ? await this.prisma.auditDashboardPeriod.findUnique({
-          where: { id: periodId },
+      ? await this.prisma.auditDashboardPeriod.findFirst({
+          where: { id: periodId, dataset: PERFORMA },
         })
       : await this.prisma.auditDashboardPeriod.findFirst({
+          where: { dataset: PERFORMA },
           orderBy: [{ sortOrder: 'desc' }, { createdAt: 'desc' }],
         });
 
@@ -941,6 +984,7 @@ export class AuditDashboardService {
    */
   async getPeriodStats() {
     const periods = await this.prisma.auditDashboardPeriod.findMany({
+      where: { dataset: PERFORMA },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       include: { metrics: true },
     });
@@ -981,6 +1025,102 @@ export class AuditDashboardService {
         };
       }),
     };
+  }
+
+  /* ── Riwayat satu mitra (portal /cek) ───────────────────────── */
+
+  /**
+   * Semua periode DATA PEMBAYARAN milik satu mitra (bisa >1 record person
+   * kalau namanya di Excel beda-beda, lihat MitraPortalPin.aliases), lengkap
+   * dengan upah —
+   * pemanggilnya portal mitra yang SUDAH memverifikasi nama + PIN, jadi
+   * kolom payroll ikut. PIN dari Excel tetap dibuang (juga PIN rekan kerja
+   * di LP bersama): tidak relevan untuk pemiliknya dan isinya tidak konsisten
+   * antar periode.
+   */
+  async getPersonHistory(personIds: string[]) {
+    if (personIds.length === 0) return [];
+
+    const metrics = await this.prisma.auditDashboardMetric.findMany({
+      where: {
+        personId: { in: personIds },
+        period: { dataset: PEMBAYARAN },
+      },
+      include: { person: true, period: true },
+    });
+
+    return metrics
+      .sort(
+        (a, b) =>
+          a.period.sortOrder - b.period.sortOrder ||
+          a.period.createdAt.getTime() - b.period.createdAt.getTime(),
+      )
+      .map((metric) => ({
+        period: {
+          id: metric.period.id,
+          label: metric.period.label,
+          sheetName: metric.period.sheetName,
+          startDate: metric.period.startDate,
+          endDate: metric.period.endDate,
+          year: metric.period.year,
+        },
+        row: (() => {
+          const row = this.toRow(metric);
+          // LP borongan bersama membawa PIN rekan kerjanya -> dibuang.
+          return {
+            ...row,
+            pin: null,
+            lpRows: row.lpRows.map((lp) => omit(lp, ['pin', 'workerPins'])),
+          };
+        })(),
+      }));
+  }
+
+  /**
+   * Riwayat gaji satu Anak Harian (Cleaning Service, QC, Trainer, dst) untuk
+   * portal /cek. Hanya kolom gaji — anak harian tidak punya kapasitas/BJD.
+   */
+  async getHarianHistory(personIds: string[]) {
+    if (personIds.length === 0) return [];
+
+    const rows = await this.prisma.auditDashboardHarianRow.findMany({
+      where: {
+        personId: { in: personIds },
+        period: { dataset: PEMBAYARAN },
+      },
+      include: { period: true },
+    });
+
+    return rows
+      .sort(
+        (a, b) =>
+          a.period.sortOrder - b.period.sortOrder ||
+          a.period.createdAt.getTime() - b.period.createdAt.getTime(),
+      )
+      .map((row) => ({
+        period: {
+          id: row.period.id,
+          label: row.period.label,
+          sheetName: row.period.sheetName,
+          startDate: row.period.startDate,
+          endDate: row.period.endDate,
+          year: row.period.year,
+        },
+        row: {
+          bagian: row.bagian,
+          hariKerjaRaw: row.hariKerjaRaw,
+          hariKerja: row.hariKerja,
+          gapokRp: row.gapokRp,
+          upahRp: row.upahRp,
+          upahLemburWeekdayRp: row.upahLemburWeekdayRp,
+          upahLemburWeekendRp: row.upahLemburWeekendRp,
+          uangMakanRp: row.uangMakanRp,
+          premiRp: row.premiRp,
+          tunjanganRp: row.tunjanganRp,
+          potonganRp: row.potonganRp,
+          totalUpahRp: row.totalUpahRp,
+        },
+      }));
   }
 
   private toRow(metric: MetricWithPerson) {
@@ -1088,9 +1228,12 @@ export class AuditDashboardService {
   /* ── Persons ────────────────────────────────────────────────── */
 
   async getPersons() {
+    // Mitra yang hanya ada di data pembayaran tidak ditampilkan di dashboard.
+    const inPerforma = { period: { dataset: PERFORMA } };
     const persons = await this.prisma.auditDashboardPerson.findMany({
+      where: { metrics: { some: inPerforma } },
       orderBy: { name: 'asc' },
-      include: { _count: { select: { metrics: true } } },
+      include: { _count: { select: { metrics: { where: inPerforma } } } },
     });
 
     return persons.map((person) => ({
@@ -1149,11 +1292,12 @@ export class AuditDashboardService {
 
     const [periods, metrics] = await Promise.all([
       this.prisma.auditDashboardPeriod.findMany({
+        where: { dataset: PERFORMA },
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
         select: { id: true, label: true, sortOrder: true },
       }),
       this.prisma.auditDashboardMetric.findMany({
-        where: { personId: { in: personIds } },
+        where: { personId: { in: personIds }, period: { dataset: PERFORMA } },
       }),
     ]);
 
