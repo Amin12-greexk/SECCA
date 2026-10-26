@@ -136,7 +136,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   // Pages that don't need sidebar/topbar
-  const publicPages = ['/login', '/register/mitra', '/not-found', '/unauthorized'];
+  const publicPages = ['/login', '/register/mitra', '/not-found', '/unauthorized', '/cek'];
   const isPublicPage = publicPages.includes(pathname);
 
   if (isPublicPage || !isAuthenticated) {
