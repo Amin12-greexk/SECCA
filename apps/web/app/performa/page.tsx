@@ -45,6 +45,11 @@ import TotalBjdModal from './components/TotalBjdModal';
 import TotalUpahModal from './components/TotalUpahModal';
 import TurnoverAndShifts from './components/TurnoverAndShifts';
 import BandProgressionPanel from './components/BandProgressionPanel';
+import HarianPayrollPanel from './components/HarianPayrollPanel';
+import MitraPayrollModal from './components/MitraPayrollModal';
+import PayrollExpensePanel from './components/PayrollExpensePanel';
+import MitraPaymentCard from './components/MitraPaymentCard';
+import MitraPinCard from './components/MitraPinCard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 /* ─── Helpers ─────────────────────────────────────────────────── */
@@ -62,7 +67,7 @@ const fmtBps = (value: number | null | undefined, fd = 1) =>
 const fmtNum = (value: number | null | undefined, fd = 1) =>
     value === null || value === undefined ? '–' : fmt(value, fd);
 
-const DASHBOARD_TABS = ['kapasitas', 'naik-warna', 'tren', 'turnover', 'upload'] as const;
+const DASHBOARD_TABS = ['kapasitas', 'naik-warna', 'tren', 'penggajian', 'turnover', 'upload'] as const;
 type DashboardTab = (typeof DASHBOARD_TABS)[number];
 
 /* ─── Stat tile ───────────────────────────────────────────────── */
@@ -202,8 +207,10 @@ function UploadCard({
                 <div className="flex items-center gap-2">
                     <Upload className="h-4 w-4 text-green-600" />
                     <div>
-                        <h2 className="text-sm font-semibold text-gray-800">Upload Data</h2>
-                        <p className="text-xs text-gray-400">File .xlsx — satu sheet = satu periode</p>
+                        <h2 className="text-sm font-semibold text-gray-800">Upload Data Performa</h2>
+                        <p className="text-xs text-gray-400">
+                            Untuk dashboard ini • file .xlsx — satu sheet = satu periode
+                        </p>
                     </div>
                 </div>
 
@@ -270,6 +277,10 @@ export default function PerformaPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+    /** Naik tiap data pembayaran mitra berubah -> status PIN dimuat ulang. */
+    const [paymentVersion, setPaymentVersion] = useState(0);
+    /** Mitra yang rincian gajinya dibuka dari tab Penggajian. */
+    const [payrollPersonId, setPayrollPersonId] = useState<string | null>(null);
     const [showBjdModal, setShowBjdModal] = useState(false);
     const [showUpahModal, setShowUpahModal] = useState(false);
     const [importWarnings, setImportWarnings] = useState<Array<{
@@ -550,7 +561,9 @@ export default function PerformaPage() {
     // Tab dari "?tab=" yang tidak berhak dilihat (mis. upload tanpa login)
     // jatuh ke Kapasitas, bukan halaman kosong.
     const activeTab: DashboardTab =
-        (tab === 'upload' && !canManage) || (tab === 'turnover' && !(canManage && prevSummary))
+        (tab === 'upload' && !canManage) ||
+        (tab === 'turnover' && !(canManage && prevSummary)) ||
+        (tab === 'penggajian' && !canSeePayroll)
             ? 'kapasitas'
             : tab;
 
@@ -716,6 +729,12 @@ export default function PerformaPage() {
                                     <TrendingUp className="h-4 w-4" aria-hidden />
                                     Tren Perusahaan
                                 </TabsTrigger>
+                                {canSeePayroll ? (
+                                    <TabsTrigger value="penggajian">
+                                        <Wallet className="h-4 w-4" aria-hidden />
+                                        Penggajian
+                                    </TabsTrigger>
+                                ) : null}
                                 {canManage && prevSummary ? (
                                     <TabsTrigger value="turnover">
                                         <Users className="h-4 w-4" aria-hidden />
@@ -767,6 +786,23 @@ export default function PerformaPage() {
                             {periodStats.length > 0 ? <PeriodTrends stats={periodStats} /> : null}
                         </TabsContent>
 
+                        {/* Gaji mitra borong/bulanan + anak harian periode ini. Sumbernya
+                            data PERFORMA (Upload Data Performa), bukan data pembayaran
+                            yang dilihat mitra di halaman cek. Perlu login. */}
+                        {canSeePayroll ? (
+                            <TabsContent value="penggajian" className="space-y-5">
+                                <PayrollExpensePanel
+                                    data={expenseSummary}
+                                    periodLabel={formatPeriodLabel(summary?.period)}
+                                    onSelect={setPayrollPersonId}
+                                />
+                                <HarianPayrollPanel
+                                    data={harianSummary}
+                                    periodLabel={formatPeriodLabel(summary?.period)}
+                                />
+                            </TabsContent>
+                        ) : null}
+
                         {/* Turnover & Shifts (Khusus Manager) */}
                         {canManage && prevSummary ? (
                             <TabsContent value="turnover">
@@ -775,8 +811,10 @@ export default function PerformaPage() {
                         ) : null}
 
                         {canManage ? (
-                            <TabsContent value="upload">
+                            <TabsContent value="upload" className="space-y-4">
                                 <UploadCard onUploaded={handleUploaded} onWarnings={setImportWarnings} />
+                                <MitraPaymentCard onChanged={() => setPaymentVersion((v) => v + 1)} />
+                                <MitraPinCard refreshKey={paymentVersion} />
                             </TabsContent>
                         ) : null}
                     </Tabs>
@@ -828,6 +866,13 @@ export default function PerformaPage() {
                 summary={stats}
                 periodLabel={formatPeriodLabel(summary?.period)}
                 rows={rows}
+            />
+
+            <MitraPayrollModal
+                isOpen={canSeePayroll && payrollPersonId !== null}
+                onClose={() => setPayrollPersonId(null)}
+                row={rows.find((row) => row.personId === payrollPersonId) ?? null}
+                periodLabel={formatPeriodLabel(summary?.period)}
             />
 
             <TotalUpahModal
