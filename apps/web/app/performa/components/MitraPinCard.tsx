@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { ExternalLink, KeyRound, Link2, Loader2, Unlink, Upload } from 'lucide-react';
+import { ExternalLink, KeyRound, Link2, Loader2, RotateCcw, Unlink, Upload } from 'lucide-react';
 import {
     getMitraPinStatus,
     linkMitraExcelName,
+    resetMitraPassword,
     uploadMitraPins,
     type MitraPinStatus,
 } from '@/lib/api';
@@ -62,6 +63,20 @@ export default function MitraPinCard({ refreshKey }: { refreshKey?: unknown }) {
         }
     };
 
+    const resetPassword = async (name: string) => {
+        if (!confirm(`Reset password ${name}? Mitra ini masuk lagi dengan PIN-nya dan diminta membuat password baru.`)) {
+            return;
+        }
+        try {
+            const result = await resetMitraPassword(name);
+            setStatus((prev) => ({ ...result, issues: prev?.issues }));
+            toast.success(`Password ${name} direset — masuk lagi dengan PIN`);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Gagal mereset password.');
+        }
+    };
+
+    const withPassword = status?.withPassword ?? [];
     const issues = status?.issues ?? [];
     const unmatched = status?.unmatched ?? [];
     const linked = status?.linked ?? [];
@@ -150,6 +165,32 @@ export default function MitraPinCard({ refreshKey }: { refreshKey?: unknown }) {
                                 excelNames={status?.excelNames ?? []}
                                 onLink={(excelName) => link(item.name, excelName)}
                             />
+                        ))}
+                    </ul>
+                </details>
+            ) : null}
+
+            {withPassword.length > 0 ? (
+                <details className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-700">
+                    <summary className="cursor-pointer font-medium">
+                        {withPassword.length} mitra sudah memakai password
+                    </summary>
+                    <p className="mt-1.5 text-gray-500">
+                        Mitra ini masuk dengan nama lengkap + password, PIN-nya tidak berlaku. Kalau lupa password,
+                        reset di sini supaya bisa masuk dengan PIN lagi.
+                    </p>
+                    <ul className="mt-2 max-h-60 space-y-1 overflow-y-auto">
+                        {withPassword.map((name) => (
+                            <li key={name} className="flex items-center gap-2">
+                                <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => resetPassword(name)}
+                                    className="inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-gray-500 hover:bg-gray-200 hover:text-gray-800"
+                                >
+                                    <RotateCcw className="h-3 w-3" /> Reset
+                                </button>
+                            </li>
                         ))}
                     </ul>
                 </details>

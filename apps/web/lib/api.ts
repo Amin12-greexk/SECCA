@@ -4879,6 +4879,8 @@ export async function getTrainerSummary(trainerId?: string): Promise<TrainerSumm
 export interface MitraPortalSession {
   token: string;
   name: string;
+  /** Sudah mengganti PIN dengan password sendiri? */
+  hasPassword: boolean;
   expiresAt: string;
 }
 
@@ -4907,6 +4909,7 @@ export interface MitraPortalHarianWeek {
 
 export interface MitraPortalData {
   name: string;
+  hasPassword: boolean;
   /** Minggu sebagai mitra borongan/bulanan (performa + gaji). */
   periods: MitraPortalWeek[];
   /** Minggu sebagai anak harian (hanya gaji). */
@@ -4918,6 +4921,8 @@ export interface MitraPinStatus {
   matched: number;
   /** PIN lama (sebelum login PIN-saja) yang belum bisa dipakai masuk. */
   needsReupload: number;
+  /** Mitra yang sudah mengganti PIN dengan password sendiri. */
+  withPassword: string[];
   unmatched: Array<{ name: string; suggestions: string[] }>;
   /** Nama lengkap yang sudah dihubungkan ke nama lain di Excel performa. */
   linked: Array<{ name: string; excelNames: string[] }>;
@@ -4943,7 +4948,52 @@ export async function mitraPortalLogin(
   return unwrap<MitraPortalSession>(await response.json());
 }
 
+/** Masuk dengan nama lengkap + password sendiri (setelah PIN diganti). */
+export async function mitraPortalLoginPassword(
+  name: string,
+  password: string,
+): Promise<MitraPortalSession> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/mitra-portal/login-password`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, password }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal masuk. Coba lagi."));
+  }
+  return unwrap<MitraPortalSession>(await response.json());
+}
+
 export class MitraPortalSessionError extends Error {}
+
+/** Buat/ganti password. Berhasil = semua sesi lama (termasuk yang ini) berakhir. */
+export async function setMitraPortalPassword(
+  token: string,
+  password: string,
+  currentPassword?: string,
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/mitra-portal/password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ password, currentPassword }),
+  });
+  if (response.status === 401) {
+    throw new MitraPortalSessionError(
+      await readApiError(response, "Sesi berakhir. Masuk lagi."),
+    );
+  }
+  if (!response.ok) {
+    throw new Error(
+      await readApiError(response, "Gagal menyimpan password. Coba lagi."),
+    );
+  }
+}
 
 export async function getMitraPortalData(
   token: string,
@@ -5035,6 +5085,23 @@ export async function resetMitraPaymentData(): Promise<{
     );
   }
   return unwrap<{ success: boolean; message: string }>(await response.json());
+}
+
+export async function resetMitraPassword(
+  name: string,
+): Promise<MitraPinStatus> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/mitra-portal/pins/reset-password`,
+    {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ name }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal mereset password."));
+  }
+  return unwrap<MitraPinStatus>(await response.json());
 }
 
 export async function linkMitraExcelName(

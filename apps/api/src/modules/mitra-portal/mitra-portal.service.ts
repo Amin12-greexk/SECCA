@@ -10,20 +10,35 @@ import { badRequest } from '../../common/errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditDashboardService } from '../audit-dashboard/audit-dashboard.service';
 import { normalizePersonName } from '../audit-dashboard/audit-dashboard.parser';
-import { parsePinFile, pinKey } from './mitra-portal.pins';
+import {
+  DUMMY_PASSWORD_HASH,
+  hashPassword,
+  parsePinFile,
+  passwordProblem,
+  pinCandidates,
+  pinKey,
+  verifyPassword,
+} from './mitra-portal.pins';
 
 const TOKEN_TYPE = 'mitra-portal';
 const SESSION_MINUTES = 30;
 
-/** Salah PIN 30x dari satu perangkat/IP -> IP itu dikunci 15 menit. Login
- * hanya PIN, jadi tidak ada kunci per nama. Dibuat longgar karena HP mitra di
- * Wi-Fi pabrik bisa keluar lewat IP yang sama. */
+/** Salah PIN/password 30x dari satu perangkat/IP -> IP itu dikunci 15 menit.
+ * Dibuat longgar karena HP mitra di Wi-Fi pabrik bisa keluar lewat IP yang
+ * sama. Login PIN tidak punya nama, jadi hanya dibatasi per IP. */
 const MAX_FAILS_PER_IP = 30;
+/** Login password (nama + password) & ganti password: salah 5x untuk satu
+ * nama -> nama itu dikunci 15 menit. */
+const MAX_FAILS_PER_NAME = 5;
 const LOCK_MS = 15 * 60 * 1000;
 
 type Attempt = { fails: number; lockedUntil: number; firstFailAt: number };
 
 const LOGIN_FAILED = 'PIN salah.';
+const PASSWORD_LOGIN_FAILED = 'Nama atau password salah.';
+const PIN_REPLACED =
+  'PIN ini sudah diganti dengan password. Masuk memakai nama lengkap dan password Anda.';
+const SESSION_ENDED = 'Sesi berakhir. Masuk lagi.';
 
 @Injectable()
 export class MitraPortalService {
@@ -56,8 +71,12 @@ export class MitraPortalService {
     this.assertNotLocked(ipKey);
 
     const record = /^\d{3,8}$/.test(pin)
-      ? await this.prisma.mitraPortalPin.findUnique({
-          where: { pinKey: pinKey(pin, this.pinSecret) },
+      ? await this.prisma.mitraPortalPin.findFirst({
+          where: {
+            pinKey: {
+              in: pinCandidates(pin).map((p) => pinKey(p, this.pinSecret)),
+            },
+          },
         })
       : null;
 
@@ -66,15 +85,140 @@ export class MitraPortalService {
       throw new UnauthorizedException(LOGIN_FAILED);
     }
 
+    // Sudah punya password -> PIN tidak lagi dipakai masuk. Tetap dihitung
+    // sebagai percobaan gagal supaya tebak-tebak PIN tidak bisa mengetahui
+    // PIN mana yang sudah diganti tanpa batas.
+    if (record.passwordHash) {
+      this.registerFail(ipKey, MAX_FAILS_PER_IP);
+      throw new UnauthorizedException(PIN_REPLACED);
+    }
+
+    return this.issueSession(record);
+  }
+
+  /** Masuk dengan nama lengkap + password buatan mitra sendiri. */
+  async loginWithPassword(rawName: string, rawPassword: string, ip: string) {
+    const normalizedName = normalizePersonName(rawName ?? '');
+    const password = rawPassword ?? '';
+    if (!normalizedName || !password)
+      badRequest('Isi nama lengkap dan password.');
+
+    const nameKey = `name:${normalizedName}`;
+    const ipKey = `ip:${ip}`;
+    this.assertNotLocked(nameKey);
+    this.assertNotLocked(ipKey);
+
+    const record = await this.prisma.mitraPortalPin.findUnique({
+      where: { normalizedName },
+    });
+    // Nama tidak terdaftar / belum punya password tetap menjalankan scrypt
+    // supaya waktu responsnya tidak membocorkan nama mana yang terdaftar.
+    const valid = record?.passwordHash
+      ? await verifyPassword(password, record.passwordHash)
+      : await verifyPassword(password, DUMMY_PASSWORD_HASH).then(() => false);
+
+    if (!record || !valid) {
+      this.registerFail(nameKey, MAX_FAILS_PER_NAME);
+      this.registerFail(ipKey, MAX_FAILS_PER_IP);
+      throw new UnauthorizedException(PASSWORD_LOGIN_FAILED);
+    }
+
+    this.attempts.delete(nameKey);
+    return this.issueSession(record);
+  }
+
+  private async issueSession(record: {
+    name: string;
+    normalizedName: string;
+    passwordHash: string | null;
+    passwordSetAt: Date | null;
+  }) {
+    // `pv` = versi password. Ganti/reset password mengubahnya, sehingga semua
+    // token yang sudah beredar langsung tidak berlaku.
     const token = await this.jwtService.signAsync(
-      { typ: TOKEN_TYPE, sub: record.normalizedName },
+      {
+        typ: TOKEN_TYPE,
+        sub: record.normalizedName,
+        pv: passwordVersion(record.passwordSetAt),
+      },
       { secret: this.secret, expiresIn: `${SESSION_MINUTES}m` },
     );
     return {
       token,
       name: record.name,
+      hasPassword: Boolean(record.passwordHash),
       expiresAt: new Date(Date.now() + SESSION_MINUTES * 60_000).toISOString(),
     };
+  }
+
+  /**
+   * Buat atau ganti password. Pertama kali (masuk dengan PIN) tidak perlu
+   * password lama; kalau sudah punya password, harus menyebutkan password
+   * lamanya. Setelah berhasil, semua sesi lama — termasuk yang dipakai
+   * untuk mengganti — tidak berlaku lagi: mitra masuk ulang dengan password.
+   */
+  async setPassword(
+    authorization: string | undefined,
+    newPassword: string,
+    currentPassword?: string,
+  ) {
+    const { sub, pv } = await this.verifyToken(authorization);
+    const record = await this.prisma.mitraPortalPin.findUnique({
+      where: { normalizedName: sub },
+    });
+    if (!record || pv !== passwordVersion(record.passwordSetAt)) {
+      throw new UnauthorizedException(SESSION_ENDED);
+    }
+
+    const nameKey = `name:${record.normalizedName}`;
+    if (record.passwordHash) {
+      this.assertNotLocked(nameKey);
+      const valid = await verifyPassword(
+        currentPassword ?? '',
+        record.passwordHash,
+      );
+      if (!valid) {
+        this.registerFail(nameKey, MAX_FAILS_PER_NAME);
+        badRequest('Password saat ini salah.');
+      }
+      this.attempts.delete(nameKey);
+      if (currentPassword === newPassword) {
+        badRequest('Password baru harus berbeda dari yang lama.');
+      }
+    }
+
+    const problem = passwordProblem(newPassword);
+    if (problem) badRequest(problem);
+
+    // Password yang sama dengan PIN-nya berarti tidak ada gunanya diganti.
+    const sameAsPin = pinCandidates(newPassword).some(
+      (p) => pinKey(p, this.pinSecret) === record.pinKey,
+    );
+    if (sameAsPin) badRequest('Password tidak boleh sama dengan PIN.');
+
+    await this.prisma.mitraPortalPin.update({
+      where: { normalizedName: record.normalizedName },
+      data: {
+        passwordHash: await hashPassword(newPassword),
+        passwordSetAt: new Date(),
+      },
+    });
+    return { success: true };
+  }
+
+  /** Manager: kembalikan mitra ke login PIN (mis. lupa password). */
+  async resetPassword(name: string) {
+    const normalizedName = normalizePersonName(name ?? '');
+    const record = await this.prisma.mitraPortalPin.findUnique({
+      where: { normalizedName },
+    });
+    if (!record) return badRequest('Nama tidak ada di daftar PIN.');
+    await this.prisma.mitraPortalPin.update({
+      where: { normalizedName },
+      data: { passwordHash: null, passwordSetAt: null },
+    });
+    this.attempts.delete(`name:${normalizedName}`);
+    return this.getPinStatus();
   }
 
   private assertNotLocked(key: string) {
@@ -118,12 +262,15 @@ export class MitraPortalService {
   /* ── Data milik mitra yang login ───────────────────────────── */
 
   async getMyData(authorization: string | undefined) {
-    const normalizedName = await this.verifyToken(authorization);
+    const { sub: normalizedName, pv } = await this.verifyToken(authorization);
     const record = await this.prisma.mitraPortalPin.findUnique({
       where: { normalizedName },
     });
-    // PIN-nya sudah dihapus/diganti lewat upload baru -> sesi tidak berlaku.
-    if (!record) throw new UnauthorizedException('Sesi berakhir. Masuk lagi.');
+    // PIN-nya sudah dihapus/diganti lewat upload baru, atau password baru
+    // saja dibuat/diganti/direset -> sesi tidak berlaku.
+    if (!record || pv !== passwordVersion(record.passwordSetAt)) {
+      throw new UnauthorizedException(SESSION_ENDED);
+    }
 
     const names = [record.normalizedName, ...record.aliases];
     const [persons, harianPersons] = await Promise.all([
@@ -143,7 +290,12 @@ export class MitraPortalService {
       ),
     ]);
 
-    return { name: record.name, periods, harian };
+    return {
+      name: record.name,
+      hasPassword: Boolean(record.passwordHash),
+      periods,
+      harian,
+    };
   }
 
   private async verifyToken(authorization: string | undefined) {
@@ -154,11 +306,12 @@ export class MitraPortalService {
       const payload = await this.jwtService.verifyAsync<{
         typ?: string;
         sub?: string;
+        pv?: number;
       }>(token, { secret: this.secret });
       if (payload.typ !== TOKEN_TYPE || !payload.sub) throw new Error();
-      return payload.sub;
+      return { sub: payload.sub, pv: payload.pv ?? 0 };
     } catch {
-      throw new UnauthorizedException('Sesi berakhir. Masuk lagi.');
+      throw new UnauthorizedException(SESSION_ENDED);
     }
   }
 
@@ -180,8 +333,14 @@ export class MitraPortalService {
     // Nama Lain yang sudah dihubungkan manager lewat layar (linkExcelName)
     // ikut dibawa: upload ulang file PIN mingguan tidak boleh menghapusnya.
     const previous = await this.prisma.mitraPortalPin.findMany({
-      select: { normalizedName: true, aliases: true },
+      select: {
+        normalizedName: true,
+        aliases: true,
+        passwordHash: true,
+        passwordSetAt: true,
+      },
     });
+    const previousByName = new Map(previous.map((p) => [p.normalizedName, p]));
     const previousAliases = new Map(
       previous.map((p) => [p.normalizedName, p.aliases]),
     );
@@ -196,6 +355,11 @@ export class MitraPortalService {
         ]),
       ],
       pinKey: pinKey(p.pin, this.pinSecret),
+      // Password yang sudah dibuat mitra tidak ikut hilang karena file PIN
+      // di-upload ulang.
+      passwordHash: previousByName.get(p.normalizedName)?.passwordHash ?? null,
+      passwordSetAt:
+        previousByName.get(p.normalizedName)?.passwordSetAt ?? null,
     }));
 
     // File PIN = daftar lengkap karyawan aktif: upload baru menggantikan
@@ -299,6 +463,8 @@ export class MitraPortalService {
       matched: pins.length - unmatched.length,
       /** PIN tersimpan sebelum login PIN-saja: belum bisa dipakai masuk. */
       needsReupload: pins.filter((p) => !p.pinKey).length,
+      /** Mitra yang sudah mengganti PIN dengan password sendiri. */
+      withPassword: pins.filter((p) => p.passwordHash).map((p) => p.name),
       unmatched,
       linked,
       excelNames: unclaimed.map((p) => p.name),
@@ -406,4 +572,9 @@ function levenshtein(a: string, b: string): number {
     prev = curr;
   }
   return prev[b.length];
+}
+
+/** Versi password untuk token sesi: 0 = belum punya password. */
+function passwordVersion(passwordSetAt: Date | null): number {
+  return passwordSetAt ? passwordSetAt.getTime() : 0;
 }

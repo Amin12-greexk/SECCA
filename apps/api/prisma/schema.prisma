@@ -766,6 +766,12 @@ model MitraPortalPin {
   /// satu PIN = satu orang. Null = baris lama sebelum login PIN-saja, harus
   /// upload ulang file PIN supaya bisa dipakai masuk.
   pinKey         String?  @unique
+  /// Password buatan mitra sendiri (scrypt "salt:hash" hex). Kalau terisi, PIN
+  /// tidak lagi dipakai masuk; login lewat nama lengkap + password.
+  passwordHash   String?
+  /// Kapan password terakhir dibuat/diganti. Ikut di token sesi: ganti atau
+  /// reset password membuat semua sesi lama tidak berlaku.
+  passwordSetAt  DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
