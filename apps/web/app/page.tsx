@@ -91,7 +91,7 @@ export default function Home() {
             primary
             icon={<UserRound className="h-6 w-6" />}
             title="Cek Performa & Gaji"
-            description="Untuk mitra · cukup PIN"
+            description="Untuk mitra · PIN atau password"
           />
           <EntryCard
             href="/login"

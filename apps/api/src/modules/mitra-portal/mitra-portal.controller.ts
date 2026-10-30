@@ -22,6 +22,9 @@ import { AuditDashboardDataset } from '@prisma/client';
 import { AuditDashboardService } from '../audit-dashboard/audit-dashboard.service';
 import { LinkExcelNameDto } from './dto/link-excel-name.dto';
 import { MitraLoginDto } from './dto/mitra-login.dto';
+import { MitraPasswordLoginDto } from './dto/mitra-password-login.dto';
+import { ResetMitraPasswordDto } from './dto/reset-mitra-password.dto';
+import { SetMitraPasswordDto } from './dto/set-mitra-password.dto';
 import { MitraPortalService } from './mitra-portal.service';
 
 /**
@@ -42,6 +45,42 @@ export class MitraPortalController {
   @ApiOperation({ summary: 'Masuk portal mitra dengan PIN saja' })
   login(@Body() dto: MitraLoginDto, @Req() request: FastifyRequest) {
     return this.mitraPortalService.login(dto.pin, request.ip);
+  }
+
+  @Post('login-password')
+  @Public()
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Masuk portal mitra dengan nama lengkap + password sendiri',
+  })
+  loginWithPassword(
+    @Body() dto: MitraPasswordLoginDto,
+    @Req() request: FastifyRequest,
+  ) {
+    return this.mitraPortalService.loginWithPassword(
+      dto.name,
+      dto.password,
+      request.ip,
+    );
+  }
+
+  /** @Public karena token portal diverifikasi service (lihat getMe). */
+  @Post('password')
+  @Public()
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Buat/ganti password mitra yang sedang masuk; semua sesi lama berakhir',
+  })
+  setPassword(
+    @Body() dto: SetMitraPasswordDto,
+    @Headers('authorization') authorization?: string,
+  ) {
+    return this.mitraPortalService.setPassword(
+      authorization,
+      dto.password,
+      dto.currentPassword,
+    );
   }
 
   /**
@@ -139,6 +178,17 @@ export class MitraPortalController {
     return this.auditDashboardService.resetData(
       AuditDashboardDataset.PEMBAYARAN,
     );
+  }
+
+  @Post('pins/reset-password')
+  @Roles('manager')
+  @ApiBearerAuth()
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Hapus password mitra (lupa password) -> kembali masuk dengan PIN',
+  })
+  resetPassword(@Body() dto: ResetMitraPasswordDto) {
+    return this.mitraPortalService.resetPassword(dto.name);
   }
 
   @Get('pins/status')

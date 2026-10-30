@@ -14,7 +14,11 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter(),
+    // Di belakang Traefik (Dokploy): tanpa ini request.ip = alamat proxy, jadi
+    // semua mitra terbaca satu IP dan batas percobaan login terkunci untuk
+    // semua orang sekaligus. 1 = percaya satu proxy (Traefik), IP klien diambil
+    // dari entri X-Forwarded-For yang ia tambahkan.
+    new FastifyAdapter({ trustProxy: 1 }),
   );
 
   // Upload Excel dashboard performa (POST /api/audit-dashboard/import).

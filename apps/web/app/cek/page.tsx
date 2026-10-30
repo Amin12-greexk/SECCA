@@ -10,6 +10,7 @@ import {
     ChevronRight,
     Eye,
     EyeOff,
+    KeyRound,
     Loader2,
     LogOut,
     Package,
@@ -23,10 +24,12 @@ import {
     MitraPortalSessionError,
     getMitraPortalData,
     mitraPortalLogin,
+    mitraPortalLoginPassword,
     type MitraPortalData,
     type MitraPortalSession,
 } from '@/lib/api';
 import { CAPACITY_BANDS } from '../performa/components/capacityBand';
+import PasswordDialog from './PasswordDialog';
 import {
     capacityChartOption,
     fmtRp,
@@ -37,6 +40,8 @@ import {
 } from './mitraWeeks';
 
 const SESSION_KEY = 'secca-mitra-portal';
+/** Sesi mana yang sudah diberi anjuran buat password (sekali per login). */
+const NUDGE_KEY = 'secca-mitra-pw-nudge';
 
 function readSession(): MitraPortalSession | null {
     try {
@@ -52,6 +57,8 @@ function readSession(): MitraPortalSession | null {
 export default function CekMitraPage() {
     const [session, setSession] = useState<MitraPortalSession | null>(null);
     const [ready, setReady] = useState(false);
+    /** Nama mitra yang baru mengganti password -> layar masuk memberi tahu. */
+    const [changedFor, setChangedFor] = useState<string | null>(null);
 
     useEffect(() => {
         // sessionStorage hanya ada di browser -> dibaca setelah mount.
@@ -79,15 +86,27 @@ export default function CekMitraPage() {
         try {
             sessionStorage.setItem(SESSION_KEY, JSON.stringify(next));
         } catch {}
+        setChangedFor(null);
         setSession(next);
+    }, []);
+
+    // Setelah ganti password: keluar & hapus semua sisa sesi supaya tidak ada
+    // token lama yang dipakai ulang (server juga sudah membatalkannya).
+    const passwordChanged = useCallback((name: string) => {
+        try {
+            sessionStorage.removeItem(SESSION_KEY);
+            sessionStorage.removeItem(NUDGE_KEY);
+        } catch {}
+        setChangedFor(name);
+        setSession(null);
     }, []);
 
     return (
         <div className="min-h-[100dvh] bg-emerald-50/60">
             {!ready ? null : session ? (
-                <MitraHome session={session} onLogout={logout} />
+                <MitraHome session={session} onLogout={logout} onPasswordChanged={passwordChanged} />
             ) : (
-                <LoginForm onLogin={login} />
+                <LoginForm key={changedFor ?? 'login'} onLogin={login} changedFor={changedFor} />
             )}
         </div>
     );
@@ -95,11 +114,29 @@ export default function CekMitraPage() {
 
 /* ─── Login ───────────────────────────────────────────────────── */
 
-function LoginForm({ onLogin }: { onLogin: (session: MitraPortalSession) => void }) {
+function LoginForm({
+    onLogin,
+    changedFor,
+}: {
+    onLogin: (session: MitraPortalSession) => void;
+    /** Nama mitra yang baru saja mengganti password: langsung ke mode password. */
+    changedFor: string | null;
+}) {
+    const [mode, setMode] = useState<'pin' | 'password'>(changedFor ? 'password' : 'pin');
+    const [name, setName] = useState(changedFor ?? '');
     const [pin, setPin] = useState('');
-    const [showPin, setShowPin] = useState(false);
+    const [password, setPassword] = useState('');
+    const [showSecret, setShowSecret] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const switchMode = (next: 'pin' | 'password') => {
+        setMode(next);
+        setError(null);
+        setPin('');
+        setPassword('');
+        setShowSecret(false);
+    };
 
     const submit = async (event: React.FormEvent) => {
         event.preventDefault();
@@ -107,14 +144,28 @@ function LoginForm({ onLogin }: { onLogin: (session: MitraPortalSession) => void
         setBusy(true);
         setError(null);
         try {
-            onLogin(await mitraPortalLogin(pin));
+            onLogin(mode === 'pin' ? await mitraPortalLogin(pin) : await mitraPortalLoginPassword(name, password));
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Gagal masuk.');
             setPin('');
+            setPassword('');
         } finally {
             setBusy(false);
         }
     };
+
+    const field =
+        'h-12 w-full rounded-xl border border-gray-200 px-3.5 text-base outline-none transition focus:border-[#059833] focus:ring-2 focus:ring-[#059833]/20';
+    const toggle = (
+        <button
+            type="button"
+            onClick={() => setShowSecret((v) => !v)}
+            aria-label={showSecret ? 'Sembunyikan' : 'Tampilkan'}
+            className="absolute right-1.5 top-1.5 flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-gray-400 hover:bg-gray-50 hover:text-gray-700"
+        >
+            {showSecret ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+        </button>
+    );
 
     return (
         <div className="mx-auto flex min-h-[100dvh] max-w-sm flex-col justify-center px-5 py-10">
@@ -131,36 +182,75 @@ function LoginForm({ onLogin }: { onLogin: (session: MitraPortalSession) => void
                 </div>
             </div>
 
+            {changedFor ? (
+                <p role="status" className="mb-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800 ring-1 ring-emerald-100">
+                    <b>Password berhasil disimpan.</b> Silakan masuk lagi dengan nama lengkap dan password baru Anda.
+                </p>
+            ) : null}
+
             <form onSubmit={submit} className="space-y-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
-                <div>
-                    <label htmlFor="mitra-pin" className="mb-1.5 block text-sm font-medium text-gray-700">
-                        PIN
-                    </label>
-                    <p className="mb-2 text-xs text-gray-400">Masukkan PIN dari perusahaan.</p>
-                    <div className="relative">
-                        <input
-                            id="mitra-pin"
-                            value={pin}
-                            onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                            type={showPin ? 'text' : 'password'}
-                            inputMode="numeric"
-                            autoComplete="off"
-                            required
-                            autoFocus
-                            minLength={3}
-                            className="h-12 w-full rounded-xl border border-gray-200 px-3.5 pr-12 text-lg tracking-[0.3em] outline-none transition focus:border-[#059833] focus:ring-2 focus:ring-[#059833]/20"
-                            placeholder="••••"
-                        />
-                        <button
-                            type="button"
-                            onClick={() => setShowPin((v) => !v)}
-                            aria-label={showPin ? 'Sembunyikan PIN' : 'Tampilkan PIN'}
-                            className="absolute right-1.5 top-1.5 flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-gray-400 hover:bg-gray-50 hover:text-gray-700"
-                        >
-                            {showPin ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                        </button>
+                {mode === 'pin' ? (
+                    <div>
+                        <label htmlFor="mitra-pin" className="mb-1.5 block text-sm font-medium text-gray-700">
+                            PIN
+                        </label>
+                        <p className="mb-2 text-xs text-gray-400">Masukkan PIN dari perusahaan.</p>
+                        <div className="relative">
+                            <input
+                                id="mitra-pin"
+                                value={pin}
+                                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                                type={showSecret ? 'text' : 'password'}
+                                inputMode="numeric"
+                                autoComplete="off"
+                                required
+                                autoFocus
+                                minLength={3}
+                                className={`${field} pr-12 text-lg tracking-[0.3em]`}
+                                placeholder="••••"
+                            />
+                            {toggle}
+                        </div>
                     </div>
-                </div>
+                ) : (
+                    <>
+                        <div>
+                            <label htmlFor="mitra-name" className="mb-1.5 block text-sm font-medium text-gray-700">
+                                Nama lengkap
+                            </label>
+                            <input
+                                id="mitra-name"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                autoComplete="username"
+                                autoCapitalize="characters"
+                                required
+                                autoFocus={!changedFor}
+                                className={`${field} uppercase`}
+                                placeholder="SESUAI DATA PERUSAHAAN"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="mitra-password" className="mb-1.5 block text-sm font-medium text-gray-700">
+                                Password
+                            </label>
+                            <div className="relative">
+                                <input
+                                    id="mitra-password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    type={showSecret ? 'text' : 'password'}
+                                    autoComplete="current-password"
+                                    required
+                                    autoFocus={Boolean(changedFor)}
+                                    maxLength={72}
+                                    className={`${field} pr-12`}
+                                />
+                                {toggle}
+                            </div>
+                        </div>
+                    </>
+                )}
 
                 {error ? (
                     <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -177,15 +267,43 @@ function LoginForm({ onLogin }: { onLogin: (session: MitraPortalSession) => void
                     Masuk
                 </button>
             </form>
-            <p className="mt-4 text-center text-xs text-gray-400">Lupa PIN? Tanyakan ke admin.</p>
+
+            <button
+                type="button"
+                onClick={() => switchMode(mode === 'pin' ? 'password' : 'pin')}
+                className="mt-4 cursor-pointer text-center text-sm font-medium text-[#059833] hover:underline"
+            >
+                {mode === 'pin' ? 'Sudah punya password? Masuk dengan password' : 'Belum punya password? Masuk dengan PIN'}
+            </button>
+            <p className="mt-2 text-center text-xs text-gray-400">
+                {mode === 'pin' ? 'Lupa PIN? Tanyakan ke admin.' : 'Lupa password? Minta admin mereset.'}
+            </p>
         </div>
     );
 }
 
 /* ─── Halaman mitra ───────────────────────────────────────────── */
 
-function MitraHome({ session, onLogout }: { session: MitraPortalSession; onLogout: () => void }) {
+function MitraHome({
+    session,
+    onLogout,
+    onPasswordChanged,
+}: {
+    session: MitraPortalSession;
+    onLogout: () => void;
+    onPasswordChanged: (name: string) => void;
+}) {
     const [data, setData] = useState<MitraPortalData | null>(null);
+    // Belum punya password -> dialog anjuran terbuka sekali per login.
+    const [passwordOpen, setPasswordOpen] = useState(() => {
+        if (session.hasPassword) return false;
+        try {
+            return sessionStorage.getItem(NUDGE_KEY) !== session.expiresAt;
+        } catch {
+            return true;
+        }
+    });
+    const hasPassword = data?.hasPassword ?? session.hasPassword;
     const [error, setError] = useState<string | null>(null);
     const [index, setIndex] = useState<number | null>(null);
 
@@ -204,6 +322,13 @@ function MitraHome({ session, onLogout }: { session: MitraPortalSession; onLogou
             cancelled = true;
         };
     }, [session.token, onLogout]);
+
+    useEffect(() => {
+        if (!passwordOpen || session.hasPassword) return;
+        try {
+            sessionStorage.setItem(NUDGE_KEY, session.expiresAt);
+        } catch {}
+    }, [passwordOpen, session.hasPassword, session.expiresAt]);
 
     const weeks = useMemo(() => (data ? toWeeks(data.periods) : []), [data]);
     const harianWeeks = useMemo(() => (data ? toHarianWeeks(data.harian ?? []) : []), [data]);
@@ -226,12 +351,46 @@ function MitraHome({ session, onLogout }: { session: MitraPortalSession; onLogou
                     </p>
                 </div>
                 <button
+                    onClick={() => setPasswordOpen(true)}
+                    aria-label={hasPassword ? 'Ganti password' : 'Buat password'}
+                    className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-gray-600 ring-1 ring-gray-200 hover:bg-white"
+                >
+                    <KeyRound className="h-4 w-4" />
+                </button>
+                <button
                     onClick={onLogout}
                     className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm text-gray-600 ring-1 ring-gray-200 hover:bg-white"
                 >
                     <LogOut className="h-4 w-4" /> Keluar
                 </button>
             </header>
+
+            {!hasPassword ? (
+                <button
+                    onClick={() => setPasswordOpen(true)}
+                    className="mb-4 flex w-full cursor-pointer items-center gap-3 rounded-2xl bg-amber-50 p-3.5 text-left ring-1 ring-amber-200 hover:bg-amber-100/70"
+                >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                        <KeyRound className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-amber-900">Ganti PIN dengan password Anda</span>
+                        <span className="block text-xs text-amber-800/80">
+                            PIN dipakai bersama banyak orang. Buat password sendiri supaya akun aman.
+                        </span>
+                    </span>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-amber-700" />
+                </button>
+            ) : null}
+
+            <PasswordDialog
+                session={session}
+                hasPassword={hasPassword}
+                open={passwordOpen}
+                onOpenChange={setPasswordOpen}
+                onChanged={onPasswordChanged}
+                onSessionEnded={onLogout}
+            />
 
             {error ? (
                 <p className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</p>
