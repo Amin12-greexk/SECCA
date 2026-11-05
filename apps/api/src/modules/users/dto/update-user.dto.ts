@@ -54,6 +54,12 @@ export class UpdateUserDto {
   @IsBoolean()
   useCustomUiAccess?: boolean;
 
+  @ApiPropertyOptional({ description: 'Akun hanya-lihat (read-only)' })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  readOnly?: boolean;
+
   @ApiPropertyOptional({ type: [UiAccessEntryDto] })
   @IsOptional()
   @IsArray()

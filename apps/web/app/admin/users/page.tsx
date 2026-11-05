@@ -72,6 +72,7 @@ function UsersContent() {
     productionRoomId: '' as string | '',
     pin: '',
     useCustomUiAccess: false,
+    readOnly: false,
     uiAccessDraft: {} as UiAccessDraft,
   });
   const [editForm, setEditForm] = useState({
@@ -83,6 +84,7 @@ function UsersContent() {
     productionRoomId: '' as string | '',
     pin: '',
     useCustomUiAccess: false,
+    readOnly: false,
     uiAccessDraft: {} as UiAccessDraft,
   });
 
@@ -180,6 +182,7 @@ function UsersContent() {
         workerId,
         productionRoomId: form.productionRoomId || undefined,
         useCustomUiAccess: form.useCustomUiAccess,
+        readOnly: form.readOnly,
         uiAccesses: serializeUiAccessDraft(form.uiAccessDraft),
       });
       toast.success('Akun berhasil dibuat.');
@@ -192,6 +195,7 @@ function UsersContent() {
         productionRoomId: '',
         pin: '',
         useCustomUiAccess: false,
+        readOnly: false,
         uiAccessDraft: {},
       });
       setCreateOpen(false);
@@ -216,6 +220,7 @@ function UsersContent() {
       productionRoomId: user.productionRoomId ?? '',
       pin: worker?.pin ?? '',
       useCustomUiAccess: user.useCustomUiAccess ?? false,
+      readOnly: user.readOnly ?? false,
       uiAccessDraft: buildUiAccessDraft(user.uiAccesses),
     });
     setEditOpen(true);
@@ -253,6 +258,7 @@ function UsersContent() {
         workerId,
         productionRoomId: editForm.productionRoomId || null,
         useCustomUiAccess: editForm.useCustomUiAccess,
+        readOnly: editForm.readOnly,
         uiAccesses: serializeUiAccessDraft(editForm.uiAccessDraft),
       });
       toast.success('Akun berhasil diperbarui.');
@@ -405,6 +411,23 @@ function UsersContent() {
                   />
                 </div>
               )}
+              <div className="flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                <div>
+                  <Label className="text-sm font-semibold text-gray-900">Hanya lihat (read-only)</Label>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Semua aksi tambah, ubah, hapus, dan upload dikunci di server untuk akun ini.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={form.readOnly}
+                    onChange={(event) => setForm((prev) => ({ ...prev, readOnly: event.target.checked }))}
+                  />
+                  Aktif
+                </label>
+              </div>
+
               <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -556,6 +579,9 @@ function UsersContent() {
                               </span>
                               {user.useCustomUiAccess ? (
                                 <span className="text-xs text-emerald-600 font-medium">Akses UI khusus</span>
+                              ) : null}
+                              {user.readOnly ? (
+                                <span className="text-xs text-amber-600 font-medium">Hanya lihat</span>
                               ) : null}
                             </div>
                           </td>
@@ -724,6 +750,22 @@ function UsersContent() {
                 />
               </div>
             )}
+            <div className="flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+              <div>
+                <Label className="text-sm font-semibold text-gray-900">Hanya lihat (read-only)</Label>
+                <p className="mt-1 text-xs text-gray-500">
+                  Semua aksi tambah, ubah, hapus, dan upload dikunci di server untuk akun ini.
+                </p>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={editForm.readOnly}
+                  onChange={(event) => setEditForm((prev) => ({ ...prev, readOnly: event.target.checked }))}
+                />
+                Aktif
+              </label>
+            </div>
             <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>

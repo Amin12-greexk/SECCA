@@ -5,6 +5,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { ReadOnlyGuard } from './read-only.guard';
 import { RolesGuard } from './roles.guard';
 
 @Module({
@@ -20,7 +21,10 @@ import { RolesGuard } from './roles.guard';
     AuthService,
     JwtAuthGuard,
     RolesGuard,
+    ReadOnlyGuard,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // Setelah JwtAuthGuard (butuh request.user), sebelum RolesGuard.
+    { provide: APP_GUARD, useClass: ReadOnlyGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
   exports: [JwtModule],

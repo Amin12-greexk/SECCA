@@ -43,6 +43,7 @@ export class JwtAuthGuard implements CanActivate {
           id: true,
           role: true,
           useCustomUiAccess: true,
+          readOnly: true,
           uiAccesses: {
             select: {
               moduleKey: true,
@@ -61,6 +62,7 @@ export class JwtAuthGuard implements CanActivate {
         sub: appUser.id,
         role: appUser.role.toLowerCase(),
         useCustomUiAccess: appUser.useCustomUiAccess,
+        readOnly: appUser.readOnly,
         uiAccesses: appUser.uiAccesses,
       };
       return true;

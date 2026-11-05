@@ -172,6 +172,7 @@ export class AuthService {
       workerId: user.workerId ?? null,
       pin: user.worker?.pin ?? null,
       useCustomUiAccess: user.useCustomUiAccess,
+      readOnly: user.readOnly,
       uiAccesses: user.uiAccesses,
     };
   }
@@ -225,6 +226,7 @@ export class AuthService {
     role: UserRole;
     workerId: string | null;
     useCustomUiAccess: boolean;
+    readOnly: boolean;
     worker?: {
       pin: string | null;
     } | null;
@@ -250,6 +252,7 @@ export class AuthService {
         workerId: user.workerId ?? null,
         pin: user.worker?.pin ?? null,
         useCustomUiAccess: user.useCustomUiAccess,
+        readOnly: user.readOnly,
         uiAccesses: user.uiAccesses ?? [],
       },
       token,

@@ -263,7 +263,7 @@ function UploadCard({
  * upload, reset, dan panel Turnover & Shift — bukan di akses halamannya.
  */
 export default function PerformaPage() {
-    const { isAuthenticated, hasModuleAccess, loading: authLoading } = useAuth();
+    const { user, isAuthenticated, hasModuleAccess, loading: authLoading } = useAuth();
     const toast = useToast();
 
     const [periods, setPeriods] = useState<PerformaPeriod[]>([]);
@@ -308,7 +308,8 @@ export default function PerformaPage() {
         if (DASHBOARD_TABS.includes(fromUrl as DashboardTab)) setTab(fromUrl as DashboardTab);
     }, []);
 
-    const canManage = isAuthenticated && hasModuleAccess('dashboard', 2);
+    // Akun hanya-lihat tidak diberi upload/reset/ubah warna (server menolaknya juga).
+    const canManage = isAuthenticated && hasModuleAccess('dashboard', 2) && !user?.readOnly;
     /**
      * Semua angka rupiah — total upah, rincian pembayaran per mitra, dan
      * halaman payroll — hanya untuk yang login. Pengunjung publik cuma melihat

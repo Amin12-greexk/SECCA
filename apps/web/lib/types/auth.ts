@@ -26,6 +26,8 @@ export interface User {
     role: UserRole;
     workerId?: string | null;
     useCustomUiAccess?: boolean;
+    /** Akun hanya-lihat: tambah/ubah/hapus dikunci di server. */
+    readOnly?: boolean;
     uiAccesses?: UiAccessEntry[];
 }
 
