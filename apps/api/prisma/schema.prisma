@@ -100,6 +100,9 @@ model AppUser {
   workerId          String?  @unique
   productionRoomId  String?
   useCustomUiAccess Boolean  @default(false)
+  /// Akun hanya-lihat: semua aksi tambah/ubah/hapus/upload ditolak di API
+  /// (lihat ReadOnlyGuard), apa pun role dan akses menunya.
+  readOnly          Boolean  @default(false)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

@@ -361,6 +361,7 @@ function normalizeUser(payload: unknown): User | null {
       typeof row.useCustomUiAccess === "boolean"
         ? row.useCustomUiAccess
         : false,
+    readOnly: row.readOnly === true,
     uiAccesses: Array.isArray(row.uiAccesses)
       ? row.uiAccesses
           .filter((item) => !!item && typeof item === "object")
@@ -416,6 +417,7 @@ export interface User {
   productionRoomId?: string | null;
   productionRoom?: ProductionRoom | null;
   useCustomUiAccess?: boolean;
+  readOnly?: boolean;
   uiAccesses?: Array<{
     moduleKey: string;
     level: number;
@@ -435,6 +437,7 @@ export interface CreateUserRequest {
   workerId?: string | null;
   productionRoomId?: string | null;
   useCustomUiAccess?: boolean;
+  readOnly?: boolean;
   uiAccesses?: Array<{
     moduleKey: string;
     level: number;
@@ -449,6 +452,7 @@ export interface UpdateUserRequest {
   workerId?: string | null;
   productionRoomId?: string | null;
   useCustomUiAccess?: boolean;
+  readOnly?: boolean;
   uiAccesses?: Array<{
     moduleKey: string;
     level: number;

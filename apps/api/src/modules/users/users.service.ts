@@ -49,6 +49,7 @@ export class UsersService {
         select: { id: true, code: true, name: true, type: true },
       },
       useCustomUiAccess: true,
+      readOnly: true,
       createdAt: true,
       uiAccesses: {
         select: {
@@ -112,6 +113,7 @@ export class UsersService {
         workerId: dto.workerId ?? null,
         productionRoomId: dto.productionRoomId ?? null,
         useCustomUiAccess: dto.useCustomUiAccess ?? false,
+        readOnly: dto.readOnly ?? false,
         uiAccesses: normalizedUiAccesses
           ? {
               create: normalizedUiAccesses.map((item) => ({
@@ -167,6 +169,7 @@ export class UsersService {
     if (dto.useCustomUiAccess !== undefined) {
       data.useCustomUiAccess = dto.useCustomUiAccess;
     }
+    if (dto.readOnly !== undefined) data.readOnly = dto.readOnly;
     if (dto.workerId !== undefined) {
       if (dto.workerId) {
         const worker = await this.prisma.worker.findUnique({

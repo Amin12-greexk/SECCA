@@ -19,6 +19,8 @@ export type RequestAuthUser = {
   sub?: string;
   role?: string;
   useCustomUiAccess?: boolean;
+  /** Akun hanya-lihat: aksi tulis ditolak (lihat ReadOnlyGuard). */
+  readOnly?: boolean;
   uiAccesses?: RequestUserUiAccess[];
 };
 
