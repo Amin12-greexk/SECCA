@@ -888,6 +888,68 @@ export class AuditDashboardService {
     };
   }
 
+  /**
+   * Pengeluaran upah tiap periode (untuk grafik tren di Laporan Keuangan):
+   * upah bersih borong/bulanan dari metrik + upah bersih anak harian.
+   * Perlu login, sama seperti expense-summary.
+   */
+  async getExpenseTrend() {
+    const [periods, metricSums, harianSums] = await Promise.all([
+      this.prisma.auditDashboardPeriod.findMany({
+        where: { dataset: PERFORMA },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        select: {
+          id: true,
+          label: true,
+          sortOrder: true,
+          startDate: true,
+          endDate: true,
+        },
+      }),
+      this.prisma.auditDashboardMetric.groupBy({
+        by: ['periodId'],
+        where: { period: { dataset: PERFORMA } },
+        _sum: {
+          netWageRp: true,
+          subsidyRp: true,
+          premiumRp: true,
+          mealAllowanceRp: true,
+          deductionRp: true,
+        },
+      }),
+      this.prisma.auditDashboardHarianRow.groupBy({
+        by: ['periodId'],
+        where: { period: { dataset: PERFORMA } },
+        _sum: { totalUpahRp: true },
+      }),
+    ]);
+
+    const metricByPeriod = new Map(metricSums.map((m) => [m.periodId, m._sum]));
+    const harianByPeriod = new Map(
+      harianSums.map((h) => [h.periodId, h._sum.totalUpahRp ?? 0]),
+    );
+
+    return {
+      periods: periods.map((period) => {
+        const sum = metricByPeriod.get(period.id);
+        return {
+          id: period.id,
+          label: period.label,
+          sortOrder: period.sortOrder,
+          startDate: period.startDate,
+          endDate: period.endDate,
+          netWageRp: sum?.netWageRp ?? 0,
+          allowanceRp:
+            (sum?.subsidyRp ?? 0) +
+            (sum?.premiumRp ?? 0) +
+            (sum?.mealAllowanceRp ?? 0),
+          deductionRp: sum?.deductionRp ?? 0,
+          harianRp: harianByPeriod.get(period.id) ?? 0,
+        };
+      }),
+    };
+  }
+
   /* ── Anak Harian (staf pendukung dibayar harian) ───────────────── */
 
   /**

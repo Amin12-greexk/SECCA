@@ -95,28 +95,12 @@ function Header() {
   );
 }
 
-/** Pengingat untuk akun hanya-lihat: tombol tambah/ubah/hapus akan ditolak server. */
-function ReadOnlyBanner() {
-  const { user } = useAuth();
-  if (!user?.readOnly) return null;
-
-  return (
-    <div
-      role="status"
-      className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-medium text-amber-800 sm:text-sm"
-    >
-      Akun Anda hanya bisa melihat data. Menambah, mengubah, dan menghapus dikunci.
-    </div>
-  );
-}
-
 function MainContent({ children }: { children: React.ReactNode }) {
   const { isCollapsed, isMobile, isAppFullscreen } = useSidebar();
 
   if (isAppFullscreen) {
     return (
       <main className="min-h-screen bg-emerald-50/50">
-        <ReadOnlyBanner />
         {children}
       </main>
     );
@@ -131,7 +115,6 @@ function MainContent({ children }: { children: React.ReactNode }) {
         ${isMobile ? 'ml-0' : (isCollapsed ? 'ml-20' : 'ml-64')}
       `}
     >
-      <ReadOnlyBanner />
       {children}
     </main>
   );
