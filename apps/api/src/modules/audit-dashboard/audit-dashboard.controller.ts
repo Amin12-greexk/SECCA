@@ -105,6 +105,13 @@ export class AuditDashboardController {
     return this.auditDashboardService.getHarianSummary(query.periodId);
   }
 
+  @Get('expense-trend')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Pengeluaran upah tiap periode untuk grafik tren (perlu login)' })
+  getExpenseTrend() {
+    return this.auditDashboardService.getExpenseTrend();
+  }
+
   @Get('persons')
   @Public()
   @ApiOperation({ summary: 'Daftar mitra beserta warnanya' })

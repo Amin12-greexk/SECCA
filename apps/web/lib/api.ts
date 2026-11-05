@@ -4113,6 +4113,33 @@ export async function getPerformaHarianSummary(
   }
 }
 
+export interface PerformaExpenseTrendPoint {
+  id: string;
+  label: string;
+  sortOrder: number;
+  startDate?: string | null;
+  endDate?: string | null;
+  /** Upah bersih borong + bulanan. */
+  netWageRp: number;
+  /** Subsidi + premi + uang makan. */
+  allowanceRp: number;
+  deductionRp: number;
+  /** Upah bersih anak harian. */
+  harianRp: number;
+}
+
+export async function getPerformaExpenseTrend(): Promise<PerformaExpenseTrendPoint[]> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/audit-dashboard/expense-trend`,
+    { headers: getAuthHeaders({ json: false }) },
+  );
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal memuat tren pengeluaran."));
+  }
+  const json = await response.json();
+  return unwrap<{ periods: PerformaExpenseTrendPoint[] }>(json).periods;
+}
+
 export async function getPerformaMonthlyExpenses(): Promise<PerformaMonthlyExpenseStatsResponse> {
   try {
     const response = await fetch(
