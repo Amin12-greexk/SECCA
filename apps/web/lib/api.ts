@@ -5301,3 +5301,84 @@ export async function resetPresensi(): Promise<{ deleted: number }> {
   }
   return unwrap<{ deleted: number }>(await response.json());
 }
+
+/* ── Penggajian bulanan (file "DATA PENGGAJIAN ..."): terpisah dari Performa ── */
+
+export interface MonthlyPayrollMonth {
+  id: string;
+  /** YYYY-MM */
+  month: string;
+  label: string;
+  fileName: string | null;
+  updatedAt: string;
+  mitraCount: number;
+  harianCount: number;
+  netWageRp: number;
+  harianRp: number;
+}
+
+export interface MonthlyPayrollResponse {
+  period: PerformaPeriodRef | null;
+  expense: PerformaExpenseSummaryResponse | null;
+  harian: PerformaHarianSummaryResponse | null;
+}
+
+export interface MonthlyPayrollImportResult {
+  fileName: string;
+  months: Array<{
+    month: string;
+    label: string;
+    mitra: number;
+    harian: number;
+    totalNetWageRp: number;
+    totalHarianRp: number;
+    replaced: boolean;
+  }>;
+  skippedSheets: string[];
+  issues: Array<{ sheet: string; row: number; reason: string }>;
+}
+
+export async function getMonthlyPayrollMonths(): Promise<MonthlyPayrollMonth[]> {
+  const response = await fetch(`${API_BASE_URL}/api/payroll-monthly/months`, {
+    headers: getAuthHeaders({ json: false }),
+  });
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal memuat daftar bulan penggajian."));
+  }
+  return unwrap<{ months: MonthlyPayrollMonth[] }>(await response.json()).months;
+}
+
+export async function getMonthlyPayroll(month?: string): Promise<MonthlyPayrollResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/payroll-monthly${buildQueryString({ month })}`,
+    { headers: getAuthHeaders({ json: false }) },
+  );
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal memuat penggajian bulanan."));
+  }
+  return unwrap<MonthlyPayrollResponse>(await response.json());
+}
+
+export async function uploadMonthlyPayroll(file: File): Promise<MonthlyPayrollImportResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${API_BASE_URL}/api/payroll-monthly/import`, {
+    method: "POST",
+    headers: getAuthHeaders({ json: false }),
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal mengunggah file penggajian."));
+  }
+  return unwrap<MonthlyPayrollImportResult>(await response.json());
+}
+
+export async function deleteMonthlyPayrollMonth(month: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/payroll-monthly/${month}`, {
+    method: "DELETE",
+    headers: getAuthHeaders({ json: false }),
+  });
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal menghapus bulan."));
+  }
+}

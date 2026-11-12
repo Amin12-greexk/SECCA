@@ -141,6 +141,16 @@ const API_ACCESS_RULES: ApiAccessRule[] = [
     methods: ['GET'],
   },
   {
+    // Penggajian bulanan: melihat untuk akun dengan akses Laporan/Dashboard;
+    // upload & hapus tetap manager (@Roles di controller).
+    pattern: /^\/api\/payroll-monthly(?:\/|$)/i,
+    anyOf: [
+      { moduleKey: 'reports', minLevel: 1 },
+      { moduleKey: 'dashboard', minLevel: 1 },
+    ],
+    methods: ['GET'],
+  },
+  {
     pattern: /^\/api\/lots(?:\/|$)/i,
     anyOf: [{ moduleKey: 'stock', minLevel: 2 }],
   },

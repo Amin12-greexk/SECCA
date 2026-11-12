@@ -9,8 +9,11 @@ import LazyEChart from '@/components/charts/LazyEChart';
 import {
   getPerformaExpenseSummary,
   getPerformaHarianSummary,
+  getMonthlyPayroll,
+  getMonthlyPayrollMonths,
   getPerformaExpenseTrend,
   getPerformaPeriods,
+  type MonthlyPayrollMonth,
   type PerformaExpenseSummaryResponse,
   type PerformaHarianSummaryResponse,
   type PerformaExpenseTrendPoint,
@@ -20,6 +23,7 @@ import { useToast } from '@/lib/toast';
 import StickyPeriodPicker from '../performa/components/StickyPeriodPicker';
 import { formatPeriodLabel } from '../performa/components/periodLabel';
 import { ExpenseTile } from '../performa/components/PayrollExpensePanel';
+import { downloadPayrollExcel } from '../performa/components/payrollExport';
 
 const fmtRp = (value: number | null | undefined) =>
   value === null || value === undefined
@@ -50,6 +54,10 @@ function ReportsContent() {
   const [trend, setTrend] = useState<PerformaExpenseTrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Sumber data: mingguan (Performa) atau bulanan (file Data Penggajian).
+  const [source, setSource] = useState<'mingguan' | 'bulanan'>('mingguan');
+  const [monthList, setMonthList] = useState<MonthlyPayrollMonth[]>([]);
+  const [month, setMonth] = useState('');
 
   const loadForPeriod = useCallback(
     async (id: string) => {
@@ -69,6 +77,40 @@ function ReportsContent() {
     },
     [toast],
   );
+
+  const loadForMonth = useCallback(
+    async (value: string) => {
+      setLoading(true);
+      try {
+        const result = await getMonthlyPayroll(value || undefined);
+        setExpense(result.expense);
+        setHarian(result.harian);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Gagal memuat penggajian bulanan.');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [toast],
+  );
+
+  useEffect(() => {
+    getMonthlyPayrollMonths()
+      .then((list) => {
+        setMonthList(list);
+        setMonth(list[list.length - 1]?.month ?? '');
+      })
+      .catch(() => {});
+  }, []);
+
+  const switchSource = (next: 'mingguan' | 'bulanan') => {
+    setSource(next);
+    setSearch('');
+    if (next === 'bulanan') loadForMonth(month);
+    else loadForPeriod(periodId);
+  };
+
+  const refresh = () => (source === 'bulanan' ? loadForMonth(month) : loadForPeriod(periodId));
 
   useEffect(() => {
     (async () => {
@@ -96,7 +138,11 @@ function ReportsContent() {
   };
 
   const periodRef = expense?.period ?? harian?.period ?? null;
-  const periodLabel = periodRef ? formatPeriodLabel(periodRef) : undefined;
+  const periodLabel = periodRef
+    ? source === 'bulanan'
+      ? periodRef.label
+      : formatPeriodLabel(periodRef)
+    : undefined;
   const summary = expense?.summary ?? null;
   const harianSummary = harian?.summary ?? null;
 
@@ -121,13 +167,21 @@ function ReportsContent() {
   const harianNet = harianSummary?.totalUpahBersihRp ?? 0;
   const totalPengeluaran = borongBulananNet + harianNet;
 
+  const chartPoints = useMemo(
+    () =>
+      source === 'bulanan'
+        ? monthList.map((m) => ({ label: m.label, netWageRp: m.netWageRp, harianRp: m.harianRp }))
+        : trend,
+    [source, monthList, trend],
+  );
+
   const chartOption = useMemo<EChartsOption>(() => {
-    if (trend.length === 0) return {};
+    if (chartPoints.length === 0) return {};
     return {
       tooltip: { trigger: 'axis', valueFormatter: (value) => fmtRp(Number(value)) },
       legend: { data: ['Borong + Bulanan', 'Anak Harian'], top: 0, right: 10 },
       grid: { left: '3%', right: '4%', bottom: '3%', top: 36, containLabel: true },
-      xAxis: { type: 'category', data: trend.map((p) => p.label) },
+      xAxis: { type: 'category', data: chartPoints.map((p) => p.label) },
       yAxis: {
         type: 'value',
         axisLabel: { formatter: (v: number) => `${Math.round(v / 1_000_000)} jt` },
@@ -137,19 +191,19 @@ function ReportsContent() {
           name: 'Borong + Bulanan',
           type: 'bar',
           stack: 'upah',
-          data: trend.map((p) => p.netWageRp),
+          data: chartPoints.map((p) => p.netWageRp),
           itemStyle: { color: '#047f2b' },
         },
         {
           name: 'Anak Harian',
           type: 'bar',
           stack: 'upah',
-          data: trend.map((p) => p.harianRp),
+          data: chartPoints.map((p) => p.harianRp),
           itemStyle: { color: '#0ea5a4', borderRadius: [4, 4, 0, 0] },
         },
       ],
     };
-  }, [trend]);
+  }, [chartPoints]);
 
   const exportCsv = () => {
     if (!expense) return;
@@ -224,21 +278,56 @@ function ReportsContent() {
             Laporan Keuangan &amp; Payroll
           </h1>
           <p className="mt-1.5 text-sm text-gray-600">
-            Pengeluaran upah mitra borong, bulanan, dan anak harian per periode — dari data dashboard Performa.
+            Pengeluaran upah mitra borong, bulanan, dan anak harian per periode — dari data dashboard Performa (mingguan) atau Data Penggajian (bulanan).
           </p>
           <p className="mt-0.5 text-xs text-gray-400">{periodLabel ?? 'Data periode'}</p>
         </div>
 
         <div className="flex flex-wrap items-end gap-2">
-          <StickyPeriodPicker
-            periods={periods}
-            value={periodId}
-            onChange={handlePeriodChange}
-            disabled={loading}
-          />
+          {monthList.length > 0 ? (
+            <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 text-sm shadow-sm">
+              {(['mingguan', 'bulanan'] as const).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => switchSource(item)}
+                  className={`cursor-pointer rounded-md px-3 py-1.5 font-medium transition-colors ${
+                    source === item ? 'bg-green-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {item === 'mingguan' ? 'Mingguan' : 'Bulanan'}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {source === 'bulanan' ? (
+            <select
+              value={month}
+              onChange={(event) => {
+                setMonth(event.target.value);
+                loadForMonth(event.target.value);
+              }}
+              disabled={loading}
+              aria-label="Bulan penggajian"
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800"
+            >
+              {[...monthList].reverse().map((item) => (
+                <option key={item.month} value={item.month}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <StickyPeriodPicker
+              periods={periods}
+              value={periodId}
+              onChange={handlePeriodChange}
+              disabled={loading}
+            />
+          )}
           <button
             type="button"
-            onClick={() => loadForPeriod(periodId)}
+            onClick={refresh}
             disabled={loading}
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50"
           >
@@ -246,11 +335,23 @@ function ReportsContent() {
           </button>
           <button
             type="button"
+            onClick={() =>
+              downloadPayrollExcel(expense, harian, periodLabel ?? 'periode').catch(() =>
+                toast.error('Gagal membuat file Excel.'),
+              )
+            }
+            disabled={!hasData || loading}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 disabled:opacity-50"
+          >
+            <FileDown className="h-4 w-4" /> Download Rangkuman (Excel)
+          </button>
+          <button
+            type="button"
             onClick={exportCsv}
             disabled={!expense || loading}
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50"
           >
-            <FileDown className="h-4 w-4 text-indigo-600" /> Ekspor CSV
+            <FileDown className="h-4 w-4 text-indigo-600" /> CSV
           </button>
           <button
             type="button"
@@ -319,7 +420,7 @@ function ReportsContent() {
             </div>
           ) : null}
 
-          {summary ? (
+          {summary && (source === 'mingguan' || totals.bjd > 0) ? (
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <ExpenseTile label="Total HK" value={fmtNum(totals.hk)} accent="#64748b" />
               <ExpenseTile label="Baku Basah (g)" value={fmtNum(totals.baku)} accent="#64748b" />
@@ -339,9 +440,9 @@ function ReportsContent() {
         </>
       ) : null}
 
-      {trend.length > 0 ? (
+      {chartPoints.length > 0 ? (
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-bold text-gray-700">Pengeluaran Upah per Periode</h2>
+          <h2 className="mb-3 text-sm font-bold text-gray-700">Pengeluaran Upah per {source === 'bulanan' ? 'Bulan' : 'Periode'}</h2>
           <LazyEChart option={chartOption} height={300} />
         </div>
       ) : null}
