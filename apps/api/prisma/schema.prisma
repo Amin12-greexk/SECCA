@@ -926,3 +926,62 @@ model PresensiRecord {
   @@unique([pin, date, shift])
   @@index([date])
 }
+
+/// Penggajian BULANAN (file "DATA PENGGAJIAN ..."): total sebulan per mitra &
+/// anak harian. Terpisah total dari dataset Performa/Pembayaran mingguan —
+/// tidak punya baku/BJD, jadi tidak ikut kapasitas dan tidak tampil ke mitra.
+model MonthlyPayrollPeriod {
+  id        String   @id @default(uuid())
+  /// "YYYY-MM"
+  month     String   @unique
+  label     String
+  sheetName String
+  fileName  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mitra  MonthlyPayrollMitra[]
+  harian MonthlyPayrollHarian[]
+}
+
+model MonthlyPayrollMitra {
+  id              String  @id @default(uuid())
+  periodId        String
+  pin             String?
+  name            String
+  level           String?
+  hk              Float?
+  upahBorongRp    Float?
+  subsidyRp       Float?
+  premiumRp       Float?
+  mealAllowanceRp Float?
+  deductionRp     Float?
+  netWageRp       Float?
+
+  period MonthlyPayrollPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@index([periodId])
+}
+
+model MonthlyPayrollHarian {
+  id                  String  @id @default(uuid())
+  periodId            String
+  pin                 String?
+  name                String
+  bagian              String?
+  gapokRp             Float?
+  hariKerja           Float?
+  upahRp              Float?
+  upahLemburWeekdayRp Float?
+  upahLemburWeekendRp Float?
+  uangMakanRp         Float?
+  premiRp             Float?
+  tunjanganRp         Float?
+  potonganRp          Float?
+  totalUpahRp         Float?
+
+  period MonthlyPayrollPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@index([periodId])
+}
+
