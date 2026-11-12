@@ -41,6 +41,12 @@ type RawBatchWithSupplier = Prisma.RawBatchGetPayload<{
   include: { supplier: true };
 }>;
 
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+/** Hari kalender WIB (YYYY-MM-DD) dari sebuah waktu. */
+const wibDayKey = (date: Date) =>
+  new Date(date.getTime() + WIB_OFFSET_MS).toISOString().slice(0, 10);
+
 @Injectable()
 export class BakuService {
   private readonly logger = new Logger(BakuService.name);
@@ -583,6 +589,31 @@ export class BakuService {
     const deltaLotWeight = newLotWeight - oldLotWeight;
     const moistureBps = Math.round(newMoisturePercent * 100);
 
+    // Tanggal pecah bon: geser sejauh selisih hari (jam tiap LP dipertahankan).
+    // Nomor LP memuat tahun, jadi pindah tahun ditolak.
+    const oldDayKey = wibDayKey(entry.pecahBonDate);
+    let dateShiftMs = 0;
+    if (dto.pecahBonDate && dto.pecahBonDate !== oldDayKey) {
+      const target = Date.parse(`${dto.pecahBonDate}T00:00:00Z`);
+      if (Number.isNaN(target)) {
+        return badRequest('Tanggal pecah bon tidak valid', {
+          pecahBonDate: dto.pecahBonDate,
+        });
+      }
+      if (dto.pecahBonDate.slice(0, 4) !== oldDayKey.slice(0, 4)) {
+        return badRequest(
+          'Tanggal harus di tahun yang sama dengan tanggal pecah bon awal (nomor LP memuat tahun).',
+          { from: oldDayKey, to: dto.pecahBonDate },
+        );
+      }
+      if (dto.pecahBonDate > wibDayKey(new Date())) {
+        return badRequest('Tanggal pecah bon tidak boleh di masa depan', {
+          pecahBonDate: dto.pecahBonDate,
+        });
+      }
+      dateShiftMs = target - Date.parse(`${oldDayKey}T00:00:00Z`);
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const lot = entry.pecahBonId
         ? await tx.productionLot.findFirst({
@@ -706,6 +737,13 @@ export class BakuService {
           initialWeightGram: newInitialWeight,
           moisturePercent: newMoisturePercent,
           dryWeightGram,
+          ...(dateShiftMs !== 0
+            ? {
+                pecahBonDate: new Date(
+                  entry.pecahBonDate.getTime() + dateShiftMs,
+                ),
+              }
+            : {}),
         },
         include: {
           rawBatch: true,
@@ -715,7 +753,28 @@ export class BakuService {
         },
       });
 
-      return updatedEntry;
+      // LP lain di kartu induk yang sama & pada tanggal lama yang sama ikut bergeser.
+      const shiftedSiblings: Array<{ id: string; pecahBonDate: string }> = [];
+      if (dateShiftMs !== 0 && dto.applyToSiblings) {
+        const siblings = await tx.pecahBonEntry.findMany({
+          where: { rawBatchId: entry.rawBatchId, id: { not: entryId } },
+          select: { id: true, pecahBonDate: true },
+        });
+        for (const sibling of siblings) {
+          if (wibDayKey(sibling.pecahBonDate) !== oldDayKey) continue;
+          const moved = new Date(sibling.pecahBonDate.getTime() + dateShiftMs);
+          await tx.pecahBonEntry.update({
+            where: { id: sibling.id },
+            data: { pecahBonDate: moved },
+          });
+          shiftedSiblings.push({
+            id: sibling.id,
+            pecahBonDate: moved.toISOString(),
+          });
+        }
+      }
+
+      return { ...updatedEntry, shiftedSiblings };
     });
   }
 
