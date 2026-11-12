@@ -209,6 +209,8 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     initialWeightGram: "",
     moisturePercent: "",
     featherCondition: "",
+    pecahBonDate: "",
+    applyToSiblings: true,
   });
   const [, setScanLoading] = useState(false);
   const scanBufferRef = useRef("");
@@ -1123,6 +1125,8 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
       initialWeightGram: String(entry.initialWeightGram ?? ""),
       moisturePercent: String(entry.moisturePercent ?? ""),
       featherCondition: entry.featherCondition ?? "",
+      pecahBonDate: wibDay(entry.pecahBonDate),
+      applyToSiblings: true,
     });
     setEditOpen(true);
   };
@@ -1159,6 +1163,25 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
       setDeleteLoading(null);
     }
   };
+
+  // Tanggal pecah bon dihitung per hari kalender WIB.
+  const editOriginalDay = editEntry ? wibDay(editEntry.pecahBonDate) : "";
+  const editDateChanged =
+    Boolean(editEntry) &&
+    editValues.pecahBonDate !== "" &&
+    editValues.pecahBonDate !== editOriginalDay;
+  // LP lain di kartu induk yang sama & pada tanggal lama yang sama.
+  const editSiblings =
+    editEntry && editDateChanged
+      ? (
+          rawBatches.find((batch) => batch.id === editEntry.rawBatchId)
+            ?.pecahBonEntries ?? []
+        ).filter(
+          (item) =>
+            item.id !== editEntry.id &&
+            wibDay(item.pecahBonDate) === editOriginalDay,
+        )
+      : [];
 
   const handleEditSave = async () => {
     if (!editEntry) return;
@@ -1199,6 +1222,19 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
       return;
     }
 
+    if (editDateChanged) {
+      if (editValues.pecahBonDate.slice(0, 4) !== editOriginalDay.slice(0, 4)) {
+        toast.error(
+          "Tanggal harus di tahun yang sama (nomor LP memuat tahun).",
+        );
+        return;
+      }
+      if (editValues.pecahBonDate > wibDay(new Date().toISOString())) {
+        toast.error("Tanggal pecah bon tidak boleh di masa depan.");
+        return;
+      }
+    }
+
     setEditSaving(true);
     try {
       const updated = await updatePecahBonEntry(editEntry.id, {
@@ -1209,13 +1245,31 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         pieceCount: parsedPiece,
         initialWeightGram: parsedWeight,
         moisturePercent: parsedMoisture,
+        ...(editDateChanged
+          ? {
+              pecahBonDate: editValues.pecahBonDate,
+              applyToSiblings:
+                editSiblings.length > 0 && editValues.applyToSiblings,
+            }
+          : {}),
       });
+
+      const shifted = new Map(
+        (updated.shiftedSiblings ?? []).map((item) => [
+          item.id,
+          item.pecahBonDate,
+        ]),
+      );
 
       setRawBatches((prev) =>
         prev.map((batch) => {
           if (batch.id !== updated.rawBatchId) return batch;
           const updatedEntries = batch.pecahBonEntries?.map((entry) =>
-            entry.id === updated.id ? { ...entry, ...updated } : entry,
+            entry.id === updated.id
+              ? { ...entry, ...updated }
+              : shifted.has(entry.id)
+                ? { ...entry, pecahBonDate: shifted.get(entry.id)! }
+                : entry,
           );
           return {
             ...batch,
@@ -1226,7 +1280,11 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
         }),
       );
 
-      toast.success("Pecah bon berhasil diperbarui.");
+      toast.success(
+        shifted.size > 0
+          ? `Pecah bon diperbarui. ${shifted.size} LP lain di kartu induk yang sama ikut berubah tanggalnya.`
+          : "Pecah bon berhasil diperbarui.",
+      );
       setEditOpen(false);
     } catch (err) {
       const message =
@@ -3222,6 +3280,65 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label>Tanggal Pecah</Label>
+                <Input
+                  type="date"
+                  value={editValues.pecahBonDate}
+                  max={wibDay(new Date().toISOString())}
+                  onChange={(e) =>
+                    setEditValues((prev) => ({
+                      ...prev,
+                      pecahBonDate: e.target.value,
+                    }))
+                  }
+                  className="max-w-xs"
+                />
+                {editDateChanged && (
+                  <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                    <p className="font-semibold">
+                      Perhatian: tanggal pecah bon akan berubah dari{" "}
+                      {editOriginalDay} ke {editValues.pecahBonDate}.
+                    </p>
+                    <p className="text-xs leading-relaxed">
+                      Tanggal ini dipakai di riwayat pecah bon, hari kerja
+                      analitik, dan rekap periode. Jam masing-masing LP tetap
+                      dipertahankan, dan nomor LP tidak berubah.
+                    </p>
+                    {editSiblings.length > 0 ? (
+                      <label className="flex cursor-pointer items-start gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={editValues.applyToSiblings}
+                          onChange={(e) =>
+                            setEditValues((prev) => ({
+                              ...prev,
+                              applyToSiblings: e.target.checked,
+                            }))
+                          }
+                        />
+                        <span>
+                          Ikut ubah <b>{editSiblings.length} LP lain</b> dari
+                          kartu induk yang sama pada tanggal {editOriginalDay} (
+                          {editSiblings
+                            .slice(0, 6)
+                            .map((item) => item.pecahBonId ?? "—")
+                            .join(", ")}
+                          {editSiblings.length > 6 ? ", ..." : ""}). Hilangkan
+                          centang kalau hanya LP ini yang diubah.
+                        </span>
+                      </label>
+                    ) : (
+                      <p className="text-xs">
+                        Tidak ada LP lain di kartu induk ini pada tanggal{" "}
+                        {editOriginalDay}.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <DialogFooter>
                 <Button
                   type="button"
@@ -3463,6 +3580,12 @@ export function PecahBonContent({ embedded = false }: { embedded?: boolean }) {
     </div>
   );
 }
+
+/** Hari kalender WIB (YYYY-MM-DD) dari waktu ISO. */
+const wibDay = (iso: string) =>
+  new Date(new Date(iso).getTime() + 7 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
 
 export default function PecahBonPage() {
   return (

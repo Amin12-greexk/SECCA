@@ -143,6 +143,10 @@ export interface PecahBonUpdateRequest {
   pieceCount: number;
   initialWeightGram: number;
   moisturePercent: number;
+  /** Tanggal pecah bon baru (YYYY-MM-DD, hari kalender WIB); kosong = tidak diubah. */
+  pecahBonDate?: string;
+  /** Kalau tanggal diubah: ikut menggeser LP lain di kartu induk & hari lama yang sama. */
+  applyToSiblings?: boolean;
 }
 
 export interface PecahBonEntry {
@@ -168,6 +172,8 @@ export interface PecahBonEntry {
   updatedAt: string;
   /** Tanggal setoran (FinishReceipt.returnedAt) — null berarti LP ini belum disetor. */
   submittedAt?: string | null;
+  /** Hanya ada di respons edit: LP lain yang ikut bergeser tanggalnya. */
+  shiftedSiblings?: Array<{ id: string; pecahBonDate: string }>;
 }
 
 export type BakuReceiveResponse = RawBatch;
