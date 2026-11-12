@@ -20,6 +20,7 @@ import { useToast } from '@/lib/toast';
 import StickyPeriodPicker from '../performa/components/StickyPeriodPicker';
 import { formatPeriodLabel } from '../performa/components/periodLabel';
 import { ExpenseTile } from '../performa/components/PayrollExpensePanel';
+import { downloadPayrollExcel } from '../performa/components/payrollExport';
 
 const fmtRp = (value: number | null | undefined) =>
   value === null || value === undefined
@@ -246,11 +247,23 @@ function ReportsContent() {
           </button>
           <button
             type="button"
+            onClick={() =>
+              downloadPayrollExcel(expense, harian, periodLabel ?? 'periode').catch(() =>
+                toast.error('Gagal membuat file Excel.'),
+              )
+            }
+            disabled={!hasData || loading}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 disabled:opacity-50"
+          >
+            <FileDown className="h-4 w-4" /> Download Rangkuman (Excel)
+          </button>
+          <button
+            type="button"
             onClick={exportCsv}
             disabled={!expense || loading}
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50"
           >
-            <FileDown className="h-4 w-4 text-indigo-600" /> Ekspor CSV
+            <FileDown className="h-4 w-4 text-indigo-600" /> CSV
           </button>
           <button
             type="button"
