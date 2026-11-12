@@ -37,6 +37,7 @@ const MENU_ACCESS_REQUIREMENTS: Record<string, { moduleKey: UiAccessModuleKey; m
     'Barang Jadi': { moduleKey: 'koreksi', minLevel: 2 },
     'Riwayat Setoran': { moduleKey: 'koreksi', minLevel: 3 },
     Laporan: { moduleKey: 'reports', minLevel: 1 },
+    Presensi: { moduleKey: 'reports', minLevel: 1 },
     Pengaturan: { moduleKey: 'settings', minLevel: 1 },
     'Manajemen Data': { moduleKey: 'admin', minLevel: 1 },
     'Manajemen Akun': { moduleKey: 'admin', minLevel: 2 },
@@ -284,6 +285,17 @@ const menuItems: MenuItem[] = [
         icon: (
             <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
                 <path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+        ),
+        roles: ['manager'],
+    },
+    {
+        name: 'Presensi',
+        href: '/presensi',
+        colorClass: 'bg-purple-100 text-purple-700 border-purple-200/70',
+        icon: (
+            <svg className="w-4 h-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
         ),
         roles: ['manager'],

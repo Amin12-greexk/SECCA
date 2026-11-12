@@ -5159,3 +5159,145 @@ export async function getMitraPinStatus(): Promise<MitraPinStatus> {
   }
   return unwrap<MitraPinStatus>(await response.json());
 }
+
+/* ── Presensi finger ─────────────────────────────────────────────── */
+
+export interface PresensiRecord {
+  id: string;
+  date: string;
+  /** 1 = masuk pagi, 2 = masuk sore (pulang lewat tengah malam) */
+  shift: number;
+  clockIn: string | null;
+  clockOut: string | null;
+  minutes: number | null;
+  edited: boolean;
+}
+
+export interface PresensiPerson {
+  pin: string;
+  name: string;
+  shifts: number[];
+  hadirDays: number;
+  incompleteDays: number;
+  totalMinutes: number;
+  avgIn: string | null;
+  avgOut: string | null;
+  /** Hanya terisi untuk tampilan mingguan atau detail=1. */
+  records: PresensiRecord[];
+}
+
+export interface PresensiResponse {
+  month: string | null;
+  months: string[];
+  weeks: Array<{ start: string; end: string }>;
+  weekStart: string | null;
+  range: { from: string; to: string } | null;
+  days: string[];
+  people: PresensiPerson[];
+  totals: { people: number; hadirDays: number; shift1: number; shift2: number };
+}
+
+export interface PresensiImportResult {
+  fileName: string;
+  totalRecords: number;
+  keptEdited: number;
+  people: number;
+  from: string;
+  to: string;
+  sheets: Array<{ name: string; people: number; records: number }>;
+  skippedSheets: string[];
+  issues: Array<{ sheet: string; row: number; reason: string }>;
+}
+
+export async function getPresensi(params: {
+  month?: string;
+  weekStart?: string | null;
+  shift?: string;
+  search?: string;
+  detail?: boolean;
+}): Promise<PresensiResponse> {
+  const query = buildQueryString({
+    month: params.month,
+    weekStart: params.weekStart || undefined,
+    shift: params.shift || undefined,
+    search: params.search || undefined,
+    detail: params.detail ? "1" : undefined,
+  });
+  const response = await fetch(`${API_BASE_URL}/api/presensi${query}`, {
+    headers: getAuthHeaders({ json: false }),
+  });
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal memuat data presensi."));
+  }
+  return unwrap<PresensiResponse>(await response.json());
+}
+
+export async function uploadPresensi(file: File): Promise<PresensiImportResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${API_BASE_URL}/api/presensi/import`, {
+    method: "POST",
+    headers: getAuthHeaders({ json: false }),
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal mengunggah file presensi."));
+  }
+  return unwrap<PresensiImportResult>(await response.json());
+}
+
+export async function savePresensiRecord(input: {
+  id?: string;
+  pin: string;
+  name: string;
+  date: string;
+  shift: number;
+  clockIn: string | null;
+  clockOut: string | null;
+}): Promise<PresensiRecord> {
+  const isUpdate = Boolean(input.id);
+  const response = await fetch(
+    `${API_BASE_URL}/api/presensi/records${isUpdate ? `/${input.id}` : ""}`,
+    {
+      method: isUpdate ? "PATCH" : "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(
+        isUpdate
+          ? { clockIn: input.clockIn, clockOut: input.clockOut }
+          : {
+              pin: input.pin,
+              name: input.name,
+              date: input.date,
+              shift: input.shift,
+              clockIn: input.clockIn,
+              clockOut: input.clockOut,
+            },
+      ),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal menyimpan presensi."));
+  }
+  return unwrap<PresensiRecord>(await response.json());
+}
+
+export async function deletePresensiRecord(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/presensi/records/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders({ json: false }),
+  });
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal menghapus presensi."));
+  }
+}
+
+export async function resetPresensi(): Promise<{ deleted: number }> {
+  const response = await fetch(`${API_BASE_URL}/api/presensi/reset`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Gagal menghapus data presensi."));
+  }
+  return unwrap<{ deleted: number }>(await response.json());
+}

@@ -190,6 +190,8 @@ const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
     { matcher: /^\/admin\/rooms(?:\/|$)/, moduleKey: 'admin', minLevel: 1 },
     { matcher: /^\/settings(?:\/|$)/, moduleKey: 'settings', minLevel: 1 },
     { matcher: /^\/reports(?:\/|$)/, moduleKey: 'reports', minLevel: 1 },
+    // Presensi ikut menu Laporan; upload & edit dibatasi manager di halaman + server.
+    { matcher: /^\/presensi(?:\/|$)/, moduleKey: 'reports', minLevel: 1 },
 ];
 
 const DEFAULT_ROUTE_PRIORITY: Array<{ path: string; moduleKey: UiAccessModuleKey; minLevel: number }> = [

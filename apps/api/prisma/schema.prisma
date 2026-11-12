@@ -904,3 +904,25 @@ model InventoryMovement {
 
   @@index([lotId, createdAt])
 }
+
+/// Presensi finger (jam masuk/pulang per orang per hari). Baris yang diedit
+/// manual (`edited`) tidak ditimpa saat file presensi di-upload ulang.
+model PresensiRecord {
+  id        String    @id @default(uuid())
+  pin       String
+  name      String
+  date      DateTime  @db.Date
+  /// 1 = masuk pagi, 2 = masuk sore (pulang lewat tengah malam)
+  shift     Int       @default(1)
+  /// "HH:MM"
+  clockIn   String?
+  clockOut  String?
+  edited    Boolean   @default(false)
+  editedBy  String?
+  editedAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([pin, date, shift])
+  @@index([date])
+}
