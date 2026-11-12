@@ -6,7 +6,6 @@ import {
     BarChart3,
     CalendarRange,
     Loader2,
-    FileDown,
     RefreshCw,
     Timer,
     TrendingUp,
@@ -46,10 +45,9 @@ import TotalBjdModal from './components/TotalBjdModal';
 import TotalUpahModal from './components/TotalUpahModal';
 import TurnoverAndShifts from './components/TurnoverAndShifts';
 import BandProgressionPanel from './components/BandProgressionPanel';
-import HarianPayrollPanel from './components/HarianPayrollPanel';
 import MitraPayrollModal from './components/MitraPayrollModal';
-import { downloadPayrollExcel } from './components/payrollExport';
-import PayrollExpensePanel from './components/PayrollExpensePanel';
+import MonthlyPayrollCard from './components/MonthlyPayrollCard';
+import PenggajianTab from './components/PenggajianTab';
 import MitraPaymentCard from './components/MitraPaymentCard';
 import MitraPinCard from './components/MitraPinCard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -794,31 +792,12 @@ export default function PerformaPage() {
                             yang dilihat mitra di halaman cek. Perlu login. */}
                         {canSeePayroll ? (
                             <TabsContent value="penggajian" className="space-y-5">
-                                <div className="flex justify-end">
-                                    <button
-                                        type="button"
-                                        disabled={!expenseSummary && !harianSummary}
-                                        onClick={() =>
-                                            downloadPayrollExcel(
-                                                expenseSummary,
-                                                harianSummary,
-                                                formatPeriodLabel(summary?.period) || 'periode',
-                                            ).catch(() => {})
-                                        }
-                                        className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50"
-                                    >
-                                        <FileDown className="h-4 w-4 text-green-600" />
-                                        Download Rangkuman (Excel)
-                                    </button>
-                                </div>
-                                <PayrollExpensePanel
-                                    data={expenseSummary}
-                                    periodLabel={formatPeriodLabel(summary?.period)}
-                                    onSelect={setPayrollPersonId}
-                                />
-                                <HarianPayrollPanel
-                                    data={harianSummary}
-                                    periodLabel={formatPeriodLabel(summary?.period)}
+                                <PenggajianTab
+                                    weeklyExpense={expenseSummary}
+                                    weeklyHarian={harianSummary}
+                                    weeklyLabel={formatPeriodLabel(summary?.period) || ''}
+                                    refreshKey={paymentVersion}
+                                    onSelectPerson={setPayrollPersonId}
                                 />
                             </TabsContent>
                         ) : null}
@@ -834,6 +813,7 @@ export default function PerformaPage() {
                             <TabsContent value="upload" className="space-y-4">
                                 <UploadCard onUploaded={handleUploaded} onWarnings={setImportWarnings} />
                                 <MitraPaymentCard onChanged={() => setPaymentVersion((v) => v + 1)} />
+                                <MonthlyPayrollCard onChanged={() => setPaymentVersion((v) => v + 1)} />
                                 <MitraPinCard refreshKey={paymentVersion} />
                             </TabsContent>
                         ) : null}
