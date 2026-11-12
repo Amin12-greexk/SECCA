@@ -134,6 +134,13 @@ const API_ACCESS_RULES: ApiAccessRule[] = [
     anyOf: [{ moduleKey: 'reports', minLevel: 1 }],
   },
   {
+    // Presensi: akun dengan akses Laporan boleh MELIHAT saja; upload/edit/hapus
+    // tetap khusus manager (@Roles('manager') di controller).
+    pattern: /^\/api\/presensi(?:\/|$)/i,
+    anyOf: [{ moduleKey: 'reports', minLevel: 1 }],
+    methods: ['GET'],
+  },
+  {
     pattern: /^\/api\/lots(?:\/|$)/i,
     anyOf: [{ moduleKey: 'stock', minLevel: 2 }],
   },
