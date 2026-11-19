@@ -2,7 +2,7 @@
 
 /**
  * AmbientBlobs — CSS-only floating gradient shapes for background ambiance.
- * GPU-composited, auto-disabled for prefers-reduced-motion.
+ * GPU-composited, disabled when reduce-motion is enabled per device (lib/motion).
  */
 export default function AmbientBlobs() {
     return (

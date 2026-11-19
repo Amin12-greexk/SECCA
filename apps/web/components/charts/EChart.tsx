@@ -13,6 +13,7 @@ import {
 import { CanvasRenderer } from 'echarts/renderers';
 import ReactEChartsCore from 'echarts-for-react/lib/core';
 import type { EChartsOption } from 'echarts';
+import { prefersReducedMotion } from '@/lib/motion';
 
 // Import selektif: hanya modul yang dipakai halaman performa, supaya bundle
 // jauh lebih ringan daripada import 'echarts' penuh.
@@ -58,10 +59,8 @@ export default function EChart({
         [group],
     );
 
-    // Animasi masuk cepat untuk polesan, tapi hormati prefers-reduced-motion.
-    const reducedMotion =
-        typeof window !== 'undefined' &&
-        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    // Animasi masuk cepat untuk polesan; bisa dimatikan per perangkat (lib/motion).
+    const reducedMotion = prefersReducedMotion();
 
     const merged = useMemo<EChartsOption>(
         () => ({

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { gsap } from 'gsap';
+import { prefersReducedMotion } from '@/lib/motion';
 import { ChevronRight, LogIn, UserRound } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { getDefaultAuthorizedPath } from '@/lib/access-control';
@@ -24,9 +25,7 @@ export default function Home() {
   useEffect(() => {
     if (loading || isAuthenticated || !contentRef.current) return;
 
-    const reducedMotion =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reducedMotion = prefersReducedMotion();
 
     if (reducedMotion) return;
 

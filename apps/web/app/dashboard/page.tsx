@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { gsap } from 'gsap';
+import { prefersReducedMotion } from '@/lib/motion';
 import { useAuth } from '@/lib/auth/AuthContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import PageTransition from '@/components/animations/PageTransition';
@@ -19,9 +20,7 @@ function DashboardContent() {
 
     useEffect(() => {
         if (!containerRef.current) return;
-        const reducedMotion =
-            typeof window !== 'undefined' &&
-            window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const reducedMotion = prefersReducedMotion();
         if (reducedMotion) return;
 
         gsap.fromTo(
