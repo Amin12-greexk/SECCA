@@ -2,11 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
+import { prefersReducedMotion } from '@/lib/motion';
 
-function prefersReducedMotion(): boolean {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
 
 interface StaggerCardsProps {
     children: React.ReactNode;

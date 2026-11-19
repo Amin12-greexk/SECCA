@@ -10,6 +10,7 @@ import Sidebar from "@/components/Sidebar";
 import { ToastProvider } from "@/lib/toast";
 import { AuthProvider, useAuth } from "@/lib/auth/AuthContext";
 import { SidebarProvider, useSidebar } from "@/lib/context/SidebarContext";
+import { reduceMotionInitScript } from "@/lib/motion";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -164,12 +165,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id">
+    <html lang="id" suppressHydrationWarning>
       <head>
         <title>SECCA</title>
         <meta name="description" content="Sistem manajemen operasional" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" sizes="any" />
+        <script dangerouslySetInnerHTML={{ __html: reduceMotionInitScript }} />
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
         <AuthProvider>

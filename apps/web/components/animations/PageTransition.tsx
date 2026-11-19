@@ -2,11 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
+import { prefersReducedMotion } from '@/lib/motion';
 
-function prefersReducedMotion(): boolean {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
 
 interface PageTransitionProps {
     children: React.ReactNode;
@@ -16,7 +13,7 @@ interface PageTransitionProps {
 /**
  * Wraps page content with a fade + slide-up entry animation.
  * Staggers direct children for a polished reveal.
- * Automatically disabled when prefers-reduced-motion is active.
+ * Disabled when reduce-motion is enabled per device (lib/motion).
  */
 export default function PageTransition({
     children,

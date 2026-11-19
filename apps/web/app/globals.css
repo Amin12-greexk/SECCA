@@ -432,35 +432,35 @@ button:active:not(:disabled) {
 
 /* ─── Reduced Motion ──────────────────────────────────────────── */
 
-@media (prefers-reduced-motion: reduce) {
+/* Dulu mengikuti @media (prefers-reduced-motion: reduce); di Windows itu aktif
+   bila "Show animations" mati, sehingga semua animasi hilang. Sekarang hanya
+   aktif bila diminta per perangkat (lihat lib/motion.ts). */
+:root[data-reduce-motion='true'] .ambient-blob,
+:root[data-reduce-motion='true'] .ambient-blob-1,
+:root[data-reduce-motion='true'] .ambient-blob-2,
+:root[data-reduce-motion='true'] .ambient-blob-3 {
+  animation: none !important;
+}
 
-  .ambient-blob,
-  .ambient-blob-1,
-  .ambient-blob-2,
-  .ambient-blob-3 {
-    animation: none !important;
-  }
+:root[data-reduce-motion='true'] .animate-spin-slow,
+:root[data-reduce-motion='true'] .animate-fade-in,
+:root[data-reduce-motion='true'] .animate-slide-in-left,
+:root[data-reduce-motion='true'] .animate-slide-in-right,
+:root[data-reduce-motion='true'] .animate-scale-in,
+:root[data-reduce-motion='true'] .animate-bar-grow,
+:root[data-reduce-motion='true'] .animate-pulse-subtle {
+  animation: none !important;
+}
 
-  .animate-spin-slow,
-  .animate-fade-in,
-  .animate-slide-in-left,
-  .animate-slide-in-right,
-  .animate-scale-in,
-  .animate-bar-grow,
-  .animate-pulse-subtle {
-    animation: none !important;
-  }
+:root[data-reduce-motion='true'] .card-hover:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
 
-  .card-hover:hover {
-    transform: none !important;
-    box-shadow: none !important;
-  }
-
-  *,
-  *::before,
-  *::after {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-  }
+:root[data-reduce-motion='true'] *,
+:root[data-reduce-motion='true'] *::before,
+:root[data-reduce-motion='true'] *::after {
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
 }
